@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+
+# Knowledge base (contains sensitive implementation details)
+/knowledge-base/

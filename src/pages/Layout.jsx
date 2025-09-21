@@ -1,0 +1,444 @@
+
+
+import React, { useState, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { Shield, Users, Wrench, Target, BarChart3, User, Binoculars, Upload, ClipboardCheck, Joystick, Puzzle, ArrowLeft, Package, Home, ArrowRightLeft, History, Download, Lock, Calendar } from "lucide-react";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
+import TotpVerificationPrompt from "@/components/auth/TotpVerificationPrompt";
+import { User as UserEntity } from "@/api/entities";
+import { Soldier } from "@/api/entities";
+import SecuritySettings from "@/pages/SecuritySettings";
+import SoldierLinkingDialog from "@/components/auth/SoldierLinkingDialog";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+
+const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
+  // Soldier role - very limited navigation, only view their own equipment
+  if (userRole === 'soldier') {
+    return [
+      {
+        title: "My Equipment",
+        url: createPageUrl("MyEquipment"),
+        icon: Wrench,
+      },
+      {
+        title: "My Weapons",
+        url: createPageUrl("MyWeapons"),
+        icon: Target,
+      },
+      {
+        title: "My Gear",
+        url: createPageUrl("MyGear"),
+        icon: Binoculars,
+      },
+      {
+        title: "My Drone Sets",
+        url: createPageUrl("MyDrones"),
+        icon: Joystick,
+      },
+      {
+        title: "Security",
+        url: createPageUrl("SecuritySettings"),
+        icon: Lock,
+      },
+    ];
+  }
+
+  // Original navigation for all other roles
+  const allItems = [
+    {
+      title: "Signing",
+      url: createPageUrl("SoldierManagement"),
+      icon: User,
+      permission: 'can_sign_equipment',
+    },
+    {
+      title: "Command Dashboard",
+      url: createPageUrl("Dashboard"),
+      icon: BarChart3,
+      permission: 'can_view_reports',
+    },
+    {
+      title: "Activity History",
+      url: createPageUrl("History"),
+      icon: History,
+      permission: 'can_view_history',
+    },
+    { title: "Divisions", url: createPageUrl("Divisions"), icon: Shield },
+    { title: "Personnel", url: createPageUrl("Soldiers"), icon: Users },
+    { title: "Weapons", url: createPageUrl("Weapons"), icon: Target },
+    { title: "Serialized Gear", url: createPageUrl("SerializedGear"), icon: Binoculars },
+    { title: "Drones", url: createPageUrl("Drones"), icon: Joystick },
+    { title: "Drone Components", url: createPageUrl("DroneComponents"), icon: Puzzle },
+    {
+      title: "Armory Deposit/Release",
+      url: createPageUrl("ArmoryDeposit"),
+      icon: Package,
+      permission: 'can_deposit_equipment',
+    },
+    {
+      title: "Let's Go Home",
+      url: createPageUrl("SoldierRelease"),
+      icon: Home,
+      // REMOVED: permission restriction - now accessible to all users
+    },
+    {
+      title: "Equipment Transfer",
+      url: createPageUrl("EquipmentTransfer"),
+      icon: ArrowRightLeft,
+      permission: 'can_transfer_equipment',
+    },
+    {
+      title: "Daily Verification",
+      url: createPageUrl("DailyVerification"),
+      icon: ClipboardCheck,
+      permission: 'can_perform_daily_verification',
+    },
+    {
+      title: "Verification History",
+      url: createPageUrl("VerificationHistory"),
+      icon: Calendar,
+      permission: 'can_perform_daily_verification',
+    },
+    {
+      title: "Maintenance",
+      url: createPageUrl("Maintenance"),
+      icon: ClipboardCheck,
+      permission: 'can_perform_maintenance',
+    },
+    { title: "Equipment", url: createPageUrl("Equipment"), icon: Wrench },
+    {
+      title: "Import Data",
+      url: createPageUrl("Import"),
+      icon: Upload,
+      permission: 'can_import_data',
+    },
+    {
+      title: "Data Export",
+      url: createPageUrl("DataExport"),
+      icon: Download,
+      permission: 'can_export_data',
+    },
+    {
+      title: "Security",
+      url: createPageUrl("SecuritySettings"),
+      icon: Lock,
+    },
+    {
+      title: "User Management",
+      url: createPageUrl("UserManagement"),
+      icon: Users,
+      permission: 'can_manage_users',
+    },
+  ];
+
+  if (!permissions) {
+    // If permissions are not yet loaded (e.g., initial render), show items that don't require specific permissions.
+    return allItems.filter(item => !item.permission);
+  }
+
+  // Admins see everything
+  if (permissions.role === 'admin') {
+      return allItems;
+  }
+
+  // For other roles, filter based on specific permissions
+  return allItems.filter(item => {
+    // If no specific permission is required for the item, it's always visible
+    if (!item.permission) return true;
+    // Otherwise, check if the user has the required permission
+    return permissions[item.permission];
+  });
+};
+
+
+export default function Layout({ children, currentPageName }) {
+  console.log(`ARMORY APP CODE: Final redeploy attempt. If you see this, the application code is running. [Timestamp: ${new Date().toISOString()}]`);
+  const location = useLocation();
+
+  const [currentUser, setCurrentUser] = useState(null);
+  const [linkedSoldier, setLinkedSoldier] = useState(null);
+  const [showSoldierLinking, setShowSoldierLinking] = useState(false);
+  const [isTotpVerified, setIsTotpVerified] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const user = await UserEntity.me();
+        setCurrentUser(user);
+
+        // Check if user has linked soldier
+        if (user.linked_soldier_id) {
+          try {
+            const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
+            setLinkedSoldier(soldiers[0] || null);
+          } catch (error) {
+            console.error("Error loading linked soldier:", error);
+            setLinkedSoldier(null); // Ensure it's null on error
+          }
+        } else {
+            setLinkedSoldier(null); // No linked soldier ID
+        }
+
+        if (user.totp_enabled) {
+          const lastVerificationTime = sessionStorage.getItem('lastTotpVerificationTime');
+          const twentyFourHours = 24 * 60 * 60 * 1000;
+
+          if (lastVerificationTime && (Date.now() - parseInt(lastVerificationTime)) < twentyFourHours) {
+            setIsTotpVerified(true); // Verified and within the 24-hour window
+          } else {
+            setIsTotpVerified(false); // Needs verification
+          }
+        } else {
+          // If 2FA is not enabled, user must set it up first.
+          setIsTotpVerified(false);
+        }
+      } catch (error) {
+        // Not logged in or authentication failed.
+        setCurrentUser(null);
+        setLinkedSoldier(null); // Ensure no soldier is linked if auth fails
+        setIsTotpVerified(true); // Allow login page to show
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    checkAuthStatus();
+  }, []);
+
+  // This effect runs periodically to check if the 24-hour session has expired
+  useEffect(() => {
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    const checkInterval = 5 * 60 * 1000; // Check every 5 minutes
+
+    const intervalId = setInterval(() => {
+      if (currentUser && currentUser.totp_enabled && isTotpVerified) {
+        const lastVerificationTime = sessionStorage.getItem('lastTotpVerificationTime');
+        if (!lastVerificationTime || (Date.now() - parseInt(lastVerificationTime)) > twentyFourHours) {
+          setIsTotpVerified(false); // Expire the verification
+        }
+      }
+    }, checkInterval);
+
+    return () => clearInterval(intervalId); // Cleanup on component unmount
+  }, [currentUser, isTotpVerified]);
+
+  const handleTotpSuccess = () => {
+    sessionStorage.setItem('lastTotpVerificationTime', Date.now().toString());
+    setIsTotpVerified(true);
+
+    // Show soldier linking dialog if not linked yet
+    if (currentUser && !currentUser.linked_soldier_id && !linkedSoldier) {
+      setTimeout(() => setShowSoldierLinking(true), 500);
+    }
+  };
+
+  const handleTotpSetupComplete = async () => {
+    // Refresh user data and proceed to verification
+    try {
+      const user = await UserEntity.me();
+      setCurrentUser(user);
+      // After setup, if the user now has a linked soldier, update it
+      if (user.linked_soldier_id) {
+          try {
+            const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
+            setLinkedSoldier(soldiers[0] || null);
+          } catch (error) {
+            console.error("Error loading linked soldier after TOTP setup:", error);
+            setLinkedSoldier(null);
+          }
+      } else {
+          setLinkedSoldier(null);
+      }
+      setIsTotpVerified(false); // Still need to verify after setup
+    } catch (error) {
+      console.error("Error refreshing user after TOTP setup:", error);
+    }
+  };
+
+  const handleSoldierLinked = (soldier) => {
+    setLinkedSoldier(soldier);
+    setShowSoldierLinking(false);
+    // Optionally, re-fetch currentUser to update its linked_soldier_id from the backend.
+    // For now, we rely on the `soldier` object passed back from the dialog.
+  };
+
+  const navigationItems = getNavigationItems(
+    currentUser?.role === 'admin' ? { role: 'admin' } : currentUser?.permissions,
+    currentUser?.custom_role,
+    currentUser?.linked_soldier_id
+  );
+
+  if (isCheckingAuth) {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  // If user is logged in but doesn't have 2FA enabled, force them to set it up
+  if (currentUser && !currentUser.totp_enabled) {
+    return (
+      <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center">
+        <div className="max-w-2xl w-full mx-4">
+          <SecuritySettings onSetupComplete={handleTotpSetupComplete} isRequired={true} />
+        </div>
+      </div>
+    );
+  }
+
+  // If user has TOTP enabled but not verified, show verification prompt
+  if (currentUser && currentUser.totp_enabled && !isTotpVerified) {
+    return <TotpVerificationPrompt onSuccess={handleTotpSuccess} />;
+  }
+
+  // Show soldier linking dialog if user is logged in, TOTP verified, but hasn't linked their soldier yet
+  if (currentUser && currentUser.totp_enabled && isTotpVerified && !currentUser.linked_soldier_id && !linkedSoldier) {
+    return (
+      <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center">
+        <SoldierLinkingDialog
+          open={true}
+          onOpenChange={setShowSoldierLinking} // Allows the dialog to be closed if it has an internal close mechanism
+          onLinked={handleSoldierLinked}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-slate-50">
+          <style jsx>{`
+            :root {
+              --military-green: #2D5016;
+              --navy-blue: #1E3A8A;
+              --accent-gold: #D4AF37;
+            }
+          `}</style>
+
+          <Sidebar className="border-r border-slate-200 bg-white">
+            <SidebarHeader className="border-b border-slate-200 p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-800 to-green-900 rounded-lg flex items-center justify-center">
+                  <Shield className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-slate-900 text-lg">ARMORY</h2>
+                  <p className="text-xs text-slate-600 font-medium tracking-wide">
+                    {currentUser?.custom_role === 'soldier' ? 'PERSONAL EQUIPMENT' : 'EQUIPMENT MANAGEMENT'}
+                  </p>
+                </div>
+              </div>
+            </SidebarHeader>
+
+            <SidebarContent className="p-3">
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 py-3">
+                  {currentUser?.custom_role === 'soldier' ? 'My Equipment' : 'Operations'}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="space-y-1">
+                    {navigationItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          className={`hover:bg-green-50 hover:text-green-800 transition-all duration-200 rounded-lg font-medium ${
+                            location.pathname === item.url ? 'bg-green-100 text-green-800 border border-green-200' : 'text-slate-700'
+                          }`}
+                        >
+                          <Link to={item.url} className="flex items-center gap-3 px-4 py-3">
+                            <item.icon className="w-5 h-5" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+
+            <SidebarFooter className="border-t border-slate-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-slate-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-900 text-sm truncate">
+                    {linkedSoldier ? `${linkedSoldier.first_name} ${linkedSoldier.last_name}` : 
+                     currentUser?.custom_role === 'soldier' ? 'Soldier Account' : 'Command User'}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">
+                    {linkedSoldier ? `ID: ${linkedSoldier.soldier_id}` : 
+                     currentUser?.custom_role === 'soldier' ? 'Personal View' : 'Equipment Manager'}
+                  </p>
+                </div>
+              </div>
+              {!linkedSoldier && currentUser && currentUser.custom_role !== 'soldier' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSoldierLinking(true)}
+                  className="mt-2 w-full text-xs"
+                >
+                  Link Soldier Account
+                </Button>
+              )}
+            </SidebarFooter>
+          </Sidebar>
+
+          <main className="flex-1 flex flex-col relative z-0 overflow-auto">
+            <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4 shrink-0">
+              <SidebarTrigger className="md:hidden hover:bg-slate-100 p-2 rounded-lg transition-colors duration-200 -ml-2" />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => window.history.back()}
+                className="h-9 w-9 shrink-0"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-3 md:hidden">
+                <div className="w-8 h-8 bg-gradient-to-br from-green-800 to-green-900 rounded-md flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <h1 className="font-bold text-slate-900 text-lg">ARMORY</h1>
+              </div>
+            </header>
+
+            <div className="flex-1">
+              <ErrorBoundary>
+                {children}
+              </ErrorBoundary>
+            </div>
+          </main>
+        </div>
+      </SidebarProvider>
+
+      {/* Render the dialog at the top level, controlled by state, for manual linking */}
+      <SoldierLinkingDialog
+        open={showSoldierLinking}
+        onOpenChange={setShowSoldierLinking}
+        onLinked={handleSoldierLinked}
+      />
+    </ErrorBoundary>
+  );
+}
+

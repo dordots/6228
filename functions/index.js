@@ -11,6 +11,7 @@ const authFunctions = require("./src/auth");
 const emailFunctions = require("./src/email");
 const dataFunctions = require("./src/data");
 const formFunctions = require("./src/forms");
+const userFunctions = require("./src/users");
 
 // Export all functions
 module.exports = {
@@ -37,4 +38,13 @@ module.exports = {
   deleteAllSoldiers: dataFunctions.deleteAllSoldiers,
   deleteAllWeapons: dataFunctions.deleteAllWeapons,
   deleteAllSerializedGear: dataFunctions.deleteAllSerializedGear,
+  
+  // User Management Functions
+  createPhoneUser: userFunctions.createPhoneUser,
+  listUsers: userFunctions.listUsers,
+  updateUserRole: userFunctions.updateUserRole,
+  updateUserPermissions: userFunctions.updateUserPermissions,
+  deleteUser: userFunctions.deleteUser,
+  getUserByPhone: userFunctions.getUserByPhone,
+  setAdminByPhone: userFunctions.setAdminByPhone,
 };

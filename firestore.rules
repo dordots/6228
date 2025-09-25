@@ -19,72 +19,111 @@ service cloud.firestore {
     function isManager() {
       return isAuthenticated() && 
         (request.auth.token.role == 'admin' || 
-         request.auth.token.role == 'manager');
+         request.auth.token.custom_role == 'manager');
     }
     
-    function isSoldier(soldierID) {
+    function hasPermission(permission) {
       return isAuthenticated() && 
-        request.auth.token.soldier_id == soldierID;
+        (isAdmin() || 
+         request.auth.token.permissions[permission] == true);
+    }
+    
+    function isLinkedToSoldier(soldierId) {
+      return isAuthenticated() && 
+        request.auth.token.linked_soldier_id == soldierId;
     }
     
     function belongsToDivision(division) {
       return isAuthenticated() && 
-        request.auth.token.division == division;
+        (isAdmin() || 
+         request.auth.token.department == division);
+    }
+    
+    function canViewSoldierData(soldierData) {
+      return isAuthenticated() && 
+        (isAdmin() || 
+         isManager() || 
+         isLinkedToSoldier(soldierData.soldier_id) ||
+         (hasPermission('can_view_reports') && belongsToDivision(soldierData.division_name)));
+    }
+    
+    function canEditSoldierData(soldierData) {
+      return isAuthenticated() && 
+        (isAdmin() || 
+         (hasPermission('can_edit_soldiers') && belongsToDivision(soldierData.division_name)));
+    }
+    
+    // System collection - for admin setup
+    match /system/{document} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || 
+        (document == 'admin_setup' && !exists(/databases/$(database)/documents/system/admin_setup));
     }
     
     // Soldiers collection
     match /soldiers/{soldierID} {
-      allow read: if isAuthenticated();
-      allow create: if isAdmin();
-      allow update: if isAdmin() || 
-        (isManager() && belongsToDivision(resource.data.division_name));
-      allow delete: if isAdmin();
+      allow read: if canViewSoldierData(resource.data);
+      allow create: if hasPermission('can_create_soldiers');
+      allow update: if canEditSoldierData(resource.data);
+      allow delete: if hasPermission('can_delete_soldiers');
     }
     
     // Equipment collection
     match /equipment/{equipmentID} {
       allow read: if isAuthenticated();
-      allow create: if isManager();
-      allow update: if isManager() && 
+      allow create: if hasPermission('can_create_equipment');
+      allow update: if hasPermission('can_edit_equipment') && 
         (isAdmin() || belongsToDivision(resource.data.division_name));
-      allow delete: if isAdmin();
+      allow delete: if hasPermission('can_delete_equipment');
     }
     
     // Weapons collection
     match /weapons/{weaponID} {
-      allow read: if isAuthenticated();
-      allow create: if isManager();
-      allow update: if isManager();
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() && 
+        (isAdmin() || 
+         isManager() ||
+         resource.data.assigned_to == request.auth.token.linked_soldier_id ||
+         belongsToDivision(resource.data.division_name));
+      allow create: if hasPermission('can_create_weapons');
+      allow update: if hasPermission('can_edit_weapons');
+      allow delete: if hasPermission('can_delete_weapons');
     }
     
     // Serialized gear collection
     match /serialized_gear/{gearID} {
-      allow read: if isAuthenticated();
-      allow create: if isManager();
-      allow update: if isManager();
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() && 
+        (isAdmin() || 
+         isManager() ||
+         resource.data.assigned_to == request.auth.token.linked_soldier_id ||
+         belongsToDivision(resource.data.division_name));
+      allow create: if hasPermission('can_create_gear');
+      allow update: if hasPermission('can_edit_gear');
+      allow delete: if hasPermission('can_delete_gear');
     }
     
     // Drone sets collection
     match /drone_sets/{droneSetID} {
-      allow read: if isAuthenticated();
-      allow create: if isManager();
-      allow update: if isManager();
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() && 
+        (isAdmin() || 
+         isManager() ||
+         resource.data.assigned_to == request.auth.token.linked_soldier_id ||
+         belongsToDivision(resource.data.division_name));
+      allow create: if hasPermission('can_create_drones');
+      allow update: if hasPermission('can_edit_drones');
+      allow delete: if hasPermission('can_delete_drones');
     }
     
     // Drone components collection
     match /drone_components/{componentID} {
       allow read: if isAuthenticated();
-      allow create: if isManager();
-      allow update: if isManager();
-      allow delete: if isAdmin();
+      allow create: if hasPermission('can_create_drone_components');
+      allow update: if hasPermission('can_edit_drone_components');
+      allow delete: if hasPermission('can_delete_drone_components');
     }
     
-    // Activity logs - read only for most users
+    // Activity logs - read with permission, write for authenticated
     match /activity_logs/{logID} {
-      allow read: if isAuthenticated();
+      allow read: if hasPermission('can_view_history');
       allow create: if isAuthenticated();
       allow update: if false; // Never update logs
       allow delete: if isAdmin();
@@ -93,16 +132,25 @@ service cloud.firestore {
     // Daily verifications
     match /daily_verifications/{verificationID} {
       allow read: if isAuthenticated();
-      allow create: if isManager();
+      allow create: if hasPermission('can_perform_daily_verification');
       allow update: if false; // Immutable once created
       allow delete: if isAdmin();
     }
     
     // Users collection - for profile management
     match /users/{userId} {
+      allow read: if isAuthenticated() && 
+        (isOwner(userId) || hasPermission('can_manage_users'));
+      allow create: if isOwner(userId) || hasPermission('can_manage_users');
+      allow update: if isOwner(userId) || hasPermission('can_manage_users');
+      allow delete: if hasPermission('can_manage_users');
+    }
+    
+    // Uploads collection - for file storage references
+    match /uploads/{uploadId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isOwner(resource.data.uploaded_by);
       allow delete: if isAdmin();
     }
   }

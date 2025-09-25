@@ -231,6 +231,96 @@ export const User = {
       recaptchaVerifier = null;
     }
     confirmationResult = null;
+  },
+  
+  // User Management Methods (for UserManagement page)
+  
+  // List all users
+  list: async (options = {}) => {
+    try {
+      const listUsersFn = httpsCallable(functions, 'listUsers');
+      const result = await listUsersFn(options);
+      return result.data.users || [];
+    } catch (error) {
+      console.error('Error listing users:', error);
+      throw error;
+    }
+  },
+  
+  // Create new user
+  create: async (userData) => {
+    try {
+      const createUserFn = httpsCallable(functions, 'createPhoneUser');
+      const result = await createUserFn(userData);
+      return result.data;
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw error;
+    }
+  },
+  
+  // Update user (role/permissions)
+  update: async (uid, updates) => {
+    try {
+      if (updates.role !== undefined || updates.customRole !== undefined) {
+        const updateRoleFn = httpsCallable(functions, 'updateUserRole');
+        await updateRoleFn({ uid, role: updates.role, customRole: updates.customRole });
+      }
+      
+      if (updates.permissions !== undefined) {
+        const updatePermsFn = httpsCallable(functions, 'updateUserPermissions');
+        await updatePermsFn({ uid, permissions: updates.permissions });
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
+  },
+  
+  // Delete user
+  delete: async (uid, hardDelete = false) => {
+    try {
+      const deleteUserFn = httpsCallable(functions, 'deleteUser');
+      const result = await deleteUserFn({ uid, hardDelete });
+      return result.data;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
+  },
+  
+  // Find user by email/phone
+  findByEmail: async (emailOrPhone) => {
+    try {
+      const getUserFn = httpsCallable(functions, 'getUserByPhone');
+      const result = await getUserFn({ phoneNumber: emailOrPhone });
+      return result.data;
+    } catch (error) {
+      console.error('Error finding user:', error);
+      return null;
+    }
+  },
+  
+  // Bulk create users (for import)
+  bulkCreate: async (users) => {
+    try {
+      // Create users one by one (can be optimized later)
+      const results = [];
+      for (const user of users) {
+        try {
+          const result = await User.create(user);
+          results.push({ success: true, data: result });
+        } catch (error) {
+          results.push({ success: false, error: error.message });
+        }
+      }
+      return results;
+    } catch (error) {
+      console.error('Error in bulk create:', error);
+      throw error;
+    }
   }
 };
 

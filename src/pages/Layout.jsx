@@ -334,18 +334,29 @@ export default function Layout({ children, currentPageName }) {
     return <TotpVerificationPrompt onSuccess={handleTotpSuccess} />;
   }
 
-  // Show soldier linking dialog if user is logged in, TOTP verified, but hasn't linked their soldier yet
-  // Skip this for admin users - they don't need to be linked to a soldier
-  if (currentUser && currentUser.totp_enabled && isTotpVerified && !currentUser.linked_soldier_id && !linkedSoldier && currentUser.role !== 'admin') {
-    return (
-      <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center">
-        <SoldierLinkingDialog
-          open={true}
-          onOpenChange={setShowSoldierLinking} // Allows the dialog to be closed if it has an internal close mechanism
-          onLinked={handleSoldierLinked}
-        />
-      </div>
-    );
+  // Check if user has any role assigned
+  if (currentUser && currentUser.totp_enabled && isTotpVerified) {
+    // Check if user has no role or permissions
+    const hasRole = currentUser.role || currentUser.custom_role;
+    const hasAnyPermission = currentUser.permissions && Object.values(currentUser.permissions).some(p => p === true);
+    
+    if (!hasRole && !hasAnyPermission) {
+      // User has no role and no permissions - show access denied
+      return window.location.href = '/access-denied';
+    }
+    
+    // Show soldier linking dialog if needed (non-admin users without linked soldier)
+    if (!currentUser.linked_soldier_id && !linkedSoldier && currentUser.role !== 'admin' && currentUser.custom_role === 'soldier') {
+      return (
+        <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center">
+          <SoldierLinkingDialog
+            open={true}
+            onOpenChange={setShowSoldierLinking}
+            onLinked={handleSoldierLinked}
+          />
+        </div>
+      );
+    }
   }
 
   return (

@@ -22,7 +22,9 @@
       "Bash(gcloud projects get-iam-policy:*)",
       "Bash(gcloud projects add-iam-policy-binding:*)",
       "Bash(firebase projects:get-default-service-account:*)",
-      "Bash(firebase functions:artifacts:setpolicy:*)"
+      "Bash(firebase functions:artifacts:setpolicy:*)",
+      "Bash(firebase projects:list:*)",
+      "Bash(firebase functions:shell:*)"
     ],
     "deny": []
   }

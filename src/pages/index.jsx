@@ -50,6 +50,8 @@ import MyGear from "./MyGear";
 
 import MyDrones from "./MyDrones";
 
+import AccessDenied from "./AccessDenied";
+
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
@@ -102,6 +104,8 @@ const PAGES = {
     
     MyDrones: MyDrones,
     
+    AccessDenied: AccessDenied,
+    
 }
 
 function _getCurrentPage(url) {
@@ -122,11 +126,12 @@ function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
     
-    // Login route doesn't need protection
-    if (location.pathname === '/login') {
+    // Login and AccessDenied routes don't need protection
+    if (location.pathname === '/login' || location.pathname === '/access-denied') {
         return (
             <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/access-denied" element={<AccessDenied />} />
             </Routes>
         );
     }

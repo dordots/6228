@@ -166,6 +166,7 @@ Migrate Armory Management System from Base44 to Firebase infrastructure.
 4. Soldier linking for proper data isolation
 5. Admin users bypass soldier linking requirement
 6. Comprehensive documentation created
+7. Fixed multiple UI rendering errors
 
 ### Issues Resolved
 1. Fixed History.jsx import error
@@ -173,6 +174,7 @@ Migrate Armory Management System from Base44 to Firebase infrastructure.
 3. Fixed soldier linking for Base44 compatibility
 4. Fixed React rendering error with linkedSoldier object
 5. Fixed admin bypass for soldier linking dialog
+6. Fixed Dashboard rendering error with {message} object in RecentActivity component
 
 ### Documentation Created
 - FIREBASE_SETUP_CHECKLIST.md - Initial setup guide
@@ -190,3 +192,8 @@ Migrate Armory Management System from Base44 to Firebase infrastructure.
 
 ### Final Notes
 The Firebase migration is technically complete. All functionality has been implemented and deployed. The system maintains full compatibility with the original Base44 implementation while running on Firebase infrastructure. The only remaining tasks are configuration (SendGrid) and data import, which the user will handle manually through the existing UI.
+
+### Recent Bug Fixes
+- Fixed Dashboard rendering error where ActivityLog could return objects with `{message}` property instead of strings
+- Updated `processActivityDetails` function to handle both string and object inputs gracefully
+- Added type checking and object-to-string conversion for robust error handling

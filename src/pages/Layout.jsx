@@ -352,7 +352,7 @@ export default function Layout({ children, currentPageName }) {
     <ErrorBoundary>
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-slate-50">
-          <style jsx>{`
+          <style>{`
             :root {
               --military-green: #2D5016;
               --navy-blue: #1E3A8A;

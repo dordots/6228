@@ -371,11 +371,10 @@ export default function HistoryPage() {
 
                 console.log('History filter applied:', filter, 'User:', currentUser?.full_name, 'Division:', userDivision, 'Is Admin:', isAdmin, 'Is Manager:', isManager);
 
-                const [activityData, userData] = await Promise.all([
-                    ActivityLog.filter(filter, '-created_date', 500),
-                    User.list()
-                ]);
+                const activityData = await ActivityLog.filter(filter, '-created_date', 500);
                 setActivities(Array.isArray(activityData) ? activityData : []);
+                
+                // Extract unique user names from activities
                 const userNames = [...new Set(activityData.map(a => a.user_full_name).filter(Boolean))];
                 setUsers(userNames);
             } catch (error) {

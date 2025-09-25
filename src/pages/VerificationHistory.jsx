@@ -272,7 +272,7 @@ export default function VerificationHistoryPage() {
                   filteredVerifications.map((verification) => (
                     <TableRow key={verification.id}>
                       <TableCell className="font-medium">
-                        {format(new Date(verification.verification_date), 'MMM dd, yyyy')}
+                        {verification.verification_date ? format(new Date(verification.verification_date), 'MMM dd, yyyy') : 'N/A'}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
@@ -295,7 +295,7 @@ export default function VerificationHistoryPage() {
                       <TableCell className="text-sm text-slate-500">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {format(new Date(verification.created_date), 'HH:mm')}
+                          {verification.created_date ? format(new Date(verification.created_date), 'HH:mm') : 'N/A'}
                         </div>
                       </TableCell>
                     </TableRow>

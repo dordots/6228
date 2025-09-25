@@ -40,12 +40,25 @@ const formatUtcToIsraelTime = (utcDateString) => {
 const processActivityDetails = (details) => {
     if (!details) return { text: '', hasSignature: false };
     
+    // Handle object details (e.g., error messages)
+    if (typeof details === 'object' && details !== null) {
+        // If it has a message property, use that
+        if (details.message) {
+            return { text: String(details.message), hasSignature: false };
+        }
+        // Otherwise, try to stringify it
+        return { text: JSON.stringify(details), hasSignature: false };
+    }
+    
+    // Convert to string to ensure it's safe to process
+    const detailsStr = String(details);
+    
     const signatureRegex = /(data:image\/png;base64,[\s\S]+)/;
-    const hasSignature = signatureRegex.test(details);
+    const hasSignature = signatureRegex.test(detailsStr);
     
     if (hasSignature) {
         // Remove the signature data completely and clean up the text
-        let text = details.replace(signatureRegex, '').replace(/Signature:\s*$/, '').trim();
+        let text = detailsStr.replace(signatureRegex, '').replace(/Signature:\s*$/, '').trim();
         // Remove any remaining filename references like "signature.png" or similar
         text = text.replace(/signature\.(png|jpg|jpeg)/gi, '').trim();
         // Clean up any leftover punctuation
@@ -53,7 +66,7 @@ const processActivityDetails = (details) => {
         return { text, hasSignature: true };
     }
     
-    return { text: details, hasSignature: false };
+    return { text: detailsStr, hasSignature: false };
 };
 
 // Enhanced function to extract comprehensive activity information  

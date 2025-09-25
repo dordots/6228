@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && 
+        request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        request.auth.token.role == 'admin';
+    }
+    
+    function isManager() {
+      return isAuthenticated() && 
+        (request.auth.token.role == 'admin' || 
+         request.auth.token.role == 'manager');
+    }
+    
+    function isSoldier(soldierID) {
+      return isAuthenticated() && 
+        request.auth.token.soldier_id == soldierID;
+    }
+    
+    function belongsToDivision(division) {
+      return isAuthenticated() && 
+        request.auth.token.division == division;
+    }
+    
+    // Soldiers collection
+    match /soldiers/{soldierID} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || 
+        (isManager() && belongsToDivision(resource.data.division_name));
+      allow delete: if isAdmin();
+    }
+    
+    // Equipment collection
+    match /equipment/{equipmentID} {
+      allow read: if isAuthenticated();
+      allow create: if isManager();
+      allow update: if isManager() && 
+        (isAdmin() || belongsToDivision(resource.data.division_name));
+      allow delete: if isAdmin();
+    }
+    
+    // Weapons collection
+    match /weapons/{weaponID} {
+      allow read: if isAuthenticated();
+      allow create: if isManager();
+      allow update: if isManager();
+      allow delete: if isAdmin();
+    }
+    
+    // Serialized gear collection
+    match /serialized_gear/{gearID} {
+      allow read: if isAuthenticated();
+      allow create: if isManager();
+      allow update: if isManager();
+      allow delete: if isAdmin();
+    }
+    
+    // Drone sets collection
+    match /drone_sets/{droneSetID} {
+      allow read: if isAuthenticated();
+      allow create: if isManager();
+      allow update: if isManager();
+      allow delete: if isAdmin();
+    }
+    
+    // Drone components collection
+    match /drone_components/{componentID} {
+      allow read: if isAuthenticated();
+      allow create: if isManager();
+      allow update: if isManager();
+      allow delete: if isAdmin();
+    }
+    
+    // Activity logs - read only for most users
+    match /activity_logs/{logID} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if false; // Never update logs
+      allow delete: if isAdmin();
+    }
+    
+    // Daily verifications
+    match /daily_verifications/{verificationID} {
+      allow read: if isAuthenticated();
+      allow create: if isManager();
+      allow update: if false; // Immutable once created
+      allow delete: if isAdmin();
+    }
+    
+    // Users collection - for profile management
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

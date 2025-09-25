@@ -6,7 +6,23 @@
       "Bash(git push:*)",
       "Bash(mkdir:*)",
       "Bash(mv:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm install:*)",
+      "Bash(firebase use:*)",
+      "Bash(grep:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(node:*)",
+      "Bash(cat:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(rm:*)",
+      "Bash(firebase functions:log:*)",
+      "Bash(gcloud projects get-iam-policy:*)",
+      "Bash(gcloud projects add-iam-policy-binding:*)",
+      "Bash(firebase projects:get-default-service-account:*)",
+      "Bash(firebase functions:artifacts:setpolicy:*)"
     ],
     "deny": []
   }

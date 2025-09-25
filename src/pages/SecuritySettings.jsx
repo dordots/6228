@@ -209,6 +209,22 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                             </div>
                         )
                     )}
+                    {isRequired && user?.totp_enabled && (
+                        <div className="mt-4">
+                            <Button 
+                                onClick={() => {
+                                    if (onSetupComplete) {
+                                        onSetupComplete();
+                                    } else {
+                                        window.location.href = '/dashboard';
+                                    }
+                                }} 
+                                className="w-full"
+                            >
+                                Continue to Dashboard
+                            </Button>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

@@ -1,0 +1,39 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isManager() {
+      return request.auth != null && 
+        (request.auth.token.role == 'admin' || 
+         request.auth.token.role == 'manager');
+    }
+    
+    // Public files (e.g., form templates)
+    match /public/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    
+    // Private files (e.g., sensitive documents)
+    match /private/{allPaths=**} {
+      allow read: if isManager();
+      allow write: if isManager();
+    }
+    
+    // User uploads (profile pictures, signatures)
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == userId;
+    }
+    
+    // Equipment photos
+    match /equipment/{equipmentId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "Weapon",
+  "type": "object",
+  "description": "Entity representing weapons in the military unit",
+  "properties": {
+    "weapon_id": {
+      "type": "string",
+      "description": "Unique weapon ID from import"
+    },
+    "weapon_type": {
+      "type": "string",
+      "description": "Type of weapon"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["functioning", "not_functioning"],
+      "default": "functioning",
+      "description": "Weapon operational status"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Soldier ID of assigned soldier"
+    },
+    "division_name": {
+      "type": "string",
+      "description": "The division the weapon is assigned to, based on the assigned soldier."
+    },
+    "last_checked_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the weapon was last checked or serviced"
+    },
+    "armory_status": {
+      "type": "string",
+      "enum": ["with_soldier", "in_deposit"],
+      "default": "with_soldier",
+      "description": "Whether the weapon is with the soldier or deposited"
+    },
+    "deposit_location": {
+      "type": "string",
+      "enum": ["division_deposit", "armory_deposit"],
+      "description": "Specific location where the weapon is deposited (only applies when armory_status is 'in_deposit')"
+    },
+    "last_signed_by": {
+      "type": "string",
+      "description": "Full name of the last soldier who signed for this weapon."
+    },
+    "comments": {
+      "type": "string",
+      "description": "Additional comments or notes about the weapon."
+    }
+  },
+  "required": ["weapon_id", "weapon_type"]
+}

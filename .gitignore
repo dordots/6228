@@ -24,6 +24,17 @@ dist-ssr
 *.sw?
 
 .env
+.env.local
 
-# Knowledge base (contains sensitive implementation details)
-/knowledge-base/
+
+# Firebase
+.firebase/
+*.log
+firebase-debug.log*
+firestore-debug.log*
+firestore.rules.compiled
+ui-debug.log*
+
+# Service account keys (NEVER commit these!)
+*firebase-adminsdk*.json
+serviceAccountKey.json

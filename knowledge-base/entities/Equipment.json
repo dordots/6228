@@ -1,0 +1,35 @@
+{
+  "name": "Equipment",
+  "type": "object",
+  "description": "Entity representing standard equipment in the military unit",
+  "properties": {
+    "equipment_type": {
+      "type": "string",
+      "description": "Type/category of equipment"
+    },
+    "serial_number": {
+      "type": "string",
+      "description": "Equipment serial number (only for serialized items)"
+    },
+    "condition": {
+      "type": "string",
+      "enum": ["functioning", "not_functioning"],
+      "default": "functioning",
+      "description": "Equipment condition"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Soldier ID of assigned soldier (optional - if empty, equipment is in division storage)"
+    },
+    "quantity": {
+      "type": "number",
+      "default": 1,
+      "description": "Quantity of this equipment type"
+    },
+    "division_name": {
+      "type": "string",
+      "description": "The division the equipment belongs to (required)"
+    }
+  },
+  "required": ["equipment_type", "division_name"]
+}

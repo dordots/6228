@@ -1,0 +1,22 @@
+{
+  "name": "DroneComponent",
+  "type": "object",
+  "description": "Entity representing individual drone components in the military unit",
+  "properties": {
+    "component_id": {
+      "type": "string",
+      "description": "Unique serial number for the drone component"
+    },
+    "component_type": {
+      "type": "string",
+      "description": "The type of drone component (e.g., Avetta Drone, Evo Remote)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["Operational", "Maintenance", "Damaged"],
+      "default": "Operational",
+      "description": "The operational status of the component"
+    }
+  },
+  "required": ["component_id", "component_type"]
+}

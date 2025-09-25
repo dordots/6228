@@ -1,0 +1,54 @@
+{
+  "name": "SerializedGear",
+  "type": "object",
+  "description": "Entity representing serialized gear in the military unit",
+  "properties": {
+    "gear_id": {
+      "type": "string",
+      "description": "Unique gear ID from import"
+    },
+    "gear_type": {
+      "type": "string",
+      "description": "Type of serialized gear"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["functioning", "not_functioning"],
+      "default": "functioning",
+      "description": "Gear operational status"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Soldier ID of assigned soldier"
+    },
+    "division_name": {
+      "type": "string",
+      "description": "The division the gear is assigned to, based on the assigned soldier."
+    },
+    "last_checked_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the gear was last checked or serviced"
+    },
+    "armory_status": {
+      "type": "string",
+      "enum": ["with_soldier", "in_deposit"],
+      "default": "with_soldier",
+      "description": "Whether the gear is with the soldier or deposited"
+    },
+    "deposit_location": {
+      "type": "string",
+      "enum": ["division_deposit", "armory_deposit"],
+      "description": "Specific location where the gear is deposited (only applies when armory_status is 'in_deposit')"
+    },
+    "last_signed_by": {
+      "type": "string",
+      "description": "Full name of the last soldier who signed for this gear."
+    },
+    "comments": {
+      "type": "string",
+      "description": "Additional comments or notes about the gear."
+    }
+  },
+  "required": ["gear_id", "gear_type"]
+}

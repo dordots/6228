@@ -186,7 +186,15 @@ export default function Layout({ children, currentPageName }) {
         if (user.linked_soldier_id) {
           try {
             const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
-            setLinkedSoldier(soldiers[0] || null);
+            const soldier = soldiers[0];
+            
+            // Validate soldier object before setting
+            if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
+              setLinkedSoldier(soldier);
+            } else {
+              console.warn("Invalid soldier object received:", soldier);
+              setLinkedSoldier(null);
+            }
           } catch (error) {
             console.error("Error loading linked soldier:", error);
             setLinkedSoldier(null); // Ensure it's null on error
@@ -256,7 +264,15 @@ export default function Layout({ children, currentPageName }) {
       if (user.linked_soldier_id) {
           try {
             const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
-            setLinkedSoldier(soldiers[0] || null);
+            const soldier = soldiers[0];
+            
+            // Validate soldier object before setting
+            if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
+              setLinkedSoldier(soldier);
+            } else {
+              console.warn("Invalid soldier object received after TOTP setup:", soldier);
+              setLinkedSoldier(null);
+            }
           } catch (error) {
             console.error("Error loading linked soldier after TOTP setup:", error);
             setLinkedSoldier(null);
@@ -264,17 +280,28 @@ export default function Layout({ children, currentPageName }) {
       } else {
           setLinkedSoldier(null);
       }
-      setIsTotpVerified(false); // Still need to verify after setup
+      // If TOTP was just set up, mark as verified and store the verification time
+      setIsTotpVerified(true);
+      sessionStorage.setItem('lastTotpVerificationTime', Date.now().toString());
     } catch (error) {
       console.error("Error refreshing user after TOTP setup:", error);
     }
   };
 
-  const handleSoldierLinked = (soldier) => {
-    setLinkedSoldier(soldier);
-    setShowSoldierLinking(false);
-    // Optionally, re-fetch currentUser to update its linked_soldier_id from the backend.
-    // For now, we rely on the `soldier` object passed back from the dialog.
+  const handleSoldierLinked = async (soldier) => {
+    try {
+      setLinkedSoldier(soldier);
+      setShowSoldierLinking(false);
+      
+      // Reload user data to get updated claims
+      const updatedUser = await UserEntity.me();
+      setCurrentUser(updatedUser);
+      
+      // Force a page reload to ensure all components get fresh data
+      window.location.reload();
+    } catch (error) {
+      console.error("Error after soldier linking:", error);
+    }
   };
 
   const navigationItems = getNavigationItems(
@@ -308,7 +335,8 @@ export default function Layout({ children, currentPageName }) {
   }
 
   // Show soldier linking dialog if user is logged in, TOTP verified, but hasn't linked their soldier yet
-  if (currentUser && currentUser.totp_enabled && isTotpVerified && !currentUser.linked_soldier_id && !linkedSoldier) {
+  // Skip this for admin users - they don't need to be linked to a soldier
+  if (currentUser && currentUser.totp_enabled && isTotpVerified && !currentUser.linked_soldier_id && !linkedSoldier && currentUser.role !== 'admin') {
     return (
       <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center">
         <SoldierLinkingDialog
@@ -381,11 +409,11 @@ export default function Layout({ children, currentPageName }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900 text-sm truncate">
-                    {linkedSoldier ? `${linkedSoldier.first_name} ${linkedSoldier.last_name}` : 
+                    {linkedSoldier && linkedSoldier.first_name ? `${linkedSoldier.first_name} ${linkedSoldier.last_name || ''}` : 
                      currentUser?.custom_role === 'soldier' ? 'Soldier Account' : 'Command User'}
                   </p>
                   <p className="text-xs text-slate-500 truncate">
-                    {linkedSoldier ? `ID: ${linkedSoldier.soldier_id}` : 
+                    {linkedSoldier && linkedSoldier.soldier_id ? `ID: ${linkedSoldier.soldier_id}` : 
                      currentUser?.custom_role === 'soldier' ? 'Personal View' : 'Equipment Manager'}
                   </p>
                 </div>

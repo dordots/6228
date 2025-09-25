@@ -1,4 +1,6 @@
 import Layout from "./Layout.jsx";
+import Login from "./Login.jsx";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 import Dashboard from "./Dashboard";
 
@@ -120,11 +122,22 @@ function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
     
+    // Login route doesn't need protection
+    if (location.pathname === '/login') {
+        return (
+            <Routes>
+                <Route path="/login" element={<Login />} />
+            </Routes>
+        );
+    }
+    
+    // All other routes need protection
     return (
-        <Layout currentPageName={currentPage}>
-            <Routes>            
-                
-                    <Route path="/" element={<Dashboard />} />
+        <ProtectedRoute>
+            <Layout currentPageName={currentPage}>
+                <Routes>            
+                    
+                        <Route path="/" element={<Dashboard />} />
                 
                 
                 <Route path="/Dashboard" element={<Dashboard />} />
@@ -175,8 +188,9 @@ function PagesContent() {
                 
                 <Route path="/MyDrones" element={<MyDrones />} />
                 
-            </Routes>
-        </Layout>
+                </Routes>
+            </Layout>
+        </ProtectedRoute>
     );
 }
 

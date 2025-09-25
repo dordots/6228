@@ -1,0 +1,38 @@
+{
+  "name": "DailyVerification",
+  "type": "object",
+  "description": "Entity representing daily verification records for soldiers",
+  "properties": {
+    "soldier_id": {
+      "type": "string",
+      "description": "The ID of the soldier being verified."
+    },
+    "verification_date": {
+      "type": "string",
+      "format": "date",
+      "description": "The specific date of the verification."
+    },
+    "verified_by_user_id": {
+      "type": "string",
+      "description": "The ID of the user who performed the verification."
+    },
+    "verified_by_user_name": {
+      "type": "string",
+      "description": "The full name of the user who performed the verification."
+    },
+    "division_name": {
+      "type": "string",
+      "description": "The division to which the soldier belongs at the time of verification."
+    },
+    "comments": {
+      "type": "string",
+      "description": "Optional comments if there are issues or notes."
+    }
+  },
+  "required": [
+    "soldier_id",
+    "verification_date",
+    "verified_by_user_id",
+    "division_name"
+  ]
+}

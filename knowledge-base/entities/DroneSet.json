@@ -1,0 +1,50 @@
+{
+  "name": "DroneSet",
+  "type": "object",
+  "description": "Entity representing a complete drone set in the military unit",
+  "properties": {
+    "set_serial_number": {
+      "type": "string",
+      "description": "Unique serial number for the entire drone set"
+    },
+    "set_type": {
+      "type": "string",
+      "enum": ["Avetta", "Evo"],
+      "description": "The type of drone set"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Soldier ID of the soldier this set is assigned to"
+    },
+    "components": {
+      "type": "object",
+      "description": "Key-value pairs of component roles and their SerializedGear IDs"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["Operational", "Maintenance", "Damaged"],
+      "default": "Operational",
+      "description": "The overall status of the drone set"
+    },
+    "division_name": {
+      "type": "string",
+      "description": "The division the drone set belongs to"
+    },
+    "armory_status": {
+      "type": "string",
+      "enum": ["with_soldier", "in_deposit"],
+      "default": "with_soldier",
+      "description": "Whether the drone set is with the soldier or deposited"
+    },
+    "deposit_location": {
+      "type": "string",
+      "enum": ["division_deposit", "armory_deposit"],
+      "description": "Specific location where the drone set is deposited (only applies when armory_status is 'in_deposit')"
+    },
+    "comments": {
+      "type": "string",
+      "description": "Additional comments or notes about the drone set."
+    }
+  },
+  "required": ["set_serial_number", "set_type"]
+}

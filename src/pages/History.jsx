@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
-import { Table as DetailTable, TableBody as DetailTableBody, TableCell as DetailTableCell, TableHead as DetailTableHead, DetailTableHeader, TableRow as DetailTableRow } from "@/components/ui/table";
+import { Table as DetailTable, TableBody as DetailTableBody, TableCell as DetailTableCell, TableHead as DetailTableHead, TableHeader as DetailTableHeader, TableRow as DetailTableRow } from "@/components/ui/table";
 import { ArrowRight } from "lucide-react";
 
 const activityIcons = {

@@ -1,0 +1,50 @@
+{
+  "name": "ActivityLog",
+  "type": "object",
+  "description": "Entity representing activity logs for tracking all system actions",
+  "properties": {
+    "activity_type": {
+      "type": "string",
+      "enum": [
+        "CREATE",
+        "UPDATE",
+        "DELETE",
+        "ASSIGN",
+        "UNASSIGN",
+        "INSPECT",
+        "DEPOSIT",
+        "RELEASE"
+      ],
+      "description": "The type of action performed."
+    },
+    "entity_type": {
+      "type": "string",
+      "description": "The name of the entity that was affected (e.g., Soldier, Weapon)."
+    },
+    "details": {
+      "type": "string",
+      "description": "A human-readable summary of the activity."
+    },
+    "user_full_name": {
+      "type": "string",
+      "description": "Full name of the user who performed the action."
+    },
+    "user_soldier_id": {
+      "type": "string",
+      "description": "The Soldier ID of the user who performed the action, if applicable."
+    },
+    "context": {
+      "type": "object",
+      "description": "A JSON object containing detailed context about the event, such as data diffs or related item lists."
+    },
+    "division_name": {
+      "type": "string",
+      "description": "Division associated with the activity, if any."
+    },
+    "soldier_id": {
+      "type": "string",
+      "description": "The soldier ID associated with this activity, if applicable."
+    }
+  },
+  "required": ["activity_type", "entity_type", "details"]
+}

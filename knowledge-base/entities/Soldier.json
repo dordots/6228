@@ -1,0 +1,60 @@
+{
+  "name": "Soldier",
+  "type": "object",
+  "description": "Entity representing a soldier in the military unit",
+  "properties": {
+    "soldier_id": {
+      "type": "string",
+      "description": "Unique soldier ID from import"
+    },
+    "first_name": {
+      "type": "string",
+      "description": "Soldier's first name"
+    },
+    "last_name": {
+      "type": "string",
+      "description": "Soldier's last name"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Soldier's email address"
+    },
+    "street_address": {
+      "type": "string",
+      "description": "Soldier's street address"
+    },
+    "city": {
+      "type": "string",
+      "description": "Soldier's city"
+    },
+    "division_name": {
+      "type": "string",
+      "description": "Division assignment"
+    },
+    "team_name": {
+      "type": "string",
+      "description": "Team assignment"
+    },
+    "profession": {
+      "type": "string",
+      "description": "Military profession/MOS"
+    },
+    "phone_number": {
+      "type": "string",
+      "description": "Contact phone number"
+    },
+    "enlistment_status": {
+      "type": "string",
+      "enum": ["expected", "arrived"],
+      "default": "expected",
+      "description": "Enlistment process status"
+    },
+    "arrival_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date when soldier arrived for enlistment"
+    }
+  },
+  "required": ["soldier_id", "first_name", "last_name"]
+}

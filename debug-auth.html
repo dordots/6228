@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Auth</title>
+</head>
+<body>
+    <h1>Debug Authentication</h1>
+    <button onclick="skipTotp()">Skip TOTP Check (Debug Only)</button>
+    <button onclick="clearSession()">Clear Session</button>
+    <button onclick="checkAuth()">Check Auth Status</button>
+    <pre id="output"></pre>
+
+    <script>
+        function skipTotp() {
+            sessionStorage.setItem('lastTotpVerificationTime', Date.now().toString());
+            document.getElementById('output').textContent = 'TOTP verification time set. Redirecting to dashboard...';
+            setTimeout(() => {
+                window.location.href = 'http://localhost:5173/dashboard';
+            }, 1000);
+        }
+
+        function clearSession() {
+            sessionStorage.clear();
+            localStorage.clear();
+            document.getElementById('output').textContent = 'Session cleared.';
+        }
+
+        function checkAuth() {
+            const lastVerification = sessionStorage.getItem('lastTotpVerificationTime');
+            const output = {
+                lastTotpVerificationTime: lastVerification,
+                timeSinceVerification: lastVerification ? (Date.now() - parseInt(lastVerification)) / 1000 + ' seconds' : 'Not set',
+                sessionStorage: Object.keys(sessionStorage).reduce((acc, key) => {
+                    acc[key] = sessionStorage.getItem(key);
+                    return acc;
+                }, {})
+            };
+            document.getElementById('output').textContent = JSON.stringify(output, null, 2);
+        }
+    </script>
+</body>
+</html>

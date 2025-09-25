@@ -1,0 +1,75 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "soldiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "enlistment_status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "weapons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "soldier_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "activity_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entity_type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "daily_verifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "verification_date",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

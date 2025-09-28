@@ -24,7 +24,9 @@
       "Bash(firebase projects:get-default-service-account:*)",
       "Bash(firebase functions:artifacts:setpolicy:*)",
       "Bash(firebase projects:list:*)",
-      "Bash(firebase functions:shell:*)"
+      "Bash(firebase functions:shell:*)",
+      "Bash(firebase functions:list:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }

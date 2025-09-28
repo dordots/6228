@@ -40,14 +40,18 @@ exports.createPhoneUser = functions
         }
       }
 
-      // Set custom claims
+      // Get default permissions for the role
+      const roleToUse = customRole || role || 'soldier';
+      const defaultPerms = getDefaultPermissions(roleToUse);
+      
+      // Set custom claims with new RBAC structure
       const customClaims = {
-        role,
-        custom_role: customRole || (role === 'admin' ? 'admin' : role === 'manager' ? 'manager' : 'soldier'),
-        permissions: {
-          ...getDefaultPermissions(customRole || role),
-          ...permissions
-        },
+        role: roleToUse === 'admin' ? 'admin' : 'user',
+        custom_role: roleToUse,
+        permissions: defaultPerms,
+        scope: defaultPerms.scope,
+        division: null,
+        team: null,
         linked_soldier_id: linkedSoldierId || null,
         totp_enabled: false
       };
@@ -83,9 +87,10 @@ exports.listUsers = functions
     }
 
     const isAdmin = context.auth.token.role === 'admin';
-    const canManageUsers = context.auth.token.permissions?.can_manage_users;
+    const canManageUsers = context.auth.token.permissions?.['system.users'];
+    const isDivisionManager = context.auth.token.custom_role === 'division_manager';
 
-    if (!isAdmin && !canManageUsers) {
+    if (!isAdmin && !canManageUsers && !isDivisionManager) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'Insufficient permissions to list users'
@@ -104,15 +109,21 @@ exports.listUsers = functions
           const customClaims = user.customClaims || {};
           return {
             uid: user.uid,
+            id: user.uid, // Add id for frontend compatibility
             email: user.email,
             phoneNumber: user.phoneNumber,
+            full_name: user.displayName || user.email || user.phoneNumber, // Add full_name
             displayName: user.displayName,
             disabled: user.disabled,
+            created_date: user.metadata.creationTime, // Rename for frontend
             createdAt: user.metadata.creationTime,
             lastSignInAt: user.metadata.lastSignInTime,
-            role: customClaims.role || 'soldier',
-            customRole: customClaims.custom_role,
+            role: customClaims.role || 'user',
+            custom_role: customClaims.custom_role || 'soldier',
             permissions: customClaims.permissions || {},
+            scope: customClaims.scope,
+            division: customClaims.division,
+            team: customClaims.team,
             linkedSoldierId: customClaims.linked_soldier_id,
             totpEnabled: customClaims.totp_enabled || false
           };
@@ -144,7 +155,7 @@ exports.updateUserRole = functions
       );
     }
 
-    const { uid, role, customRole } = data;
+    const { uid, role, division, team } = data;
 
     if (!uid || !role) {
       throw new functions.https.HttpsError(
@@ -158,15 +169,18 @@ exports.updateUserRole = functions
       const user = await admin.auth().getUser(uid);
       const currentClaims = user.customClaims || {};
 
-      // Update custom claims
+      // Get default permissions for the role
+      const permissions = getDefaultPermissions(role);
+
+      // Update custom claims with new RBAC structure
       const updatedClaims = {
         ...currentClaims,
-        role,
-        custom_role: customRole || role,
-        permissions: {
-          ...getDefaultPermissions(customRole || role),
-          ...(currentClaims.permissions || {})
-        }
+        role: role === 'admin' ? 'admin' : 'user', // Admin is special, others are 'user' base role
+        custom_role: role,
+        permissions: permissions,
+        scope: permissions.scope,
+        division: division || null,
+        team: team || null,
       };
 
       await admin.auth().setCustomUserClaims(uid, updatedClaims);
@@ -174,8 +188,10 @@ exports.updateUserRole = functions
       return {
         uid,
         role,
-        customRole: customRole || role,
-        permissions: updatedClaims.permissions
+        permissions: permissions,
+        scope: permissions.scope,
+        division,
+        team
       };
     } catch (error) {
       console.error('Error updating user role:', error);
@@ -186,24 +202,26 @@ exports.updateUserRole = functions
     }
   });
 
-// Update user permissions
+// Update user division/team assignment
 exports.updateUserPermissions = functions
   .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
   .https.onCall(async (data, context) => {
-    // Check if caller is admin
-    if (!context.auth || context.auth.token.role !== 'admin') {
+    // Check if caller is admin or division manager
+    if (!context.auth || 
+        (context.auth.token.role !== 'admin' && 
+         context.auth.token.custom_role !== 'division_manager')) {
       throw new functions.https.HttpsError(
         'permission-denied',
-        'Only admins can update user permissions'
+        'Only admins and division managers can update user assignments'
       );
     }
 
-    const { uid, permissions } = data;
+    const { uid, division, team } = data;
 
-    if (!uid || !permissions) {
+    if (!uid) {
       throw new functions.https.HttpsError(
         'invalid-argument',
-        'User ID and permissions are required'
+        'User ID is required'
       );
     }
 
@@ -212,26 +230,34 @@ exports.updateUserPermissions = functions
       const user = await admin.auth().getUser(uid);
       const currentClaims = user.customClaims || {};
 
-      // Update custom claims
+      // Division managers can only assign within their division
+      if (context.auth.token.custom_role === 'division_manager' && 
+          division !== context.auth.token.division) {
+        throw new functions.https.HttpsError(
+          'permission-denied',
+          'Division managers can only assign users within their own division'
+        );
+      }
+
+      // Update custom claims with division/team
       const updatedClaims = {
         ...currentClaims,
-        permissions: {
-          ...(currentClaims.permissions || {}),
-          ...permissions
-        }
+        division: division || null,
+        team: team || null,
       };
 
       await admin.auth().setCustomUserClaims(uid, updatedClaims);
 
       return {
         uid,
-        permissions: updatedClaims.permissions
+        division,
+        team
       };
     } catch (error) {
-      console.error('Error updating user permissions:', error);
+      console.error('Error updating user assignment:', error);
       throw new functions.https.HttpsError(
         'internal',
-        `Failed to update user permissions: ${error.message}`
+        `Failed to update user assignment: ${error.message}`
       );
     }
   });
@@ -319,13 +345,19 @@ exports.getUserByPhone = functions
 
       return {
         uid: user.uid,
+        id: user.uid,
         email: user.email,
         phoneNumber: user.phoneNumber,
+        full_name: user.displayName || user.email || user.phoneNumber,
         displayName: user.displayName,
         disabled: user.disabled,
-        role: customClaims.role || 'soldier',
-        customRole: customClaims.custom_role,
+        created_date: user.metadata.creationTime,
+        role: customClaims.role || 'user',
+        custom_role: customClaims.custom_role || 'soldier',
         permissions: customClaims.permissions || {},
+        scope: customClaims.scope,
+        division: customClaims.division,
+        team: customClaims.team,
         linkedSoldierId: customClaims.linked_soldier_id,
         totpEnabled: customClaims.totp_enabled || false
       };
@@ -375,11 +407,17 @@ exports.setAdminByPhone = functions
       // Get user by phone
       const user = await admin.auth().getUserByPhoneNumber(phoneNumber);
 
-      // Set admin claims
+      // Get admin permissions
+      const adminPerms = getDefaultPermissions('admin');
+      
+      // Set admin claims with new RBAC structure
       const adminClaims = {
         role: 'admin',
         custom_role: 'admin',
-        permissions: getDefaultPermissions('admin'),
+        permissions: adminPerms,
+        scope: adminPerms.scope,
+        division: null,
+        team: null,
         linked_soldier_id: null,
         totp_enabled: user.customClaims?.totp_enabled || false
       };
@@ -413,107 +451,103 @@ exports.setAdminByPhone = functions
 
 // Helper function to get default permissions by role
 function getDefaultPermissions(role) {
+  const basePermissions = {
+    // Personnel permissions
+    'personnel.view': false,
+    'personnel.create': false,
+    'personnel.update': false,
+    'personnel.delete': false,
+    
+    // Equipment permissions (covers weapons, gear, drones, standard equipment)
+    'equipment.view': false,
+    'equipment.create': false,
+    'equipment.update': false,
+    'equipment.delete': false,
+    
+    // Operations permissions
+    'operations.sign': false,
+    'operations.transfer': false,
+    'operations.deposit': false,
+    'operations.release': false,
+    'operations.verify': false,
+    'operations.maintain': false,
+    
+    // System permissions
+    'system.reports': false,
+    'system.history': false,
+    'system.import': false,
+    'system.export': false,
+    'system.users': false,
+  };
+  
   switch (role) {
     case 'admin':
-      // Admin has all permissions
+      // Admin has all permissions with global scope
       return {
-        can_create_soldiers: true,
-        can_edit_soldiers: true,
-        can_delete_soldiers: true,
-        can_create_weapons: true,
-        can_edit_weapons: true,
-        can_delete_weapons: true,
-        can_create_gear: true,
-        can_edit_gear: true,
-        can_delete_gear: true,
-        can_create_drones: true,
-        can_edit_drones: true,
-        can_delete_drones: true,
-        can_create_drone_components: true,
-        can_edit_drone_components: true,
-        can_delete_drone_components: true,
-        can_create_equipment: true,
-        can_edit_equipment: true,
-        can_delete_equipment: true,
-        can_import_data: true,
-        can_manage_users: true,
-        can_sign_equipment: true,
-        can_view_reports: true,
-        can_perform_maintenance: true,
-        can_view_history: true,
-        can_transfer_equipment: true,
-        can_deposit_equipment: true,
-        can_release_equipment: true,
-        can_export_data: true,
-        can_perform_daily_verification: true,
+        ...Object.keys(basePermissions).reduce((acc, key) => ({...acc, [key]: true}), {}),
+        scope: 'global'
       };
       
-    case 'manager':
-      // Manager has most permissions
+    case 'division_manager':
+      // Division manager has most permissions within their division
       return {
-        can_create_soldiers: true,
-        can_edit_soldiers: true,
-        can_delete_soldiers: false,
-        can_create_weapons: true,
-        can_edit_weapons: true,
-        can_delete_weapons: false,
-        can_create_gear: true,
-        can_edit_gear: true,
-        can_delete_gear: false,
-        can_create_drones: true,
-        can_edit_drones: true,
-        can_delete_drones: false,
-        can_create_drone_components: true,
-        can_edit_drone_components: true,
-        can_delete_drone_components: false,
-        can_create_equipment: true,
-        can_edit_equipment: true,
-        can_delete_equipment: false,
-        can_import_data: true,
-        can_manage_users: false,
-        can_sign_equipment: true,
-        can_view_reports: true,
-        can_perform_maintenance: true,
-        can_view_history: true,
-        can_transfer_equipment: true,
-        can_deposit_equipment: true,
-        can_release_equipment: true,
-        can_export_data: true,
-        can_perform_daily_verification: true,
+        ...basePermissions,
+        'personnel.view': true,
+        'personnel.create': true,
+        'personnel.update': true,
+        'personnel.delete': false,
+        'equipment.view': true,
+        'equipment.create': true,
+        'equipment.update': true,
+        'equipment.delete': true,
+        'operations.sign': true,
+        'operations.transfer': true,
+        'operations.deposit': true,
+        'operations.release': true,
+        'operations.verify': true,
+        'operations.maintain': true,
+        'system.reports': true,
+        'system.history': true,
+        'system.import': true,
+        'system.export': true,
+        'system.users': false,
+        scope: 'division'
+      };
+      
+    case 'team_leader':
+      // Team leader has limited permissions within their team
+      return {
+        ...basePermissions,
+        'personnel.view': true,
+        'personnel.update': true,
+        'equipment.view': true,
+        'equipment.update': true,
+        'operations.sign': true,
+        'operations.deposit': true,
+        'operations.verify': true,
+        'system.reports': true,
+        'system.history': true,
+        scope: 'team'
+      };
+      
+    case 'soldier':
+      // Soldier can only view their own data
+      return {
+        ...basePermissions,
+        'personnel.view': true, // Own profile only
+        'equipment.view': true, // Own equipment only
+        'system.history': true, // Own activities only
+        scope: 'self'
       };
       
     default:
-      // Soldier or default role has limited permissions
+      // Default to soldier permissions
       return {
-        can_create_soldiers: false,
-        can_edit_soldiers: true,
-        can_delete_soldiers: false,
-        can_create_weapons: false,
-        can_edit_weapons: false,
-        can_delete_weapons: false,
-        can_create_gear: false,
-        can_edit_gear: false,
-        can_delete_gear: false,
-        can_create_drones: false,
-        can_edit_drones: false,
-        can_delete_drones: false,
-        can_create_drone_components: false,
-        can_edit_drone_components: false,
-        can_delete_drone_components: false,
-        can_create_equipment: false,
-        can_edit_equipment: false,
-        can_delete_equipment: false,
-        can_import_data: false,
-        can_manage_users: false,
-        can_sign_equipment: true,
-        can_view_reports: true,
-        can_perform_maintenance: true,
-        can_view_history: true,
-        can_transfer_equipment: false,
-        can_deposit_equipment: true,
-        can_release_equipment: true,
-        can_export_data: false,
-        can_perform_daily_verification: false,
+        ...basePermissions,
+        'personnel.view': true,
+        'equipment.view': true,
+        'system.history': true,
+        scope: 'self'
       };
   }
 }

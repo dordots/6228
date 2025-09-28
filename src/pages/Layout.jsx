@@ -58,80 +58,110 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
     ];
   }
 
-  // Original navigation for all other roles
+  // Navigation items with new permission structure
   const allItems = [
     {
       title: "Signing",
       url: createPageUrl("SoldierManagement"),
       icon: User,
-      permission: 'can_sign_equipment',
+      permission: 'operations.sign',
     },
     {
       title: "Command Dashboard",
       url: createPageUrl("Dashboard"),
       icon: BarChart3,
-      permission: 'can_view_reports',
+      permission: 'system.reports',
     },
     {
       title: "Activity History",
       url: createPageUrl("History"),
       icon: History,
-      permission: 'can_view_history',
+      permission: 'system.history',
     },
     { title: "Divisions", url: createPageUrl("Divisions"), icon: Shield },
-    { title: "Personnel", url: createPageUrl("Soldiers"), icon: Users },
-    { title: "Weapons", url: createPageUrl("Weapons"), icon: Target },
-    { title: "Serialized Gear", url: createPageUrl("SerializedGear"), icon: Binoculars },
-    { title: "Drones", url: createPageUrl("Drones"), icon: Joystick },
-    { title: "Drone Components", url: createPageUrl("DroneComponents"), icon: Puzzle },
+    { 
+      title: "Personnel", 
+      url: createPageUrl("Soldiers"), 
+      icon: Users,
+      permission: 'personnel.view',
+    },
+    { 
+      title: "Weapons", 
+      url: createPageUrl("Weapons"), 
+      icon: Target,
+      permission: 'equipment.view',
+    },
+    { 
+      title: "Serialized Gear", 
+      url: createPageUrl("SerializedGear"), 
+      icon: Binoculars,
+      permission: 'equipment.view',
+    },
+    { 
+      title: "Drones", 
+      url: createPageUrl("Drones"), 
+      icon: Joystick,
+      permission: 'equipment.view',
+    },
+    { 
+      title: "Drone Components", 
+      url: createPageUrl("DroneComponents"), 
+      icon: Puzzle,
+      permission: 'equipment.view',
+    },
     {
       title: "Armory Deposit/Release",
       url: createPageUrl("ArmoryDeposit"),
       icon: Package,
-      permission: 'can_deposit_equipment',
+      permission: 'operations.deposit',
     },
     {
       title: "Let's Go Home",
       url: createPageUrl("SoldierRelease"),
       icon: Home,
-      // REMOVED: permission restriction - now accessible to all users
+      permission: 'operations.release',
     },
     {
       title: "Equipment Transfer",
       url: createPageUrl("EquipmentTransfer"),
       icon: ArrowRightLeft,
-      permission: 'can_transfer_equipment',
+      permission: 'operations.transfer',
     },
     {
       title: "Daily Verification",
       url: createPageUrl("DailyVerification"),
       icon: ClipboardCheck,
-      permission: 'can_perform_daily_verification',
+      permission: 'operations.verify',
     },
     {
       title: "Verification History",
       url: createPageUrl("VerificationHistory"),
       icon: Calendar,
-      permission: 'can_perform_daily_verification',
+      permission: 'operations.verify',
     },
     {
       title: "Maintenance",
       url: createPageUrl("Maintenance"),
       icon: ClipboardCheck,
-      permission: 'can_perform_maintenance',
+      permission: 'operations.maintain',
     },
-    { title: "Equipment", url: createPageUrl("Equipment"), icon: Wrench },
+    { 
+      title: "Equipment", 
+      url: createPageUrl("Equipment"), 
+      icon: Wrench,
+      permission: 'equipment.view',
+    },
     {
       title: "Import Data",
       url: createPageUrl("Import"),
       icon: Upload,
-      permission: 'can_import_data',
+      permission: 'system.import',
     },
     {
       title: "Data Export",
       url: createPageUrl("DataExport"),
       icon: Download,
-      permission: 'can_export_data',
+      permission: 'system.export',
     },
     {
       title: "Security",
@@ -142,7 +172,7 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       title: "User Management",
       url: createPageUrl("UserManagement"),
       icon: Users,
-      permission: 'can_manage_users',
+      permission: 'system.users',
     },
   ];
 
@@ -167,7 +197,6 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
 
 
 export default function Layout({ children, currentPageName }) {
-  console.log(`ARMORY APP CODE: Final redeploy attempt. If you see this, the application code is running. [Timestamp: ${new Date().toISOString()}]`);
   const location = useLocation();
 
   const [currentUser, setCurrentUser] = useState(null);

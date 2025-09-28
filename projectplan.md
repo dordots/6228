@@ -197,3 +197,4 @@ The Firebase migration is technically complete. All functionality has been imple
 - Fixed Dashboard rendering error where ActivityLog could return objects with `{message}` property instead of strings
 - Updated `processActivityDetails` function to handle both string and object inputs gracefully
 - Added type checking and object-to-string conversion for robust error handling
+- Fixed "Soldier ID already exists" error by correcting filter format in Soldiers.jsx (line 180) to use `{ where: { soldier_id: ... } }` format required by Firebase adapter

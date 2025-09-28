@@ -177,10 +177,19 @@ export default function Soldiers() {
         await ActivityLog.create(activityData);
         
       } else {
-        const existing = await Soldier.filter({ soldier_id: soldierData.soldier_id });
-        if (Array.isArray(existing) && existing.length > 0) {
-          alert(`Error: Soldier ID "${soldierData.soldier_id}" already exists.`);
-          return;
+        // Check if a soldier with this ID already exists
+        // Since soldier_id is used as the document ID, we need to check by ID directly
+        try {
+          const existingSoldier = await Soldier.findById(soldierData.soldier_id);
+          console.log('Checking for existing soldier:', soldierData.soldier_id, 'Result:', existingSoldier);
+          
+          if (existingSoldier) {
+            alert(`Error: Soldier ID "${soldierData.soldier_id}" already exists.`);
+            return;
+          }
+        } catch (error) {
+          // If findById throws an error, the document doesn't exist, which is what we want
+          console.log('Soldier does not exist, proceeding with creation');
         }
         
         await Soldier.create(soldierData);

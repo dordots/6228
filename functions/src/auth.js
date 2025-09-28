@@ -190,7 +190,7 @@ exports.updateUserData = functions
       const currentClaims = user.customClaims || {};
 
       // Allowed fields to update
-      const allowedFields = ["linked_soldier_id", "custom_role", "permissions"];
+      const allowedFields = ["linked_soldier_id", "custom_role", "permissions", "totp_enabled", "totp_temp_secret"];
       
       // Filter updates to only allowed fields
       const filteredUpdates = {};

@@ -130,6 +130,9 @@ export const User = {
           role: claims.role,
           custom_role: claims.custom_role,
           permissions: claims.permissions,
+          scope: claims.scope,
+          division: claims.division,
+          team: claims.team,
           linked_soldier_id: claims.linked_soldier_id,
           // Add other user properties
           emailVerified: user.emailVerified,
@@ -262,14 +265,25 @@ export const User = {
   // Update user (role/permissions)
   update: async (uid, updates) => {
     try {
-      if (updates.role !== undefined || updates.customRole !== undefined) {
+      if (updates.role !== undefined || updates.customRole !== undefined || 
+          updates.division !== undefined || updates.team !== undefined) {
         const updateRoleFn = httpsCallable(functions, 'updateUserRole');
-        await updateRoleFn({ uid, role: updates.role, customRole: updates.customRole });
+        await updateRoleFn({ 
+          uid, 
+          role: updates.role || updates.customRole, 
+          division: updates.division,
+          team: updates.team
+        });
       }
       
-      if (updates.permissions !== undefined) {
+      if (updates.permissions && (updates.permissions.division !== undefined || 
+                                  updates.permissions.team !== undefined)) {
         const updatePermsFn = httpsCallable(functions, 'updateUserPermissions');
-        await updatePermsFn({ uid, permissions: updates.permissions });
+        await updatePermsFn({ 
+          uid, 
+          division: updates.permissions.division,
+          team: updates.permissions.team
+        });
       }
       
       return { success: true };

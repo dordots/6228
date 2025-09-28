@@ -51,10 +51,16 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
         setSecret('');    // Clear any previous secret
         setToken('');     // Clear token input for new setup
         try {
-            const { data } = await generateTotp();
-            setQrCodeUrl(data.qrCodeUrl);
-            setSecret(data.secret);
+            const response = await generateTotp();
+            // Handle Firebase wrapper response structure
+            if (response.success && response.data) {
+                setQrCodeUrl(response.data.qrCodeUrl);
+                setSecret(response.data.secret);
+            } else {
+                setError(response.error || "Failed to generate a new secret. Please try again.");
+            }
         } catch (err) {
+            console.error("Error generating TOTP:", err);
             setError("Failed to generate a new secret. Please try again.");
         } finally {
             setIsLoading(false);
@@ -70,8 +76,11 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
         setSuccess('');
         setIsLoading(true);
         try {
-            const { data } = await verifyTotp({ token: token, isSetup: true });
-            if (data.success) {
+            const response = await verifyTotp({ token: token, isSetup: true });
+            console.log('SecuritySettings TOTP verification response:', response); // Debug log
+            
+            // Handle Firebase wrapper response structure
+            if (response.success && response.data?.success) {
                 const message = isRequired ?
                     "2-Factor Authentication has been successfully set up! You can now access the application." :
                     "2-Factor Authentication has been successfully enabled!";
@@ -80,13 +89,28 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                 setQrCodeUrl(''); // Clear setup data after successful verification
                 setSecret('');
                 setToken('');
-                if (onSetupComplete) {
-                    onSetupComplete();
+                
+                // Reload user data to get updated claims
+                try {
+                    const updatedUser = await User.me();
+                    setUser(updatedUser);
+                } catch (err) {
+                    console.error("Error reloading user data:", err);
+                }
+                
+                // For required setup, call onSetupComplete after a short delay to allow UI update
+                if (isRequired && onSetupComplete) {
+                    // Small delay to show success message before redirecting
+                    setTimeout(() => {
+                        onSetupComplete();
+                    }, 1500);
                 }
             } else {
-                setError(data.error || "Invalid verification code. Please try again.");
+                const errorMessage = response.error || response.data?.message || "Invalid verification code. Please try again.";
+                setError(errorMessage);
             }
         } catch (err) {
+            console.error("Error during TOTP verification:", err);
             setError("An error occurred during verification. Please try again.");
         } finally {
             setIsLoading(false);

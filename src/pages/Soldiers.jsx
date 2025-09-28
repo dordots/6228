@@ -194,6 +194,32 @@ export default function Soldiers() {
         
         await Soldier.create(soldierData);
         
+        // Auto-create user account if phone number is provided
+        if (soldierData.phone_number) {
+          try {
+            // Format phone number with country code if not present
+            let phoneNumber = soldierData.phone_number.trim();
+            if (!phoneNumber.startsWith('+')) {
+              // Assuming Israel country code +972 (you can adjust this)
+              phoneNumber = '+972' + phoneNumber.replace(/^0/, '');
+            }
+            
+            await User.create({
+              phoneNumber: phoneNumber,
+              role: 'soldier',
+              custom_role: 'soldier',
+              linked_soldier_id: soldierData.soldier_id,
+              displayName: `${soldierData.first_name} ${soldierData.last_name}`,
+              email: soldierData.email || null
+            });
+            console.log(`User account created for soldier ${soldierData.soldier_id}`);
+          } catch (error) {
+            console.error('Failed to create user account:', error);
+            // Don't fail the soldier creation if user account creation fails
+            // Admin can manually create the account later
+          }
+        }
+        
         const activityData = {
           activity_type: "CREATE",
           entity_type: "Soldier",

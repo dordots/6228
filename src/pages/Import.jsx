@@ -233,6 +233,37 @@ export default function ImportPage() {
         }));
         
         await Soldier.bulkCreate(soldiersData);
+        
+        // Auto-create user accounts for soldiers with phone numbers
+        const soldierUsersToCreate = soldiersData
+          .filter(soldier => soldier.phone_number)
+          .map(soldier => {
+            let phoneNumber = soldier.phone_number.trim();
+            if (!phoneNumber.startsWith('+')) {
+              // Assuming Israel country code +972 (you can adjust this)
+              phoneNumber = '+972' + phoneNumber.replace(/^0/, '');
+            }
+            
+            return {
+              phoneNumber: phoneNumber,
+              role: 'soldier',
+              custom_role: 'soldier', 
+              linked_soldier_id: soldier.soldier_id,
+              displayName: `${soldier.first_name} ${soldier.last_name}`,
+              email: soldier.email || null
+            };
+          });
+        
+        if (soldierUsersToCreate.length > 0) {
+          try {
+            await User.bulkCreate(soldierUsersToCreate);
+            console.log(`Created ${soldierUsersToCreate.length} user accounts for imported soldiers`);
+          } catch (error) {
+            console.error('Failed to create some user accounts:', error);
+            // Don't fail the import if user account creation fails
+          }
+        }
+        
         setImportStatus(prev => ({
           ...prev,
           soldiers: { ...prev.soldiers, status: 'completed' }

@@ -234,10 +234,21 @@ export default function Layout({ children, currentPageName }) {
         }
 
         if (user.totp_enabled) {
-          const lastVerificationTime = sessionStorage.getItem('lastTotpVerificationTime');
+          // Check both localStorage (persistent) and sessionStorage (session-only)
+          const lastVerificationTimeLocal = localStorage.getItem('lastTotpVerificationTime');
+          const lastVerificationTimeSession = sessionStorage.getItem('lastTotpVerificationTime');
+          
+          // Use the most recent verification time from either storage
+          let lastVerificationTime = null;
+          if (lastVerificationTimeLocal || lastVerificationTimeSession) {
+            const localTime = lastVerificationTimeLocal ? new Date(lastVerificationTimeLocal).getTime() : 0;
+            const sessionTime = lastVerificationTimeSession ? parseInt(lastVerificationTimeSession) : 0;
+            lastVerificationTime = Math.max(localTime, sessionTime);
+          }
+          
           const twentyFourHours = 24 * 60 * 60 * 1000;
 
-          if (lastVerificationTime && (Date.now() - parseInt(lastVerificationTime)) < twentyFourHours) {
+          if (lastVerificationTime && (Date.now() - lastVerificationTime) < twentyFourHours) {
             setIsTotpVerified(true); // Verified and within the 24-hour window
           } else {
             setIsTotpVerified(false); // Needs verification
@@ -265,8 +276,18 @@ export default function Layout({ children, currentPageName }) {
 
     const intervalId = setInterval(() => {
       if (currentUser && currentUser.totp_enabled && isTotpVerified) {
-        const lastVerificationTime = sessionStorage.getItem('lastTotpVerificationTime');
-        if (!lastVerificationTime || (Date.now() - parseInt(lastVerificationTime)) > twentyFourHours) {
+        // Check both localStorage and sessionStorage
+        const lastVerificationTimeLocal = localStorage.getItem('lastTotpVerificationTime');
+        const lastVerificationTimeSession = sessionStorage.getItem('lastTotpVerificationTime');
+        
+        let lastVerificationTime = null;
+        if (lastVerificationTimeLocal || lastVerificationTimeSession) {
+          const localTime = lastVerificationTimeLocal ? new Date(lastVerificationTimeLocal).getTime() : 0;
+          const sessionTime = lastVerificationTimeSession ? parseInt(lastVerificationTimeSession) : 0;
+          lastVerificationTime = Math.max(localTime, sessionTime);
+        }
+        
+        if (!lastVerificationTime || (Date.now() - lastVerificationTime) > twentyFourHours) {
           setIsTotpVerified(false); // Expire the verification
         }
       }
@@ -276,7 +297,7 @@ export default function Layout({ children, currentPageName }) {
   }, [currentUser, isTotpVerified]);
 
   const handleTotpSuccess = () => {
-    sessionStorage.setItem('lastTotpVerificationTime', Date.now().toString());
+    // Verification time is now set in TotpVerificationPrompt based on remember preference
     setIsTotpVerified(true);
 
     // Show soldier linking dialog if not linked yet

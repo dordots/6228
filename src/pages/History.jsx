@@ -78,17 +78,34 @@ const formatUtcToIsraelTime = (dateStr) => {
 const processActivityDetails = (details) => {
     if (!details) return { text: '', hasSignature: false };
     
+    // Handle objects being passed as details
+    let detailsText = details;
+    if (typeof details === 'object' && details !== null) {
+        // Convert object to string representation
+        if (details.message) {
+            detailsText = details.message;
+        } else {
+            // Format object properties as string
+            detailsText = Object.entries(details)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join(', ');
+        }
+    }
+    
+    // Convert to string to ensure we're working with text
+    detailsText = String(detailsText);
+    
     const signatureRegex = /(data:image\/png;base64,[\s\S]+)/;
-    const hasSignature = signatureRegex.test(details);
+    const hasSignature = signatureRegex.test(detailsText);
     
     if (hasSignature) {
-        let text = details.replace(signatureRegex, '').replace(/Signature:\s*$/, '').trim();
+        let text = detailsText.replace(signatureRegex, '').replace(/Signature:\s*$/, '').trim();
         text = text.replace(/signature\.(png|jpg|jpeg)/gi, '').trim();
         text = text.replace(/\s*,\s*$/, '').trim();
         return { text, hasSignature: true };
     }
     
-    return { text: details, hasSignature: false };
+    return { text: detailsText, hasSignature: false };
 };
 
 // Enhanced function to extract comprehensive activity information
@@ -140,7 +157,18 @@ const extractAllActivityItems = (details, context) => {
     }
     
     // 2. Process details string as a fallback
-    const detailsText = String(details || '');
+    // Handle objects being passed as details
+    let processedDetails = details;
+    if (typeof details === 'object' && details !== null && !(details instanceof String)) {
+        if (details.message) {
+            processedDetails = details.message;
+        } else {
+            processedDetails = Object.entries(details)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join(', ');
+        }
+    }
+    const detailsText = String(processedDetails || '');
     // Match standard equipment like "2 Stretcher" or "2 Stretchers"
     const standardEqMatches = [...detailsText.matchAll(/(\d+)\s+([A-Za-z\s]+?)(?=\s+was|\s+were|\s+to|\s+from|\s*$)/gi)];
     standardEqMatches.forEach(match => {
@@ -171,7 +199,18 @@ const extractAllActivityItems = (details, context) => {
 // Enhanced function to determine all entity types involved
 const getAllInvolvedEntities = (details, context) => {
     const entities = [];
-    const detailsText = String(details || '').toLowerCase();
+    // Handle objects being passed as details
+    let processedDetails = details;
+    if (typeof details === 'object' && details !== null && !(details instanceof String)) {
+        if (details.message) {
+            processedDetails = details.message;
+        } else {
+            processedDetails = Object.entries(details)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join(', ');
+        }
+    }
+    const detailsText = String(processedDetails || '').toLowerCase();
     
     if (context && context.deletedRecord) {
         const record = context.deletedRecord;

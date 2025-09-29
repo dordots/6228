@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, AlertCircle, LogOut } from "lucide-react";
 import { verifyTotp } from '@/api/functions';
 import { User } from '@/api/entities';
@@ -14,6 +15,7 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [needsSetup, setNeedsSetup] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true); // Default to checked
   const navigate = useNavigate();
 
   const handleVerify = async (e) => {
@@ -32,6 +34,13 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
       // Check if the response indicates success
       // The Firebase wrapper returns {success: true, data: {success: true, message: "..."}}
       if (response.success && response.data?.success) {
+        // Store verification time based on remember preference
+        const verificationTime = new Date().toISOString();
+        if (rememberDevice) {
+          localStorage.setItem('lastTotpVerificationTime', verificationTime);
+        } else {
+          sessionStorage.setItem('lastTotpVerificationTime', verificationTime);
+        }
         onSuccess();
       } else if (response.success === false) {
         // Handle error from Firebase wrapper
@@ -85,8 +94,9 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
   const handleLogout = async () => {
     try {
       await User.logout();
-      // Clear session storage
+      // Clear both session and local storage
       sessionStorage.removeItem('lastTotpVerificationTime');
+      localStorage.removeItem('lastTotpVerificationTime');
       navigate('/login');
     } catch (error) {
       console.error('Error logging out:', error);
@@ -117,6 +127,19 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
                 required
                 autoFocus
               />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="remember" 
+                checked={rememberDevice}
+                onCheckedChange={setRememberDevice}
+              />
+              <Label 
+                htmlFor="remember" 
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                Remember this device for 24 hours
+              </Label>
             </div>
             {errorMessage && (
               <div className="space-y-2">

@@ -118,9 +118,10 @@ export const validateEntityData = (data, entityType) => {
   
   // Define valid enum values
   const enumValues = {
-    weapon_status: ['available', 'assigned', 'maintenance', 'lost'],
+    weapon_status: ['functioning', 'not_functioning'],
     gear_status: ['available', 'assigned', 'maintenance', 'lost'],
     drone_status: ['available', 'assigned', 'maintenance', 'lost'],
+    armory_status: ['with_soldier', 'in_deposit'],
   };
   
   const fields = requiredFields[entityType] || [];
@@ -159,14 +160,58 @@ export const validateEntityData = (data, entityType) => {
         break;
         
       case 'weapons':
-      case 'serialized_gear':
-      case 'drone_sets':
-        // Validate status enum
+        // Validate weapon status enum
         if (row.status && !enumValues.weapon_status.includes(row.status.toLowerCase())) {
           errors.push({
             row: index + 2,
             field: 'status',
             message: `Invalid status. Must be one of: ${enumValues.weapon_status.join(', ')}`
+          });
+        }
+        // Validate armory status enum if present
+        if (row.armory_status && !enumValues.armory_status.includes(row.armory_status.toLowerCase())) {
+          errors.push({
+            row: index + 2,
+            field: 'armory_status',
+            message: `Invalid armory_status. Must be one of: ${enumValues.armory_status.join(', ')}`
+          });
+        }
+        break;
+        
+      case 'serialized_gear':
+        // Validate gear status enum
+        if (row.status && !enumValues.gear_status.includes(row.status.toLowerCase())) {
+          errors.push({
+            row: index + 2,
+            field: 'status',
+            message: `Invalid status. Must be one of: ${enumValues.gear_status.join(', ')}`
+          });
+        }
+        // Validate armory status enum if present
+        if (row.armory_status && !enumValues.armory_status.includes(row.armory_status.toLowerCase())) {
+          errors.push({
+            row: index + 2,
+            field: 'armory_status',
+            message: `Invalid armory_status. Must be one of: ${enumValues.armory_status.join(', ')}`
+          });
+        }
+        break;
+        
+      case 'drone_sets':
+        // Validate drone status enum
+        if (row.status && !enumValues.drone_status.includes(row.status.toLowerCase())) {
+          errors.push({
+            row: index + 2,
+            field: 'status',
+            message: `Invalid status. Must be one of: ${enumValues.drone_status.join(', ')}`
+          });
+        }
+        // Validate armory status enum if present
+        if (row.armory_status && !enumValues.armory_status.includes(row.armory_status.toLowerCase())) {
+          errors.push({
+            row: index + 2,
+            field: 'armory_status',
+            message: `Invalid armory_status. Must be one of: ${enumValues.armory_status.join(', ')}`
           });
         }
         break;

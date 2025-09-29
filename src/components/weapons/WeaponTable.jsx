@@ -127,14 +127,14 @@ export default function WeaponTable({
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
                             onClick={() => onEdit(weapon)}
-                            disabled={!isAdminOrManager && !permissions.can_edit_weapons}
+                            disabled={!isAdminOrManager && !permissions['equipment.update']}
                           >
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => onReassign(weapon)}
                             // Disabled if not manager/admin AND (doesn't have edit weapons OR doesn't have transfer equipment)
-                            disabled={!isAdminOrManager && !(permissions.can_edit_weapons || permissions.can_transfer_equipment)}
+                            disabled={!isAdminOrManager && !(permissions['equipment.update'] || permissions['operations.transfer'])}
                           >
                             Reassign
                           </DropdownMenuItem>

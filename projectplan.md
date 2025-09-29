@@ -1,40 +1,44 @@
-# Project Plan: Fix Weapon Import Validation Issue
+# Project Plan: Fix Admin User Import Permissions Issue
 
 ## Problem Analysis
-The user is experiencing import failures because they're seeing "with_soldier" as a status value, but the import validation only accepts "functioning" or "not_functioning" for weapon status.
+The admin user cannot import weapons because their Firebase Auth token doesn't have the proper permissions claims set, even though they should have all permissions. This is causing Firestore security rules to deny access.
 
-After investigating, I found that there are actually two different fields:
-1. `status` - Weapon functionality status (functioning/not_functioning)
-2. `armory_status` - Weapon location status (with_soldier/in_deposit)
+## Root Cause
+When permissions are updated on a user (like when they're made admin), the Firebase Auth token needs to be refreshed to include the new custom claims. The current implementation doesn't force a token refresh after permission updates.
 
-The confusion likely arises from:
-- The division-specific export format might be including armory_status
-- The user might be manually editing the CSV and mixing up the fields
-- The export might not clearly distinguish between these fields
+## Solution Approach
+We need to implement a token refresh mechanism that ensures the user's auth token is updated with the latest permissions after any permission changes.
 
 ## Todo List
 
-### 1. ✅ Investigate the issue
-- [x] Check export functionality in functions/src/data.js
-- [x] Check import validation in src/utils/importUtils.js
-- [x] Understand weapon data model and fields
-- [x] Identify that there are two separate fields: status and armory_status
+- [ ] 1. Add a force token refresh function to the auth-adapter.js
+- [ ] 2. Update the `updateMyUserData` function to force refresh the token after updates
+- [ ] 3. Add a refresh token mechanism when the admin logs in to ensure latest permissions
+- [ ] 4. Add a manual "Refresh Permissions" button for admins to force refresh their token
+- [ ] 5. Update the Import page to check and refresh permissions before import operations
 
-### 2. ✅ Fix the import validation to handle armory_status field
-- [ ] Update the import utils to recognize and properly handle armory_status field
-- [ ] Ensure weapon import doesn't fail when armory_status is present
-- [ ] Map armory_status values correctly during import
+## Implementation Details
 
-### 3. ✅ Update column mapping for better clarity
-- [ ] Add armory_status to the column mapping in importUtils.js
-- [ ] Ensure both status and armory_status are properly mapped
+### 1. Force Token Refresh Function
+- Add a `refreshToken` function that forces Firebase to get a new ID token with updated claims
+- This will call `currentUser.getIdToken(true)` to bypass the cache
 
-### 4. ✅ Test the fix
-- [ ] Verify that weapons with armory_status can be imported
-- [ ] Ensure status field validation still works correctly
-- [ ] Check that both fields are preserved during import
+### 2. Update `updateMyUserData` 
+- Already has token refresh but ensure it's working properly
+- Add error handling and success confirmation
 
-## Implementation Notes
-- Keep changes minimal and focused on fixing the validation issue
-- Don't change the export format to maintain backward compatibility
-- Add clear column mappings to prevent future confusion
+### 3. Login Token Refresh
+- When admin logs in, force refresh the token to ensure latest permissions
+- This ensures any permission updates made while logged out are reflected
+
+### 4. Manual Refresh Button
+- Add a button in the user menu or settings that allows forcing a token refresh
+- This gives users control when they encounter permission issues
+
+### 5. Import Page Permission Check
+- Before import operations, check if user has required permissions
+- If not, attempt to refresh token and re-check
+- Show clear error messages if permissions are still insufficient
+
+## Expected Outcome
+After implementing these changes, the admin user will have their auth token properly updated with all permissions, allowing them to import weapons and other data without permission errors.

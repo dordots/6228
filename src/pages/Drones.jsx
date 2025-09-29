@@ -173,7 +173,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   };
 
   const handleDelete = async (droneSet) => {
-    if (!currentUser?.permissions?.can_delete_drones && currentUser?.role !== 'admin') {
+    if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete drone sets.");
       return;
     }
@@ -211,7 +211,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   };
 
   const handleBulkDelete = async () => {
-    if (!currentUser?.permissions?.can_delete_drones && currentUser?.role !== 'admin') {
+    if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete drone sets.");
       return;
     }
@@ -249,7 +249,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   };
 
   const handleReassignSubmit = async (droneSet, newSoldierId) => {
-    if (!currentUser?.permissions?.can_transfer_equipment && currentUser?.role !== 'admin') {
+    if (!currentUser?.permissions?.['operations.transfer'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to transfer equipment.");
       return;
     }
@@ -400,7 +400,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!currentUser?.permissions?.can_delete_drones && currentUser?.role !== 'admin'}
+              disabled={!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin'}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -415,7 +415,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
           <Button
             onClick={() => { setEditingSet(null); setShowForm(true); }}
             className="bg-sky-600 hover:bg-sky-700 text-white"
-            disabled={!currentUser?.permissions?.can_create_drones && currentUser?.role !== 'admin'}
+            disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Drone Set

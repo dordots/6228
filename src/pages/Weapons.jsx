@@ -147,7 +147,7 @@ export default function Weapons() {
       const timestampWithOffset = new Date(new Date().getTime() + 3 * 60 * 60 * 1000).toISOString();
       
       if (editingWeapon) {
-        if (!user?.permissions?.can_edit_weapons && user?.role !== 'admin') {
+        if (!user?.permissions?.['equipment.update'] && user?.role !== 'admin') {
           alert("You do not have permission to edit weapons.");
           return;
         }
@@ -199,7 +199,7 @@ export default function Weapons() {
           division_name: weaponData.division_name
         });
       } else {
-        if (!user?.permissions?.can_create_weapons && user?.role !== 'admin') {
+        if (!user?.permissions?.['equipment.create'] && user?.role !== 'admin') {
           alert("You do not have permission to create weapons.");
           return;
         }

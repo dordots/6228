@@ -17,6 +17,7 @@ import {
   mapColumns, 
   generateImportSummary 
 } from "@/utils/importUtils";
+import { auth } from '@/firebase/config';
 
 import ImportStep from "../components/import/ImportStep";
 import UpdateSoldiersStep from "../components/import/UpdateSoldiersStep";
@@ -240,6 +241,16 @@ export default function ImportPage() {
     setIsProcessing(true);
     const importResults = [];
     const allErrors = [];
+    
+    // Force token refresh to ensure we have latest permissions
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        await user.getIdToken(true); // Force refresh
+      }
+    } catch (error) {
+      console.error('Token refresh error:', error);
+    }
     
     // Calculate total items to process
     const totalItems = Object.values(importStatus).reduce((sum, status) => sum + status.data.length, 0);

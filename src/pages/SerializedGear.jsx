@@ -194,7 +194,7 @@ export default function SerializedGearPage() {
   };
 
   const handleDelete = async (gearItem) => {
-    if (!currentUser?.permissions?.can_delete_gear && currentUser?.role !== 'admin') {
+    if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete gear.");
       return;
     }
@@ -259,7 +259,7 @@ export default function SerializedGearPage() {
   };
 
   const handleBulkDelete = async () => {
-    if (!currentUser?.permissions?.can_delete_gear && currentUser?.role !== 'admin') {
+    if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete gear.");
       return;
     }
@@ -324,7 +324,7 @@ export default function SerializedGearPage() {
   };
 
   const handleReassignSubmit = async (gearItem, newSoldierId, newDivisionName) => {
-    if (!currentUser?.permissions?.can_sign_equipment) {
+    if (!currentUser?.permissions?.['operations.sign']) {
       alert("You do not have permission to reassign equipment.");
       return;
     }
@@ -506,7 +506,7 @@ export default function SerializedGearPage() {
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!currentUser?.permissions?.can_delete_gear && currentUser?.role !== 'admin'}
+              disabled={!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin'}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -521,7 +521,7 @@ export default function SerializedGearPage() {
           <Button
             onClick={() => { setEditingGear(null); setShowForm(true); }}
             className="bg-purple-700 hover:bg-purple-800 text-white"
-            disabled={!currentUser?.permissions?.can_create_gear && currentUser?.role !== 'admin'}
+            disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Gear

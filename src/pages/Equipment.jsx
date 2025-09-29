@@ -404,7 +404,7 @@ export default function EquipmentPage() {
           <Button
             onClick={() => { setEditingEquipment(null); setShowForm(true); }}
             className="bg-green-700 hover:bg-green-800 text-white"
-            disabled={!currentUser?.permissions?.can_create_equipment && currentUser?.role !== 'admin'}
+            disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Equipment

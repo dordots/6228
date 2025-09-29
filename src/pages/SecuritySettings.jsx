@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { generateTotp } from '@/api/functions';
 import { verifyTotp } from '@/api/functions'; // Keep original separate import
-import { Loader2, ShieldCheck, AlertCircle, Mail } from 'lucide-react'; // Updated icon imports
+import { Loader2, ShieldCheck, AlertCircle, Mail, LogOut } from 'lucide-react'; // Updated icon imports
 import { testSendGrid } from '@/api/functions'; // New import for SendGrid test
+import { useNavigate } from 'react-router-dom';
 
 export default function SecuritySettings({ onSetupComplete, isRequired = false }) {
     const [user, setUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true); // General loading for initial fetch, generate secret, etc.
+    const navigate = useNavigate();
 
     // TOTP specific states (refactored from original setupData and verificationCode)
     const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -25,6 +27,7 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
     const [testEmail, setTestEmail] = useState('');
     const [isTestingSendGrid, setIsTestingSendGrid] = useState(false);
     const [testResult, setTestResult] = useState(null); // Stores the outcome of SendGrid test
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -142,6 +145,18 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
             setIsTestingSendGrid(false);
         }
     };
+    
+    const handleLogout = async () => {
+        try {
+            await User.logout();
+            // Clear session storage
+            sessionStorage.removeItem('lastTotpVerificationTime');
+            navigate('/login');
+        } catch (error) {
+            console.error('Error logging out:', error);
+            setError('Failed to logout. Please try again.');
+        }
+    };
 
     return (
         <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto space-y-8">
@@ -166,6 +181,13 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                             ? "To protect your account, you must set up two-factor authentication."
                             : "Add an extra layer of security to your account using an authenticator app."}
                     </CardDescription>
+                    {isRequired && (
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                            <p className="text-sm text-blue-800">
+                                <strong>Why is this required?</strong> Two-factor authentication adds an extra layer of security to protect sensitive armory data and prevent unauthorized access.
+                            </p>
+                        </div>
+                    )}
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {error && (
@@ -247,6 +269,41 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                             >
                                 Continue to Dashboard
                             </Button>
+                        </div>
+                    )}
+                    {isRequired && !user?.totp_enabled && (
+                        <div className="mt-6 pt-6 border-t border-slate-200">
+                            <div className="text-center">
+                                {showLogoutConfirm ? (
+                                    <div className="flex gap-3 items-center justify-center">
+                                        <span className="text-sm text-slate-600">Are you sure you want to logout?</span>
+                                        <Button
+                                            onClick={handleLogout}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-red-600 hover:text-red-700"
+                                        >
+                                            Yes, logout
+                                        </Button>
+                                        <Button
+                                            onClick={() => setShowLogoutConfirm(false)}
+                                            variant="ghost"
+                                            size="sm"
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <Button
+                                        onClick={() => setShowLogoutConfirm(true)}
+                                        variant="ghost"
+                                        className="text-slate-600 hover:text-slate-800"
+                                    >
+                                        <LogOut className="w-4 h-4 mr-2" />
+                                        Cancel Setup & Logout
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     )}
                 </CardContent>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Shield, Users, Wrench, Target, BarChart3, User, Binoculars, Upload, ClipboardCheck, Joystick, Puzzle, ArrowLeft, Package, Home, ArrowRightLeft, History, Download, Lock, Calendar } from "lucide-react";
+import { Shield, Users, Wrench, Target, BarChart3, User, Binoculars, Upload, ClipboardCheck, Joystick, Puzzle, ArrowLeft, Package, Home, ArrowRightLeft, History, Download, Lock, Calendar, LogOut } from "lucide-react";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import TotpVerificationPrompt from "@/components/auth/TotpVerificationPrompt";
 import { User as UserEntity } from "@/api/entities";
@@ -204,6 +204,7 @@ export default function Layout({ children, currentPageName }) {
   const [showSoldierLinking, setShowSoldierLinking] = useState(false);
   const [isTotpVerified, setIsTotpVerified] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -312,6 +313,9 @@ export default function Layout({ children, currentPageName }) {
       // If TOTP was just set up, mark as verified and store the verification time
       setIsTotpVerified(true);
       sessionStorage.setItem('lastTotpVerificationTime', Date.now().toString());
+      
+      // Force reload to ensure proper state transition after 2FA setup
+      window.location.reload();
     } catch (error) {
       console.error("Error refreshing user after TOTP setup:", error);
     }
@@ -330,6 +334,19 @@ export default function Layout({ children, currentPageName }) {
       window.location.reload();
     } catch (error) {
       console.error("Error after soldier linking:", error);
+    }
+  };
+  
+  const handleLogout = async () => {
+    try {
+      await UserEntity.logout();
+      // Clear session storage
+      sessionStorage.removeItem('lastTotpVerificationTime');
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error logging out:', error);
+      // Force redirect even if logout fails
+      window.location.href = '/login';
     }
   };
 
@@ -442,7 +459,7 @@ export default function Layout({ children, currentPageName }) {
               </SidebarGroup>
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-slate-200 p-4">
+            <SidebarFooter className="border-t border-slate-200 p-4 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
                   <User className="w-5 h-5 text-slate-600" />
@@ -454,20 +471,52 @@ export default function Layout({ children, currentPageName }) {
                   </p>
                   <p className="text-xs text-slate-500 truncate">
                     {linkedSoldier && linkedSoldier.soldier_id ? `ID: ${linkedSoldier.soldier_id}` : 
-                     currentUser?.custom_role === 'soldier' ? 'Personal View' : 'Equipment Manager'}
+                     currentUser?.email || currentUser?.phone || 'Equipment Manager'}
                   </p>
                 </div>
               </div>
-              {!linkedSoldier && currentUser && currentUser.custom_role !== 'soldier' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowSoldierLinking(true)}
-                  className="mt-2 w-full text-xs"
-                >
-                  Link Soldier Account
-                </Button>
-              )}
+              <div className="space-y-2">
+                {!linkedSoldier && currentUser && currentUser.custom_role !== 'soldier' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowSoldierLinking(true)}
+                    className="w-full text-xs"
+                  >
+                    Link Soldier Account
+                  </Button>
+                )}
+                {showLogoutConfirm ? (
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleLogout}
+                      className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowLogoutConfirm(false)}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowLogoutConfirm(true)}
+                    className="w-full text-xs"
+                  >
+                    <LogOut className="w-3 h-3 mr-1.5" />
+                    Logout
+                  </Button>
+                )}
+              </div>
             </SidebarFooter>
           </Sidebar>
 

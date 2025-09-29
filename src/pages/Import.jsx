@@ -1,31 +1,54 @@
 
 import React, { useState } from "react";
-import { Soldier } from "@/api/entities";
-import { Weapon } from "@/api/entities";
-import { SerializedGear } from "@/api/entities";
-import { DroneComponent } from "@/api/entities";
-import { Equipment } from "@/api/entities"; // Import Equipment entity
+import { Soldier, Weapon, SerializedGear, DroneSet, DroneComponent, Equipment, User, ActivityLog } from "@/api/entities";
 import { UploadFile, ExtractDataFromUploadedFile } from "@/api/integrations";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle, AlertTriangle, Upload, FileSpreadsheet, RefreshCw } from "lucide-react";
+import { CheckCircle, AlertTriangle, Upload, FileSpreadsheet, RefreshCw, Users, Shield, Package, Cpu, AlertCircle, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  parseCSV, 
+  detectFileType, 
+  validateEntityData, 
+  formatPhoneNumber, 
+  mapColumns, 
+  generateImportSummary 
+} from "@/utils/importUtils";
 
 import ImportStep from "../components/import/ImportStep";
 import UpdateSoldiersStep from "../components/import/UpdateSoldiersStep";
+import ImportProgressModal from "../components/import/ImportProgressModal";
 
 export default function ImportPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [importStatus, setImportStatus] = useState({
-    soldiers: { status: 'pending', count: 0, data: [] },
-    weapons: { status: 'pending', count: 0, data: [] },
-    gear: { status: 'pending', count: 0, data: [] },
-    droneComponents: { status: 'pending', count: 0, data: [] },
-    equipment: { status: 'pending', count: 0, data: [] }, // Added for equipment
-    assignments: { status: 'pending', count: 0, data: [] }
+    soldiers: { status: 'pending', count: 0, data: [], errors: [], warnings: [] },
+    weapons: { status: 'pending', count: 0, data: [], errors: [], warnings: [] },
+    serialized_gear: { status: 'pending', count: 0, data: [], errors: [], warnings: [] },
+    drone_sets: { status: 'pending', count: 0, data: [], errors: [], warnings: [] },
+    drone_components: { status: 'pending', count: 0, data: [], errors: [], warnings: [] },
+    equipment: { status: 'pending', count: 0, data: [], errors: [], warnings: [] },
+    assignments: { status: 'pending', count: 0, data: [], errors: [], warnings: [] }
+  });
+  
+  // New state for division-specific imports
+  const [divisionImportStatus, setDivisionImportStatus] = useState({
+    serialized_items: { status: 'pending', count: 0, data: [], division: null },
+    equipment: { status: 'pending', count: 0, data: [], division: null }
+  });
+  
+  // Progress tracking state
+  const [importProgress, setImportProgress] = useState({
+    isImporting: false,
+    currentEntity: '',
+    currentIndex: 0,
+    totalItems: 0,
+    entityProgress: {},
+    errors: [],
+    summary: null
   });
   // New state for soldier update functionality
   const [updateStatus, setUpdateStatus] = useState({
@@ -48,154 +71,76 @@ export default function ImportPage() {
     setError('');
     
     try {
-      console.log('Uploading file:', file.name, 'Type:', fileType); // Debug log
-      const { file_url } = await UploadFile({ file });
-      console.log('File uploaded to:', file_url); // Debug log
-      
-      let schema;
-      switch (fileType) {
-        case 'soldiers':
-          schema = {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                first_name: { type: "string" },
-                last_name: { type: "string" },
-                division_name: { type: "string" },
-                team_name: { type: "string" },
-                profession: { type: "string" },
-                phone_number: { type: "string" },
-                email: { type: "string" },
-                street_address: { type: "string" },
-                city: { type: "string" }
-              }
-            }
-          };
-          break;
-        case 'weapons':
-          schema = {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                type: { type: "string" },
-                status: { type: "string" },
-                division_name: { type: "string" } // Added division_name
-              }
-            }
-          };
-          break;
-        case 'gear':
-          schema = {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string" },
-                type: { type: "string" },
-                status: { type: "string" },
-                division_name: { type: "string" }
-              }
-            }
-          };
-          break;
-        case 'droneComponents':
-          schema = {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                component_id: { type: "string" },
-                component_type: { type: "string" },
-                status: { type: "string" }
-              }
-            }
-          };
-          break;
-        case 'equipment': // Add equipment import case
-          schema = {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                equipment_type: { type: "string" },
-                serial_number: { type: "string" },
-                condition: { type: "string" },
-                division_name: { type: "string" },
-                assigned_to: { type: "string" },
-                quantity: { type: "number" }
-              },
-              required: ["equipment_type", "division_name"]
-            }
-          };
-          break;
-        case 'assignments':
-          schema = {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                soldier_id: { type: "string" },
-                weapon_id: { type: "string" },
-                gear_id: { type: "string" }
-              }
-            }
-          };
-          break;
-        case 'equipment_assignments':
-          schema = {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                soldier_id: { type: "string" },
-                division_name: { type: "string" }
-              },
-              required: ["division_name"],
-              additionalProperties: { type: ["string", "number"] } // Allows for dynamic equipment type columns
-            }
-          };
-          break;
-        default:
-            throw new Error('Unknown file type for import.');
+      // Auto-detect file type from filename
+      const detectedType = detectFileType(file.name);
+      if (detectedType !== 'unknown' && detectedType !== fileType) {
+        console.log(`File type mismatch: expected ${fileType}, detected ${detectedType}`);
       }
-
-      console.log('Extracting data with schema for', fileType); // Debug log
-      const result = await ExtractDataFromUploadedFile({
-        file_url,
-        json_schema: schema
-      });
-
-      console.log('Extraction result:', result); // Debug log
-
-      if (result.status === 'success' && result.output) {
-        // Handle direct array response
-        const data = Array.isArray(result.output) ? result.output : [];
-        console.log('Parsed data:', data); // Debug log
+      
+      console.log('Uploading file:', file.name, 'Type:', fileType);
+      
+      // Read file content directly for CSV parsing
+      const text = await file.text();
+      const rawData = parseCSV(text);
+      
+      if (rawData.length === 0) {
+        throw new Error('No data found in CSV file');
+      }
+      
+      // Map columns based on entity type
+      const mappedData = mapColumns(rawData, fileType);
+      
+      // Validate data
+      const validation = validateEntityData(mappedData, fileType);
+      
+      // Process based on file type
+      let processedData = mappedData;
+      
+      // Special handling for specific entity types
+      if (fileType === 'soldiers') {
+        processedData = mappedData.map(soldier => ({
+          ...soldier,
+          phone_number: soldier.phone_number ? formatPhoneNumber(soldier.phone_number) : null
+        }));
+      }
+      
+      // Update import status with data and validation results
+      if (fileType === 'equipment_assignments') {
+        setEquipmentAssignmentStatus(prev => ({
+          ...prev,
+          status: validation.isValid ? 'uploaded' : 'warning',
+          count: processedData.length,
+          data: processedData,
+          processedItems: []
+        }));
+      } else if (fileType.startsWith('division_')) {
+        // Handle division-specific imports
+        const divisionMatch = file.name.match(/^(.+?)_/);
+        const divisionName = divisionMatch ? divisionMatch[1] : null;
+        const importType = fileType.includes('serialized') ? 'serialized_items' : 'equipment';
         
-        if (fileType === 'equipment_assignments') {
-          setEquipmentAssignmentStatus(prev => ({
-            ...prev,
-            status: 'uploaded',
-            count: data.length,
-            data: data,
-            processedItems: [] // Clear processed items on new upload
-          }));
-        } else {
-          setImportStatus(prev => ({
-            ...prev,
-            [fileType]: {
-              status: 'uploaded',
-              count: data.length,
-              data: data
-            }
-          }));
-        }
+        setDivisionImportStatus(prev => ({
+          ...prev,
+          [importType]: {
+            status: validation.isValid ? 'uploaded' : 'warning',
+            count: processedData.length,
+            data: processedData,
+            division: divisionName,
+            errors: validation.errors,
+            warnings: validation.warnings
+          }
+        }));
       } else {
-        throw new Error(`Failed to extract data from ${fileType} file: ${result.details || 'Unknown error'}`);
+        setImportStatus(prev => ({
+          ...prev,
+          [fileType]: {
+            status: validation.isValid ? 'uploaded' : 'warning',
+            count: processedData.length,
+            data: processedData,
+            errors: validation.errors,
+            warnings: validation.warnings
+          }
+        }));
       }
     } catch (err) {
       console.error('Upload error:', err); // Debug log
@@ -213,73 +158,216 @@ export default function ImportPage() {
     setIsProcessing(false);
   };
 
+  // Helper function to process entity imports with progress tracking
+  const processEntityImport = async (entityName, entityData, createFunction, idField) => {
+    setImportProgress(prev => ({
+      ...prev,
+      currentEntity: entityName,
+      entityProgress: {
+        ...prev.entityProgress,
+        [entityName]: { total: entityData.length, processed: 0, success: 0, failed: 0, status: 'processing' }
+      }
+    }));
+    
+    const results = [];
+    let entityIndex = 0;
+    
+    for (const item of entityData) {
+      try {
+        await createFunction(item);
+        results.push({ id: item[idField], success: true });
+        
+        // Update progress
+        entityIndex++;
+        setImportProgress(prev => ({
+          ...prev,
+          currentIndex: prev.currentIndex + 1,
+          entityProgress: {
+            ...prev.entityProgress,
+            [entityName]: {
+              ...prev.entityProgress[entityName],
+              processed: entityIndex,
+              success: prev.entityProgress[entityName].success + 1
+            }
+          }
+        }));
+      } catch (error) {
+        results.push({ 
+          id: item[idField], 
+          success: false, 
+          error: error.message,
+          data: item
+        });
+        
+        const errorDetail = {
+          entity: entityName,
+          id: item[idField],
+          message: error.message,
+          data: item
+        };
+        
+        // Update progress with error
+        entityIndex++;
+        setImportProgress(prev => ({
+          ...prev,
+          currentIndex: prev.currentIndex + 1,
+          entityProgress: {
+            ...prev.entityProgress,
+            [entityName]: {
+              ...prev.entityProgress[entityName],
+              processed: entityIndex,
+              failed: prev.entityProgress[entityName].failed + 1
+            }
+          },
+          errors: [...prev.errors, errorDetail]
+        }));
+      }
+    }
+    
+    // Mark entity as completed
+    setImportProgress(prev => ({
+      ...prev,
+      entityProgress: {
+        ...prev.entityProgress,
+        [entityName]: { ...prev.entityProgress[entityName], status: 'completed' }
+      }
+    }));
+    
+    return results;
+  };
+
   const executeImport = async () => {
     setIsProcessing(true);
+    const importResults = [];
+    const allErrors = [];
+    
+    // Calculate total items to process
+    const totalItems = Object.values(importStatus).reduce((sum, status) => sum + status.data.length, 0);
+    
+    // Initialize progress
+    setImportProgress({
+      isImporting: true,
+      currentEntity: '',
+      currentIndex: 0,
+      totalItems,
+      entityProgress: {},
+      errors: [],
+      summary: null
+    });
     
     try {
-      // Import soldiers first
+      // Import soldiers first (special handling for user creation)
       if (importStatus.soldiers.data.length > 0) {
-        const soldiersData = importStatus.soldiers.data.map(s => ({
-          soldier_id: s.id, // Assuming 'id' from CSV maps to 'soldier_id' in Soldier entity
-          first_name: s.first_name,
-          last_name: s.last_name,
-          division_name: s.division_name,
-          team_name: s.team_name,
-          profession: s.profession,
-          phone_number: s.phone_number,
-          email: s.email,
-          street_address: s.street_address,
-          city: s.city
+        setImportProgress(prev => ({
+          ...prev,
+          currentEntity: 'soldiers',
+          entityProgress: {
+            ...prev.entityProgress,
+            soldiers: { total: importStatus.soldiers.data.length, processed: 0, success: 0, failed: 0, status: 'processing' }
+          }
         }));
         
-        await Soldier.bulkCreate(soldiersData);
+        const results = [];
+        let soldierIndex = 0;
         
-        // Auto-create user accounts for soldiers with phone numbers
-        const soldierUsersToCreate = soldiersData
-          .filter(soldier => soldier.phone_number)
-          .map(soldier => {
-            let phoneNumber = soldier.phone_number.trim();
-            if (!phoneNumber.startsWith('+')) {
-              // Assuming Israel country code +972 (you can adjust this)
-              phoneNumber = '+972' + phoneNumber.replace(/^0/, '');
+        for (const soldier of importStatus.soldiers.data) {
+          try {
+            await Soldier.create(soldier);
+            
+            // Auto-create user account if phone number exists
+            if (soldier.phone_number) {
+              try {
+                const userData = {
+                  phoneNumber: soldier.phone_number,
+                  role: 'soldier',
+                  custom_role: 'soldier',
+                  linked_soldier_id: soldier.soldier_id,
+                  displayName: `${soldier.first_name} ${soldier.last_name}`
+                };
+                
+                // Only add email if it's valid
+                if (soldier.email && soldier.email.includes('@')) {
+                  userData.email = soldier.email;
+                }
+                
+                await User.create(userData);
+              } catch (userError) {
+                console.log('User account already exists or creation failed:', userError);
+                // Don't fail the soldier import if user creation fails
+              }
             }
             
-            return {
-              phoneNumber: phoneNumber,
-              role: 'soldier',
-              custom_role: 'soldier', 
-              linked_soldier_id: soldier.soldier_id,
-              displayName: `${soldier.first_name} ${soldier.last_name}`,
-              email: soldier.email || null
-            };
-          });
-        
-        if (soldierUsersToCreate.length > 0) {
-          try {
-            await User.bulkCreate(soldierUsersToCreate);
-            console.log(`Created ${soldierUsersToCreate.length} user accounts for imported soldiers`);
+            results.push({ id: soldier.soldier_id, success: true });
+            
+            // Update progress
+            soldierIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                soldiers: {
+                  ...prev.entityProgress.soldiers,
+                  processed: soldierIndex,
+                  success: prev.entityProgress.soldiers.success + 1
+                }
+              }
+            }));
           } catch (error) {
-            console.error('Failed to create some user accounts:', error);
-            // Don't fail the import if user account creation fails
+            results.push({ 
+              id: soldier.soldier_id, 
+              success: false, 
+              error: error.message,
+              data: soldier
+            });
+            
+            const errorDetail = {
+              entity: 'soldiers',
+              id: soldier.soldier_id,
+              message: error.message,
+              data: soldier
+            };
+            allErrors.push(errorDetail);
+            
+            // Update progress with error
+            soldierIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                soldiers: {
+                  ...prev.entityProgress.soldiers,
+                  processed: soldierIndex,
+                  failed: prev.entityProgress.soldiers.failed + 1
+                }
+              },
+              errors: [...prev.errors, errorDetail]
+            }));
           }
         }
         
+        importResults.push({ entity: 'soldiers', results });
         setImportStatus(prev => ({
           ...prev,
           soldiers: { ...prev.soldiers, status: 'completed' }
+        }));
+        
+        // Mark entity as completed
+        setImportProgress(prev => ({
+          ...prev,
+          entityProgress: {
+            ...prev.entityProgress,
+            soldiers: { ...prev.entityProgress.soldiers, status: 'completed' }
+          }
         }));
       }
 
       // Import weapons
       if (importStatus.weapons.data.length > 0) {
-        const weaponsData = importStatus.weapons.data.map(w => ({
-          weapon_id: w.id, // Assuming 'id' from CSV maps to 'weapon_id' in Weapon entity
-          weapon_type: w.type,
-          status: w.status?.toLowerCase() === 'functioning' ? 'functioning' : 'not_functioning',
-          division_name: w.division_name || null // Added division_name
-        }));
+        const results = await processEntityImport('weapons', importStatus.weapons.data, Weapon.create.bind(Weapon), 'weapon_id');
         
-        await Weapon.bulkCreate(weaponsData);
+        importResults.push({ entity: 'weapons', results });
         setImportStatus(prev => ({
           ...prev,
           weapons: { ...prev.weapons, status: 'completed' }
@@ -287,88 +375,135 @@ export default function ImportPage() {
       }
 
       // Import serialized gear
-      if (importStatus.gear.data.length > 0) {
-        const gearData = importStatus.gear.data.map(g => ({
-          gear_id: g.id, // Assuming 'id' from CSV maps to 'gear_id' in SerializedGear entity
-          gear_type: g.type,
-          status: g.status?.toLowerCase() === 'functioning' ? 'functioning' : 'not_functioning',
-          division_name: g.division_name || null
-        }));
-        
-        await SerializedGear.bulkCreate(gearData);
+      if (importStatus.serialized_gear.data.length > 0) {
+        const results = await processEntityImport('serialized_gear', importStatus.serialized_gear.data, SerializedGear.create.bind(SerializedGear), 'gear_id');
+        importResults.push({ entity: 'serialized_gear', results });
         setImportStatus(prev => ({
           ...prev,
-          gear: { ...prev.gear, status: 'completed' }
+          serialized_gear: { ...prev.serialized_gear, status: 'completed' }
+        }));
+      }
+
+      // Import drone sets
+      if (importStatus.drone_sets.data.length > 0) {
+        const results = await processEntityImport('drone_sets', importStatus.drone_sets.data, DroneSet.create.bind(DroneSet), 'drone_set_id');
+        importResults.push({ entity: 'drone_sets', results });
+        setImportStatus(prev => ({
+          ...prev,
+          drone_sets: { ...prev.drone_sets, status: 'completed' }
         }));
       }
 
       // Import drone components
-      if (importStatus.droneComponents.data.length > 0) {
-        const droneComponentsData = importStatus.droneComponents.data.map(d => ({
-          component_id: d.component_id,
-          component_type: d.component_type,
-          status: d.status || 'Operational' // Assuming a default status if not provided
-        }));
-        
-        await DroneComponent.bulkCreate(droneComponentsData);
+      if (importStatus.drone_components.data.length > 0) {
+        const results = await processEntityImport('drone_components', importStatus.drone_components.data, DroneComponent.create.bind(DroneComponent), 'component_id');
+        importResults.push({ entity: 'drone_components', results });
         setImportStatus(prev => ({
           ...prev,
-          droneComponents: { ...prev.droneComponents, status: 'completed' }
+          drone_components: { ...prev.drone_components, status: 'completed' }
         }));
       }
 
-      // Add equipment import
-      if (importStatus.equipment && importStatus.equipment.data.length > 0) {
-        console.log('Importing equipment:', importStatus.equipment.data); // Debug log
-        const equipmentData = importStatus.equipment.data.map(e => ({
-          equipment_type: e.equipment_type,
-          serial_number: e.serial_number || null,
-          condition: e.condition?.toLowerCase() === 'functioning' ? 'functioning' : 'not_functioning',
-          division_name: e.division_name,
-          assigned_to: e.assigned_to || null,
-          quantity: parseInt(e.quantity) || 1
-        }));
-        
-        await Equipment.bulkCreate(equipmentData);
+      // Import equipment
+      if (importStatus.equipment.data.length > 0) {
+        const results = await processEntityImport('equipment', importStatus.equipment.data, Equipment.create.bind(Equipment), 'equipment_id');
+        importResults.push({ entity: 'equipment', results });
         setImportStatus(prev => ({
           ...prev,
           equipment: { ...prev.equipment, status: 'completed' }
         }));
-        console.log('Equipment import completed'); // Debug log
       }
 
       // Process assignments
       if (importStatus.assignments.data.length > 0) {
-        const assignments = importStatus.assignments.data;
+        const results = [];
         
-        // Update weapons assignments
-        const weaponAssignments = assignments.filter(a => a.weapon_id);
-        for (const assignment of weaponAssignments) {
-          const weapons = await Weapon.filter({ weapon_id: assignment.weapon_id });
-          if (weapons.length > 0) {
-            await Weapon.update(weapons[0].id, { assigned_to: assignment.soldier_id });
+        for (const assignment of importStatus.assignments.data) {
+          try {
+            // Update weapon assignments
+            if (assignment.weapon_id) {
+              const weapon = await Weapon.findById(assignment.weapon_id);
+              if (weapon) {
+                await Weapon.update(weapon.id, { assigned_to: assignment.soldier_id });
+              }
+            }
+            
+            // Update gear assignments
+            if (assignment.gear_id) {
+              const gear = await SerializedGear.findById(assignment.gear_id);
+              if (gear) {
+                await SerializedGear.update(gear.id, { assigned_to: assignment.soldier_id });
+              }
+            }
+            
+            results.push({ 
+              id: `${assignment.soldier_id}_${assignment.weapon_id || assignment.gear_id}`, 
+              success: true 
+            });
+          } catch (error) {
+            results.push({ 
+              id: `${assignment.soldier_id}_${assignment.weapon_id || assignment.gear_id}`, 
+              success: false, 
+              error: error.message,
+              data: assignment
+            });
           }
         }
-
-        // Update gear assignments
-        const gearAssignments = assignments.filter(a => a.gear_id);
-        for (const assignment of gearAssignments) {
-          const gear = await SerializedGear.filter({ gear_id: assignment.gear_id });
-          if (gear.length > 0) {
-            await SerializedGear.update(gear[0].id, { assigned_to: assignment.soldier_id });
-          }
-        }
         
+        importResults.push({ entity: 'assignments', results });
         setImportStatus(prev => ({
           ...prev,
           assignments: { ...prev.assignments, status: 'completed' }
         }));
       }
 
+      // Calculate import summary
+      const allResults = importResults.reduce((acc, item) => acc.concat(item.results), []);
+      const summary = generateImportSummary(allResults);
+      
+      // Calculate summary by entity
+      const summaryByEntity = {};
+      importResults.forEach(({ entity, results }) => {
+        const success = results.filter(r => r.success).length;
+        const failed = results.filter(r => !r.success).length;
+        summaryByEntity[entity] = { success, failed, total: results.length };
+      });
+      
+      // Log import activity
+      await ActivityLog.create({
+        activity_type: 'IMPORT',
+        details: `Bulk import completed: ${summary.totals.successful} successful, ${summary.totals.failed} failed`,
+        context: summary
+      });
+
+      // Update progress with final summary
+      setImportProgress(prev => ({
+        ...prev,
+        isImporting: false,
+        summary: {
+          successful: summary.totals.successful,
+          failed: summary.totals.failed,
+          total: summary.totals.processed,
+          byEntity: summaryByEntity
+        }
+      }));
+
       setCurrentStep(3);
     } catch (err) {
-      console.error('Import error:', err); // Debug log
+      console.error('Import error:', err);
       setError(`Import failed: ${err.message}`);
+      
+      // Show error in progress modal
+      setImportProgress(prev => ({
+        ...prev,
+        isImporting: false,
+        summary: {
+          successful: 0,
+          failed: 0,
+          total: 0,
+          error: err.message
+        }
+      }));
     }
     
     setIsProcessing(false);
@@ -583,6 +718,20 @@ export default function ImportPage() {
     setIsProcessing(true);
     setError('');
     
+    // Initialize progress tracking
+    const totalItems = updateStatus.soldiers.data.length;
+    setImportProgress({
+      isImporting: true,
+      currentEntity: 'soldier_updates',
+      currentIndex: 0,
+      totalItems,
+      entityProgress: {
+        soldier_updates: { total: totalItems, processed: 0, success: 0, failed: 0, status: 'processing' }
+      },
+      errors: [],
+      summary: null
+    });
+    
     try {
       console.log('Starting update process...');
       const updateData = updateStatus.soldiers.data;
@@ -590,8 +739,9 @@ export default function ImportPage() {
       
       let updatedCount = 0;
       let notFoundCount = 0;
+      let processedIndex = 0;
       
-      for (const soldierUpdate of updateData) { // Changed loop structure as per outline suggestion
+      for (const soldierUpdate of updateData) {
         console.log(`Processing soldier:`, soldierUpdate);
         
         if (!soldierUpdate.soldier_id) {
@@ -781,64 +931,113 @@ export default function ImportPage() {
                 </AlertDescription>
               </Alert>
 
+              {/* Core Entity Imports */}
               <Card className="border-slate-200 shadow-sm">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileSpreadsheet className="w-5 h-5" />
-                    CSV File Upload Requirements
+                    Core Entity Imports
                   </CardTitle>
+                  <CardDescription>
+                    Import primary data entities. Files should match the export format.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <ImportStep
-                      title="Soldiers CSV"
-                      description="Columns: ID, First Name, Last Name, Division, Team, Profession, Phone, Email, Street Address, City"
+                      title="Personnel (Soldiers)"
+                      description="Personnel_YYYY-MM-DD.csv - soldier_id, first_name, last_name, phone_number, division_name, team_name"
                       fileType="soldiers"
                       status={importStatus.soldiers}
                       onUpload={handleFileUpload}
                       isProcessing={isProcessing}
                     />
                     <ImportStep
-                      title="Weapons CSV"
-                      description="Columns: ID, Type, Status, Division Name"
+                      title="Weapons"
+                      description="Weapons_YYYY-MM-DD.csv - weapon_id, weapon_type, status, division_name, assigned_to"
                       fileType="weapons"
                       status={importStatus.weapons}
                       onUpload={handleFileUpload}
                       isProcessing={isProcessing}
                     />
                     <ImportStep
-                      title="Serialized Gear CSV"
-                      description="Columns: ID, Type, Status, Division Name"
-                      fileType="gear"
-                      status={importStatus.gear}
+                      title="Serialized Gear"
+                      description="Serialized_Gear_YYYY-MM-DD.csv - gear_id, gear_type, status, division_name, assigned_to"
+                      fileType="serialized_gear"
+                      status={importStatus.serialized_gear}
                       onUpload={handleFileUpload}
                       isProcessing={isProcessing}
                     />
                     <ImportStep
-                      title="Equipment CSV"
-                      description="Columns: equipment_type, division_name, condition, quantity, serial_number, assigned_to"
+                      title="Drone Sets"
+                      description="Drone_Sets_YYYY-MM-DD.csv - drone_set_id, set_serial_number, status, division_name, assigned_to"
+                      fileType="drone_sets"
+                      status={importStatus.drone_sets}
+                      onUpload={handleFileUpload}
+                      isProcessing={isProcessing}
+                    />
+                    <ImportStep
+                      title="Drone Components"
+                      description="Drone_Components_YYYY-MM-DD.csv - component_id, component_type, drone_set_id"
+                      fileType="drone_components"
+                      status={importStatus.drone_components}
+                      onUpload={handleFileUpload}
+                      isProcessing={isProcessing}
+                    />
+                    <ImportStep
+                      title="Equipment"
+                      description="Equipment_YYYY-MM-DD.csv - equipment_id, equipment_type, quantity, division_name"
                       fileType="equipment"
                       status={importStatus.equipment}
                       onUpload={handleFileUpload}
                       isProcessing={isProcessing}
                     />
-                    <ImportStep
-                      title="Drone Components CSV"
-                      description="Columns: Component ID, Component Type, Status"
-                      fileType="droneComponents"
-                      status={importStatus.droneComponents}
-                      onUpload={handleFileUpload}
-                      isProcessing={isProcessing}
-                    />
-                    <ImportStep
-                      title="Assignments CSV"
-                      description="Columns: Soldier ID, Weapon ID, Gear ID"
-                      fileType="assignments"
-                      status={importStatus.assignments}
-                      onUpload={handleFileUpload}
-                      isProcessing={isProcessing}
-                    />
                   </div>
+                  
+                  {/* Show validation warnings/errors */}
+                  {Object.entries(importStatus).map(([type, status]) => 
+                    status.warnings?.length > 0 || status.errors?.length > 0 ? (
+                      <Alert key={type} className={status.errors?.length > 0 ? "border-red-200" : "border-yellow-200"}>
+                        <AlertCircle className="w-4 h-4" />
+                        <AlertTitle>{type.replace(/_/g, ' ')} validation issues</AlertTitle>
+                        <AlertDescription>
+                          {status.errors?.map((err, idx) => (
+                            <div key={idx} className="text-red-600 text-sm">
+                              Row {err.row}: {err.message}
+                            </div>
+                          ))}
+                          {status.warnings?.map((warn, idx) => (
+                            <div key={idx} className="text-yellow-600 text-sm">
+                              Row {warn.row}: {warn.message}
+                            </div>
+                          ))}
+                        </AlertDescription>
+                      </Alert>
+                    ) : null
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Assignments Import */}
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Assignments Import
+                  </CardTitle>
+                  <CardDescription>
+                    Import weapon and gear assignments to soldiers
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ImportStep
+                    title="Assignments CSV"
+                    description="Columns: soldier_id, weapon_id, gear_id - Links soldiers to their assigned equipment"
+                    fileType="assignments"
+                    status={importStatus.assignments}
+                    onUpload={handleFileUpload}
+                    isProcessing={isProcessing}
+                  />
                 </CardContent>
               </Card>
 
@@ -1131,6 +1330,16 @@ export default function ImportPage() {
 
         </TabsContent>
       </Tabs>
+      
+      {/* Import Progress Modal */}
+      <ImportProgressModal 
+        progress={importProgress} 
+        onClose={() => {
+          if (!importProgress.isImporting && importProgress.summary) {
+            setImportProgress(prev => ({ ...prev, summary: null }));
+          }
+        }}
+      />
     </div>
   );
 }

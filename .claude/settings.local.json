@@ -26,7 +26,9 @@
       "Bash(firebase projects:list:*)",
       "Bash(firebase functions:shell:*)",
       "Bash(firebase functions:list:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

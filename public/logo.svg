@@ -1,0 +1,29 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+  
+  <!-- Shield Shape with Modern Design -->
+  <path d="M20 3L5 10V18C5 27.5 11.5 36.5 20 38C28.5 36.5 35 27.5 35 18V10L20 3Z" 
+        fill="url(#gradient1)" 
+        filter="url(#shadow)"/>
+  
+  <!-- Inner Shield Detail -->
+  <path d="M20 7L9 12.5V18C9 25 13.5 31.5 20 33C26.5 31.5 31 25 31 18V12.5L20 7Z" 
+        fill="white" 
+        fill-opacity="0.2"/>
+  
+  <!-- Modern A Symbol -->
+  <path d="M20 14L16 26H18L19 22H21L22 26H24L20 14ZM19.5 20L20 18L20.5 20H19.5Z" 
+        fill="white"/>
+  
+  <!-- Decorative Lines -->
+  <path d="M14 16H16V18H14V16Z" fill="white" fill-opacity="0.8"/>
+  <path d="M24 16H26V18H24V16Z" fill="white" fill-opacity="0.8"/>
+</svg>

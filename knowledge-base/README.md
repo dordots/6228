@@ -1,53 +1,59 @@
-# ARMORY Knowledge Base
+# Armory Knowledge Base
 
-## Overview
+Welcome to the Armory system knowledge base. This documentation provides comprehensive information about the military equipment management system.
 
-This knowledge base contains all documentation, implementation details, and migration plans for the Armory system.
+## 📚 Documentation Structure
 
-## Directory Structure
+### 🏗️ System Overview
+- [System Analysis](system-overview/README.md) - Complete technical overview
+- [Architecture](system-overview/architecture.md) - System architecture details
+- [Features](system-overview/features.md) - Main features and capabilities
+- [User Roles](system-overview/user-roles.md) - Roles and permissions
 
-### `/migration-docs/` ⭐ ACTIVE WORK
-Complete migration planning from Base44:
-- **projectplan.md** - Main migration plan with Firebase/Supabase/Standalone options
-- **FIREBASE_MIGRATION_GUIDE.md** - Detailed Firebase implementation (chosen solution)
-- **testplan.md** - Comprehensive test strategy
-- Base44 research findings and Q&A documents
-- [See full document index](./migration-docs/README.md)
+### 🚀 Migration Documentation
+- [Migration Overview](migration/README.md) - Migration strategy and options
+- **Active Migration Path**
+  - [Firebase Migration Guide](migration/active/firebase-guide.md)
+  - [Project Plan](migration/active/project-plan.md)
+  - [Test Plan](migration/active/test-plan.md)
+- **Alternative Options**
+  - [Supabase Guide](migration/alternatives/supabase-guide.md)
+  - [Standalone Server](migration/alternatives/standalone-server-plan.md)
+- **Base44 Research**
+  - [Findings](migration/base44-research/findings.md)
+  - [Questions](migration/base44-research/questions.md)
+  - [Critical Issues](migration/base44-research/critical-issues.md)
+  - [Testing Plan](migration/base44-research/testing-plan.md)
+- **Technical Documentation**
+  - [Transaction Strategy](migration/technical/transaction-strategy.md)
+  - [Migration Checklist](migration/technical/migration-checklist.md)
 
-### `/entities/`
-JSON schemas for all data entities:
-- Soldier, Equipment, Weapon, SerializedGear
-- DroneSet, DroneComponent
-- ActivityLog, DailyVerification
+### 🏛️ Architecture
+- [Architecture Overview](architecture/README.md) - System design and patterns
 
-### `/functions/implementations/`
-Base44 server function implementations:
-- Data management functions (deleteAll*)
-- Email sending functions (SendGrid integration)
-- Form generation (signing/release forms)
-- TOTP authentication (2FA)
-- Data export functionality
+### 💻 Implementation
+- [Entities](entities/) - Database models and schemas
+- [Functions](functions/) - Server-side functions
+- [Integrations](integrations/) - External service integrations
 
-### `/server-architecture/`
-Original standalone server architecture planning
+## 🔍 Quick Links
 
-### `/System_Analysis.md`
-Complete system analysis in Hebrew with:
-- Full feature documentation
-- User roles and permissions
-- Technical architecture
-- Security measures
+- **For Developers**: Start with [System Overview](system-overview/README.md) and [Architecture](system-overview/architecture.md)
+- **For Migration**: See [Migration Overview](migration/README.md) and [Project Plan](migration/active/project-plan.md)
+- **For Operations**: Check [Features](system-overview/features.md) and [User Roles](system-overview/user-roles.md)
 
-## Current Migration Status
+## 📋 Current Status
 
-🔥 **Active**: Migrating from Base44 to Firebase
-- **Timeline**: 2 weeks
-- **Approach**: Backend-as-a-Service (BaaS) 
-- **Progress**: Planning complete, ready for implementation
+The project is actively migrating from Base44 to Firebase. The migration is in progress with a comprehensive plan and testing strategy in place.
 
-## Quick Links
+## 🛠️ Technology Stack
 
-1. [Main Migration Plan](./migration-docs/projectplan.md)
-2. [Firebase Implementation Guide](./migration-docs/FIREBASE_MIGRATION_GUIDE.md)
-3. [Test Strategy](./migration-docs/testplan.md)
-4. [Base44 Findings](./migration-docs/BASE44_FINDINGS.md)
+- **Frontend**: React 18.2.0, Vite 6.1.0, Tailwind CSS
+- **Backend**: Base44 (migrating to Firebase)
+- **Database**: Base44 managed (migrating to Firestore)
+- **Authentication**: Base44 Auth with 2FA
+- **UI Components**: Radix UI, Lucide React
+
+## 📞 Contact
+
+For questions or support regarding the Armory system, please contact the development team.

@@ -104,38 +104,18 @@ export default function Soldiers() {
       console.log('[DEBUG loadAllData] First soldier:', soldierData[0]);
       console.log('[DEBUG loadAllData] All soldier IDs:', soldierData.map(s => ({ id: s.id, soldier_id: s.soldier_id })));
 
-      // Deduplicate by document ID (not soldier_id)
+      // Deduplicate by document ID only
       const uniqueById = new Map();
       soldierData.forEach(soldier => {
         if (!uniqueById.has(soldier.id)) {
           uniqueById.set(soldier.id, soldier);
         }
       });
-      const deduplicatedById = Array.from(uniqueById.values());
+      const finalSoldiers = Array.from(uniqueById.values());
 
-      if (soldierData.length !== deduplicatedById.length) {
-        console.warn('[DEBUG loadAllData] Found duplicates by document ID! Before:', soldierData.length, 'After:', deduplicatedById.length);
+      if (soldierData.length !== finalSoldiers.length) {
+        console.warn('[DEBUG loadAllData] Found duplicates by document ID! Before:', soldierData.length, 'After:', finalSoldiers.length);
       }
-
-      // Deduplicate by soldier_id ONLY if soldier_id exists and is not empty
-      const uniqueBySoldierId = new Map();
-      deduplicatedById.forEach(soldier => {
-        const soldierId = soldier.soldier_id?.toString().trim();
-
-        if (soldierId && soldierId !== '') {
-          // Has valid soldier_id - use it as key
-          if (!uniqueBySoldierId.has(soldierId)) {
-            uniqueBySoldierId.set(soldierId, soldier);
-          } else {
-            console.warn('[DEBUG loadAllData] Duplicate soldier_id found:', soldierId, 'Keeping first occurrence, discarding:', soldier.first_name, soldier.last_name);
-          }
-        } else {
-          // No soldier_id or empty - use document ID as key (keeps all soldiers without IDs)
-          console.log('[DEBUG loadAllData] Soldier missing soldier_id, using document id:', soldier.id, soldier.first_name, soldier.last_name);
-          uniqueBySoldierId.set(`no_id_${soldier.id}`, soldier);
-        }
-      });
-      const finalSoldiers = Array.from(uniqueBySoldierId.values());
 
       console.log('[DEBUG loadAllData] Final soldiers after deduplication:', finalSoldiers.length);
       console.log('[DEBUG loadAllData] Setting soldiers state with:', finalSoldiers.length, 'soldiers');

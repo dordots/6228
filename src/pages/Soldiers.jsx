@@ -80,13 +80,14 @@ export default function Soldiers() {
   }, []);
 
   const loadAllData = async () => {
+    console.log('[DEBUG loadAllData] Function called');
     setIsLoading(true);
     try {
       const currentUser = await User.me();
       const isAdmin = currentUser?.role === 'admin';
       const isManager = currentUser?.custom_role === 'manager';
       const userDivision = currentUser?.department;
-      
+
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
 
       const results = await Promise.allSettled([
@@ -96,8 +97,50 @@ export default function Soldiers() {
         DroneSet.filter(filter),
         Equipment.filter(filter) // This loads all equipment
       ]);
-      
-      setSoldiers(results[0].status === 'fulfilled' && Array.isArray(results[0].value) ? results[0].value : []);
+
+      // Get raw soldier data from Firestore
+      let soldierData = results[0].status === 'fulfilled' && Array.isArray(results[0].value) ? results[0].value : [];
+      console.log('[DEBUG loadAllData] Raw soldiers from Firestore:', soldierData.length);
+      console.log('[DEBUG loadAllData] First soldier:', soldierData[0]);
+      console.log('[DEBUG loadAllData] All soldier IDs:', soldierData.map(s => ({ id: s.id, soldier_id: s.soldier_id })));
+
+      // Deduplicate by document ID (not soldier_id)
+      const uniqueById = new Map();
+      soldierData.forEach(soldier => {
+        if (!uniqueById.has(soldier.id)) {
+          uniqueById.set(soldier.id, soldier);
+        }
+      });
+      const deduplicatedById = Array.from(uniqueById.values());
+
+      if (soldierData.length !== deduplicatedById.length) {
+        console.warn('[DEBUG loadAllData] Found duplicates by document ID! Before:', soldierData.length, 'After:', deduplicatedById.length);
+      }
+
+      // Deduplicate by soldier_id ONLY if soldier_id exists and is not empty
+      const uniqueBySoldierId = new Map();
+      deduplicatedById.forEach(soldier => {
+        const soldierId = soldier.soldier_id?.toString().trim();
+
+        if (soldierId && soldierId !== '') {
+          // Has valid soldier_id - use it as key
+          if (!uniqueBySoldierId.has(soldierId)) {
+            uniqueBySoldierId.set(soldierId, soldier);
+          } else {
+            console.warn('[DEBUG loadAllData] Duplicate soldier_id found:', soldierId, 'Keeping first occurrence, discarding:', soldier.first_name, soldier.last_name);
+          }
+        } else {
+          // No soldier_id or empty - use document ID as key (keeps all soldiers without IDs)
+          console.log('[DEBUG loadAllData] Soldier missing soldier_id, using document id:', soldier.id, soldier.first_name, soldier.last_name);
+          uniqueBySoldierId.set(`no_id_${soldier.id}`, soldier);
+        }
+      });
+      const finalSoldiers = Array.from(uniqueBySoldierId.values());
+
+      console.log('[DEBUG loadAllData] Final soldiers after deduplication:', finalSoldiers.length);
+      console.log('[DEBUG loadAllData] Setting soldiers state with:', finalSoldiers.length, 'soldiers');
+
+      setSoldiers(finalSoldiers);
       setWeapons(results[1].status === 'fulfilled' && Array.isArray(results[1].value) ? results[1].value : []);
       setSerializedGear(results[2].status === 'fulfilled' && Array.isArray(results[2].value) ? results[2].value : []);
       setDroneSets(results[3].status === 'fulfilled' && Array.isArray(results[3].value) ? results[3].value : []);
@@ -670,9 +713,11 @@ export default function Soldiers() {
   };
 
   const filteredSoldiers = React.useMemo(() => {
+    console.log('[DEBUG filteredSoldiers] Input soldiers count:', soldiers?.length);
     const safeSoldiers = Array.isArray(soldiers) ? soldiers : [];
-    
-    return safeSoldiers.filter(soldier => {
+    console.log('[DEBUG filteredSoldiers] Safe soldiers count:', safeSoldiers.length);
+
+    const filtered = safeSoldiers.filter(soldier => {
       if (!soldier) return false;
 
       const searchLower = searchTerm.toLowerCase().trim();
@@ -699,12 +744,19 @@ export default function Soldiers() {
 
       return matchesSearch && matchesStatus && matchesDivision && matchesTeam && matchesProfession;
     });
+
+    console.log('[DEBUG filteredSoldiers] Filtered count:', filtered.length);
+    console.log('[DEBUG filteredSoldiers] Filtered IDs:', filtered.map(s => s.id));
+    return filtered;
   }, [soldiers, searchTerm, filters]);
 
   const sortedSoldiers = React.useMemo(() => {
+    console.log('[DEBUG sortedSoldiers] Input filteredSoldiers count:', filteredSoldiers?.length);
     if (!Array.isArray(filteredSoldiers)) return [];
-    
+
     let sortableItems = [...filteredSoldiers];
+    console.log('[DEBUG sortedSoldiers] sortableItems after spread:', sortableItems.length);
+    console.log('[DEBUG sortedSoldiers] sortableItems IDs:', sortableItems.map(s => s.id));
     if (sortConfig.key) {
       sortableItems.sort((a, b) => {
         let aValue = a ? a[sortConfig.key] : undefined;

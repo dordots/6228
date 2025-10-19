@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Users, Shield, Mail, Calendar, Search, UserPlus, Settings, Edit, ArrowLeft, Building, UsersIcon } from "lucide-react";
 import { format } from "date-fns";
 
@@ -157,7 +157,7 @@ export default function UserManagement() {
         phoneNumber: newUserData.phoneNumber,
         role: newUserData.role,
         customRole: newUserData.role,
-        linkedSoldierId: newUserData.linkedSoldierId || null,
+        linkedSoldierId: (newUserData.linkedSoldierId && newUserData.linkedSoldierId !== "none") ? newUserData.linkedSoldierId : null,
         displayName: newUserData.displayName || null
       });
 
@@ -257,6 +257,9 @@ export default function UserManagement() {
               <UserPlus className="w-5 h-5" />
               Create New User
             </DialogTitle>
+            <DialogDescription>
+              Create a new user account with phone authentication
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -311,7 +314,7 @@ export default function UserManagement() {
                   <SelectValue placeholder="Select a soldier..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No soldier linked</SelectItem>
+                  <SelectItem value="none">No soldier linked</SelectItem>
                   {soldiers.map((soldier) => (
                     <SelectItem key={soldier.soldier_id} value={soldier.soldier_id}>
                       {soldier.soldier_id} - {soldier.full_name}

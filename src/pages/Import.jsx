@@ -283,6 +283,94 @@ export default function ImportPage() {
         
         for (const soldier of importStatus.soldiers.data) {
           try {
+            // Validate soldier_id exists
+            if (!soldier.soldier_id || String(soldier.soldier_id).trim() === '') {
+              console.error('[Import] ERROR: Soldier missing soldier_id, skipping:', soldier);
+
+              results.push({
+                id: 'UNKNOWN',
+                success: false,
+                error: 'Missing soldier_id - this field is required',
+                data: soldier
+              });
+
+              const errorDetail = {
+                entity: 'soldiers',
+                id: 'UNKNOWN',
+                message: 'Missing soldier_id - this field is required',
+                data: soldier
+              };
+              allErrors.push(errorDetail);
+
+              soldierIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  soldiers: {
+                    ...prev.entityProgress.soldiers,
+                    processed: soldierIndex,
+                    failed: prev.entityProgress.soldiers.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Check if soldier already exists in database
+            // Note: Using findById instead of filter because filter returns all soldiers
+            console.log('[Import] Checking if soldier exists:', soldier.soldier_id);
+            let existingSoldier = null;
+            try {
+              existingSoldier = await Soldier.findById(soldier.soldier_id);
+              console.log('[Import] findById result for soldier_id', soldier.soldier_id, ':', existingSoldier);
+            } catch (findError) {
+              // Soldier doesn't exist - this is expected for new soldiers
+              console.log('[Import] Soldier does not exist (this is good for new imports)');
+            }
+
+            if (existingSoldier) {
+              console.warn('[Import] Soldier already exists, skipping:', soldier.soldier_id, soldier.first_name, soldier.last_name);
+              console.warn('[Import] Existing soldier data:', existingSoldier);
+
+              results.push({
+                id: soldier.soldier_id,
+                success: false,
+                error: `Soldier with ID "${soldier.soldier_id}" already exists in database`,
+                data: soldier
+              });
+
+              const errorDetail = {
+                entity: 'soldiers',
+                id: soldier.soldier_id,
+                message: `Soldier with ID "${soldier.soldier_id}" already exists in database`,
+                data: soldier
+              };
+              allErrors.push(errorDetail);
+
+              soldierIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  soldiers: {
+                    ...prev.entityProgress.soldiers,
+                    processed: soldierIndex,
+                    failed: prev.entityProgress.soldiers.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Soldier doesn't exist - create it
+            console.log('[Import] Creating new soldier:', soldier.soldier_id, soldier.first_name, soldier.last_name);
             await Soldier.create(soldier);
             
             // Auto-create user account if phone number exists
@@ -470,8 +558,11 @@ export default function ImportPage() {
 
       // Calculate import summary
       const allResults = importResults.reduce((acc, item) => acc.concat(item.results), []);
+      console.log('[Import] importResults:', importResults);
+      console.log('[Import] allResults:', allResults);
       const summary = generateImportSummary(allResults);
-      
+      console.log('[Import] Generated summary:', summary);
+
       // Calculate summary by entity
       const summaryByEntity = {};
       importResults.forEach(({ entity, results }) => {
@@ -479,13 +570,18 @@ export default function ImportPage() {
         const failed = results.filter(r => !r.success).length;
         summaryByEntity[entity] = { success, failed, total: results.length };
       });
-      
-      // Log import activity
-      await ActivityLog.create({
-        activity_type: 'IMPORT',
-        details: `Bulk import completed: ${summary.totals.successful} successful, ${summary.totals.failed} failed`,
-        context: summary
-      });
+      console.log('[Import] Summary by entity:', summaryByEntity);
+
+      // Log import activity (optional - don't fail import if logging fails)
+      try {
+        await ActivityLog.create({
+          activity_type: 'IMPORT',
+          details: `Bulk import completed: ${summary.totals.successful} successful, ${summary.totals.failed} failed`,
+          context: summary
+        });
+      } catch (logError) {
+        console.warn('[Import] Failed to log activity, but import completed successfully:', logError);
+      }
 
       // Update progress with final summary
       setImportProgress(prev => ({

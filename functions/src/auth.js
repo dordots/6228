@@ -89,14 +89,22 @@ exports.verifyTotp = functions
   try {
     // Get user data
     const user = await admin.auth().getUser(uid);
-    
+
+    // Debug logging
+    console.log(`[TOTP Debug] User ${uid} claims:`, {
+      totp_enabled: user.customClaims?.totp_enabled,
+      has_temp_secret: !!user.customClaims?.totp_temp_secret,
+      has_permanent_secret: !!user.customClaims?.totp_secret,
+    });
+
     // Get the secret (either temporary or permanent)
     const tempSecret = user.customClaims?.totp_temp_secret;
     const permanentSecret = user.customClaims?.totp_secret;
-    
+
     const secret = tempSecret || permanentSecret;
-    
+
     if (!secret) {
+      console.error(`[TOTP Error] No secret found for user ${uid}. Claims:`, user.customClaims);
       throw new functions.https.HttpsError(
         "failed-precondition",
         "No TOTP secret found. Please generate a new secret first."
@@ -123,18 +131,32 @@ exports.verifyTotp = functions
     
     // If using temporary secret, make it permanent
     if (tempSecret) {
-      await admin.auth().setCustomUserClaims(uid, {
+      console.log(`[TOTP Debug] Converting temp secret to permanent for user ${uid}`);
+
+      const newClaims = {
         ...user.customClaims,
         totp_secret: tempSecret,
         totp_temp_secret: null,
         totp_enabled: true,
+      };
+
+      await admin.auth().setCustomUserClaims(uid, newClaims);
+
+      // Verify the claims were set correctly
+      const updatedUser = await admin.auth().getUser(uid);
+      console.log(`[TOTP Debug] After update, user ${uid} claims:`, {
+        totp_enabled: updatedUser.customClaims?.totp_enabled,
+        has_temp_secret: !!updatedUser.customClaims?.totp_temp_secret,
+        has_permanent_secret: !!updatedUser.customClaims?.totp_secret,
       });
-      
+
       // Update user profile in Firestore
       await db.collection("users").doc(uid).set({
         totp_enabled: true,
         totp_enabled_at: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+    } else {
+      console.log(`[TOTP Debug] Using permanent secret for user ${uid}`);
     }
     
     return {

@@ -209,6 +209,7 @@ export default function Layout({ children, currentPageName }) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
+        // Get user (no forced refresh on initial load - rely on cached token)
         const user = await UserEntity.me();
         setCurrentUser(user);
 
@@ -309,14 +310,16 @@ export default function Layout({ children, currentPageName }) {
   const handleTotpSetupComplete = async () => {
     // Refresh user data and proceed to verification
     try {
-      const user = await UserEntity.me();
+      // Force refresh to get the updated totp_enabled claim from server
+      const user = await UserEntity.me(true);
       setCurrentUser(user);
+
       // After setup, if the user now has a linked soldier, update it
       if (user.linked_soldier_id) {
           try {
             const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
             const soldier = soldiers[0];
-            
+
             // Validate soldier object before setting
             if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
               setLinkedSoldier(soldier);
@@ -331,12 +334,12 @@ export default function Layout({ children, currentPageName }) {
       } else {
           setLinkedSoldier(null);
       }
+
       // If TOTP was just set up, mark as verified and store the verification time
       setIsTotpVerified(true);
       sessionStorage.setItem('lastTotpVerificationTime', Date.now().toString());
-      
-      // Force reload to ensure proper state transition after 2FA setup
-      window.location.reload();
+
+      // No need to reload - the state update will trigger re-render
     } catch (error) {
       console.error("Error refreshing user after TOTP setup:", error);
     }
@@ -346,13 +349,12 @@ export default function Layout({ children, currentPageName }) {
     try {
       setLinkedSoldier(soldier);
       setShowSoldierLinking(false);
-      
-      // Reload user data to get updated claims
-      const updatedUser = await UserEntity.me();
+
+      // Reload user data to get updated claims (force refresh to get latest)
+      const updatedUser = await UserEntity.me(true);
       setCurrentUser(updatedUser);
-      
-      // Force a page reload to ensure all components get fresh data
-      window.location.reload();
+
+      // No need for full page reload - state update handles re-render
     } catch (error) {
       console.error("Error after soldier linking:", error);
     }

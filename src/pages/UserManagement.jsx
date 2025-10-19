@@ -41,12 +41,21 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [soldiers, setSoldiers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [editingUser, setEditingUser] = useState(null);
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
+  const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
+  const [newUserData, setNewUserData] = useState({
+    phoneNumber: "",
+    role: "soldier",
+    linkedSoldierId: "",
+    displayName: ""
+  });
 
   useEffect(() => {
     loadData();
@@ -71,12 +80,13 @@ export default function UserManagement() {
       ]);
 
       setUsers(Array.isArray(usersData) ? usersData : []);
+      setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
 
       if (Array.isArray(soldiersData)) {
         // Extract unique divisions
         const uniqueDivisions = [...new Set(soldiersData.map(s => s.division_name).filter(Boolean))];
         setDivisions(uniqueDivisions.sort());
-        
+
         // Extract unique teams
         const uniqueTeams = [...new Set(soldiersData.map(s => s.team_name).filter(Boolean))];
         setTeams(uniqueTeams.sort());
@@ -89,6 +99,7 @@ export default function UserManagement() {
       console.error("Error loading data:", error);
       setError("Failed to load users or divisions");
       setUsers([]);
+      setSoldiers([]);
       setDivisions([]);
       setTeams([]);
     }
@@ -130,6 +141,39 @@ export default function UserManagement() {
   const openAssignmentDialog = (user) => {
     setEditingUser(user);
     setShowAssignmentDialog(true);
+  };
+
+  const handleCreateUser = async () => {
+    setError("");
+    setSuccess("");
+
+    if (!newUserData.phoneNumber) {
+      setError("Phone number is required");
+      return;
+    }
+
+    try {
+      await User.create({
+        phoneNumber: newUserData.phoneNumber,
+        role: newUserData.role,
+        customRole: newUserData.role,
+        linkedSoldierId: newUserData.linkedSoldierId || null,
+        displayName: newUserData.displayName || null
+      });
+
+      setSuccess("User created successfully!");
+      setShowCreateUserDialog(false);
+      setNewUserData({
+        phoneNumber: "",
+        role: "soldier",
+        linkedSoldierId: "",
+        displayName: ""
+      });
+      await loadData();
+    } catch (error) {
+      console.error("Error creating user:", error);
+      setError("Failed to create user: " + (error.message || "Unknown error"));
+    }
   };
 
   const filteredUsers = users.filter(user => {
@@ -184,6 +228,12 @@ export default function UserManagement() {
             <Users className="w-4 h-4" />
             {users.length} total users
           </Badge>
+          {isCurrentUserAdmin && (
+            <Button onClick={() => setShowCreateUserDialog(true)} className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4" />
+              Create User
+            </Button>
+          )}
         </div>
       </div>
 
@@ -192,6 +242,108 @@ export default function UserManagement() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      {success && (
+        <Alert className="border-green-200 bg-green-50 text-green-800">
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Create User Dialog */}
+      <Dialog open={showCreateUserDialog} onOpenChange={setShowCreateUserDialog}>
+        <DialogContent className="w-full max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5" />
+              Create New User
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number *</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                placeholder="+972501234567"
+                value={newUserData.phoneNumber}
+                onChange={(e) => setNewUserData({...newUserData, phoneNumber: e.target.value})}
+              />
+              <p className="text-xs text-slate-500">Format: +972XXXXXXXXX</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="displayName">Display Name (Optional)</Label>
+              <Input
+                id="displayName"
+                type="text"
+                placeholder="John Doe"
+                value={newUserData.displayName}
+                onChange={(e) => setNewUserData({...newUserData, displayName: e.target.value})}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={newUserData.role} onValueChange={(value) => setNewUserData({...newUserData, role: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLES).map(([key, role]) => (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex items-center gap-2">
+                        <span>{role.label}</span>
+                        <span className="text-xs text-slate-500">- {role.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="linkedSoldier">Link to Soldier (Optional)</Label>
+              <Select
+                value={newUserData.linkedSoldierId}
+                onValueChange={(value) => setNewUserData({...newUserData, linkedSoldierId: value})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a soldier..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No soldier linked</SelectItem>
+                  {soldiers.map((soldier) => (
+                    <SelectItem key={soldier.soldier_id} value={soldier.soldier_id}>
+                      {soldier.soldier_id} - {soldier.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button onClick={handleCreateUser} className="flex-1">
+                Create User
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCreateUserDialog(false);
+                  setNewUserData({
+                    phoneNumber: "",
+                    role: "soldier",
+                    linkedSoldierId: "",
+                    displayName: ""
+                  });
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Assignment Dialog */}
       <Dialog open={showAssignmentDialog} onOpenChange={setShowAssignmentDialog}>

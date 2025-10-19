@@ -93,9 +93,9 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                 setSecret('');
                 setToken('');
                 
-                // Reload user data to get updated claims
+                // Reload user data to get updated claims (force refresh to get latest from server)
                 try {
-                    const updatedUser = await User.me();
+                    const updatedUser = await User.me(true); // Force refresh token
                     setUser(updatedUser);
                 } catch (err) {
                     console.error("Error reloading user data:", err);

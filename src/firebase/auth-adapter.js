@@ -109,13 +109,13 @@ export const User = {
   },
   
   // Get current user with custom claims
-  me: async () => {
+  me: async (forceRefresh = false) => {
     return new Promise(async (resolve) => {
       const getFullUser = async (user) => {
         if (!user) return null;
-        
-        // Get custom claims
-        const idTokenResult = await user.getIdTokenResult();
+
+        // Get custom claims (force refresh to get latest claims from server)
+        const idTokenResult = await user.getIdTokenResult(forceRefresh);
         const claims = idTokenResult.claims;
         
         // Return user object with custom fields

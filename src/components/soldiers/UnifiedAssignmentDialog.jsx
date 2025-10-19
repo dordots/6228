@@ -339,7 +339,14 @@ export default function UnifiedAssignmentDialog({
             }
         }
 
-        await Promise.all(promises);
+        // Use allSettled instead of all to handle cases where items don't exist in Firestore
+        const results = await Promise.allSettled(promises);
+
+        // Log any failed updates
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length > 0) {
+            console.warn(`Some items failed to update (may not exist in Firestore):`, failures.map(f => f.reason?.message));
+        }
 
         // CRITICAL: Update soldier status to "arrived" if currently "expected"
         console.log(`Checking soldier status: ${soldier.enlistment_status}`);

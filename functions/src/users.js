@@ -53,7 +53,9 @@ exports.createPhoneUser = functions
         division: null,
         team: null,
         linked_soldier_id: linkedSoldierId || null,
-        totp_enabled: false
+        totp_enabled: false,
+        totp_secret: null,
+        totp_temp_secret: null
       };
 
       await admin.auth().setCustomUserClaims(userRecord.uid, customClaims);
@@ -173,6 +175,7 @@ exports.updateUserRole = functions
       const permissions = getDefaultPermissions(role);
 
       // Update custom claims with new RBAC structure
+      // IMPORTANT: Preserve TOTP settings when updating role
       const updatedClaims = {
         ...currentClaims,
         role: role === 'admin' ? 'admin' : 'user', // Admin is special, others are 'user' base role
@@ -181,6 +184,10 @@ exports.updateUserRole = functions
         scope: permissions.scope,
         division: division || null,
         team: team || null,
+        // Preserve existing TOTP settings
+        totp_enabled: currentClaims.totp_enabled || false,
+        totp_secret: currentClaims.totp_secret || null,
+        totp_temp_secret: currentClaims.totp_temp_secret || null,
       };
 
       await admin.auth().setCustomUserClaims(uid, updatedClaims);
@@ -411,6 +418,7 @@ exports.setAdminByPhone = functions
       const adminPerms = getDefaultPermissions('admin');
       
       // Set admin claims with new RBAC structure
+      // IMPORTANT: Preserve existing TOTP settings if they exist
       const adminClaims = {
         role: 'admin',
         custom_role: 'admin',
@@ -419,7 +427,9 @@ exports.setAdminByPhone = functions
         division: null,
         team: null,
         linked_soldier_id: null,
-        totp_enabled: user.customClaims?.totp_enabled || false
+        totp_enabled: user.customClaims?.totp_enabled || false,
+        totp_secret: user.customClaims?.totp_secret || null,
+        totp_temp_secret: user.customClaims?.totp_temp_secret || null
       };
 
       await admin.auth().setCustomUserClaims(user.uid, adminClaims);

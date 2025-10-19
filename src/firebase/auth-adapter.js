@@ -247,7 +247,11 @@ export const User = {
 
       // Loop through all pages until no more pageToken
       do {
-        const result = await listUsersFn({ ...options, pageToken });
+        const requestData = { ...options };
+        if (pageToken) {
+          requestData.pageToken = pageToken;
+        }
+        const result = await listUsersFn(requestData);
         const users = result.data.users || [];
         allUsers = allUsers.concat(users);
         pageToken = result.data.pageToken;

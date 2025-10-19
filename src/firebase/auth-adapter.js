@@ -238,12 +238,22 @@ export const User = {
   
   // User Management Methods (for UserManagement page)
   
-  // List all users
+  // List all users (with pagination to get all users)
   list: async (options = {}) => {
     try {
       const listUsersFn = httpsCallable(functions, 'listUsers');
-      const result = await listUsersFn(options);
-      return result.data.users || [];
+      let allUsers = [];
+      let pageToken = null;
+
+      // Loop through all pages until no more pageToken
+      do {
+        const result = await listUsersFn({ ...options, pageToken });
+        const users = result.data.users || [];
+        allUsers = allUsers.concat(users);
+        pageToken = result.data.pageToken;
+      } while (pageToken);
+
+      return allUsers;
     } catch (error) {
       console.error('Error listing users:', error);
       throw error;

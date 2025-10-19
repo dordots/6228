@@ -100,9 +100,9 @@ exports.listUsers = functions
     }
 
     try {
-      const { pageToken, maxResults = 100 } = data;
-      
-      // List users
+      const { pageToken, maxResults = 1000 } = data;
+
+      // List users (Firebase Auth max is 1000 per request)
       const listResult = await admin.auth().listUsers(maxResults, pageToken);
       
       // Get custom claims for each user

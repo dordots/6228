@@ -371,7 +371,13 @@ export default function ImportPage() {
 
             // Soldier doesn't exist - create it
             console.log('[Import] Creating new soldier:', soldier.soldier_id, soldier.first_name, soldier.last_name);
-            await Soldier.create(soldier);
+
+            // Ensure soldier_id is trimmed before creating
+            const soldierToCreate = {
+              ...soldier,
+              soldier_id: soldier.soldier_id.trim()
+            };
+            await Soldier.create(soldierToCreate);
             
             // Auto-create user account if phone number exists
             if (soldier.phone_number) {

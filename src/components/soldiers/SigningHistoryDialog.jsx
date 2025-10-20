@@ -59,15 +59,21 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
                         }
                         
                         // Method 3: Check if soldier ID appears in details text
-                        if (log.details && log.details.includes(soldier.soldier_id)) {
-                            console.log(`Found details match for soldier_id: ${log.id}`);
-                            return true;
+                        if (log.details) {
+                            const detailsStr = typeof log.details === 'string' ? log.details : JSON.stringify(log.details);
+                            if (detailsStr.includes(soldier.soldier_id)) {
+                                console.log(`Found details match for soldier_id: ${log.id}`);
+                                return true;
+                            }
                         }
-                        
+
                         // Method 4: Check if soldier name appears in details
-                        if (log.details && log.details.includes(soldier.first_name) && log.details.includes(soldier.last_name)) {
-                            console.log(`Found name match in details: ${log.id}`);
-                            return true;
+                        if (log.details) {
+                            const detailsStr = typeof log.details === 'string' ? log.details : JSON.stringify(log.details);
+                            if (detailsStr.includes(soldier.first_name) && detailsStr.includes(soldier.last_name)) {
+                                console.log(`Found name match in details: ${log.id}`);
+                                return true;
+                            }
                         }
                         
                         return false;

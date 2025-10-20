@@ -184,7 +184,24 @@ export default function Soldiers() {
             }
         });
 
-        await Soldier.update(editingSoldier.id, soldierData);
+        // Verify the soldier document exists before updating
+        const existingSoldier = await Soldier.findById(editingSoldier.id);
+        if (!existingSoldier) {
+          // Try to find by soldier_id if direct lookup failed
+          const soldierBySoldierId = await Soldier.findById(editingSoldier.soldier_id);
+          if (soldierBySoldierId) {
+            console.warn(`Soldier found by soldier_id instead of document ID. Using soldier_id: ${editingSoldier.soldier_id}`);
+            await Soldier.update(editingSoldier.soldier_id, soldierData);
+          } else {
+            alert(`Error: Soldier document not found. The soldier may have been deleted or the ID is invalid. Please refresh and try again.`);
+            setShowForm(false);
+            setEditingSoldier(null);
+            await loadAllData();
+            return;
+          }
+        } else {
+          await Soldier.update(editingSoldier.id, soldierData);
+        }
         
         const activityData = {
           activity_type: "UPDATE",
@@ -464,7 +481,24 @@ export default function Soldiers() {
       };
 
       if (updatingSoldier) {
-        await Soldier.update(updatingSoldier.id, updateData);
+        // Verify the soldier document exists before updating
+        const existingSoldier = await Soldier.findById(updatingSoldier.id);
+        if (!existingSoldier) {
+          // Try to find by soldier_id if direct lookup failed
+          const soldierBySoldierId = await Soldier.findById(updatingSoldier.soldier_id);
+          if (soldierBySoldierId) {
+            console.warn(`Soldier found by soldier_id instead of document ID. Using soldier_id: ${updatingSoldier.soldier_id}`);
+            await Soldier.update(updatingSoldier.soldier_id, updateData);
+          } else {
+            alert(`Error: Soldier document not found. The soldier may have been deleted or the ID is invalid. Please refresh and try again.`);
+            setShowUpdateDialog(false);
+            setUpdatingSoldier(null);
+            await loadAllData();
+            return;
+          }
+        } else {
+          await Soldier.update(updatingSoldier.id, updateData);
+        }
 
         const changes = {};
         Object.keys(updateData).forEach(key => {

@@ -57,9 +57,17 @@ export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldi
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // Validate soldier_id is not empty or whitespace only
+    if (!formData.soldier_id || formData.soldier_id.trim() === '') {
+      alert('Error: Soldier ID is required and cannot be empty.');
+      return;
+    }
+
     // Use custom division if "other" was selected
     const finalFormData = {
       ...formData,
+      soldier_id: formData.soldier_id.trim(), // Trim whitespace
       division_name: showCustomDivision ? customDivision : formData.division_name,
     };
     onSubmit(finalFormData);

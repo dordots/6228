@@ -9,7 +9,7 @@ import { ActivityLog } from "@/api/entities";
 import { User } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Trash2, ArrowLeft, History, Mail, Loader2, ClipboardCopy } from "lucide-react";
+import { Plus, Search, Trash2, ArrowLeft, History, Mail, Loader2, ClipboardCopy, Download } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -36,6 +36,8 @@ import UpdatePersonalDetailsDialog from "../components/soldiers/UpdatePersonalDe
 import SoldierFilters from "../components/soldiers/SoldierFilters";
 import SigningHistoryDialog from "../components/soldiers/SigningHistoryDialog";
 import { sendBulkEquipmentForms } from "@/api/functions";
+import JSZip from 'jszip';
+import { generateEquipmentFormHTML } from "@/utils/equipmentFormGenerator";
 
 export default function Soldiers() {
   const [soldiers, setSoldiers] = useState([]);
@@ -63,6 +65,7 @@ export default function Soldiers() {
   const [isCopyingEmails, setIsCopyingEmails] = useState(false); // Existing state
   const [showEmailsDialog, setShowEmailsDialog] = useState(false); // New state
   const [emailsForInvite, setEmailsForInvite] = useState([]); // New state
+  const [isGeneratingZip, setIsGeneratingZip] = useState(false); // For ZIP download
 
   // RENAMED: from availableEquipment to allEquipment for clarity
   const [allEquipment, setAllEquipment] = useState([]);
@@ -651,7 +654,7 @@ export default function Soldiers() {
     try {
       const response = await sendBulkEquipmentForms();
       const result = response.data;
-      
+
       if (result.success) {
         alert(`Bulk email completed!\n\nSent: ${result.summary.sent}\nSkipped: ${result.summary.skipped}\nErrors: ${result.summary.errors}\n\nTotal soldiers processed: ${result.summary.total}`);
       } else {
@@ -662,6 +665,97 @@ export default function Soldiers() {
       alert('Failed to send bulk emails: ' + error.message);
     } finally {
       setIsSendingBulk(false);
+    }
+  };
+
+  const handleDownloadAllForms = async () => {
+    setIsGeneratingZip(true);
+    try {
+      // Get all soldiers with their assigned equipment
+      const soldiersWithEquipment = soldiers.filter(soldier => {
+        const hasWeapons = weapons.some(w => w.assigned_to === soldier.soldier_id);
+        const hasGear = serializedGear.some(g => g.assigned_to === soldier.soldier_id);
+        const hasDrones = droneSets.some(d => d.assigned_to === soldier.soldier_id);
+        const hasEquipment = allEquipment.some(e => e.assigned_to === soldier.soldier_id && (e.quantity || 0) > 0);
+
+        return hasWeapons || hasGear || hasDrones || hasEquipment;
+      });
+
+      if (soldiersWithEquipment.length === 0) {
+        alert('No soldiers with assigned equipment found.');
+        setIsGeneratingZip(false);
+        return;
+      }
+
+      const zip = new JSZip();
+
+      // Generate HTML for each soldier
+      for (const soldier of soldiersWithEquipment) {
+        // Collect all assigned items for this soldier
+        const assignedItems = [];
+
+        // Add weapons
+        weapons
+          .filter(w => w.assigned_to === soldier.soldier_id)
+          .forEach(weapon => {
+            assignedItems.push({ type: 'Weapon', ...weapon });
+          });
+
+        // Add gear
+        serializedGear
+          .filter(g => g.assigned_to === soldier.soldier_id)
+          .forEach(gear => {
+            assignedItems.push({ type: 'Gear', ...gear });
+          });
+
+        // Add drone sets
+        droneSets
+          .filter(d => d.assigned_to === soldier.soldier_id)
+          .forEach(droneSet => {
+            assignedItems.push({ type: 'Drone Set', ...droneSet });
+          });
+
+        // Add equipment
+        allEquipment
+          .filter(e => e.assigned_to === soldier.soldier_id && (e.quantity || 0) > 0)
+          .forEach(equipment => {
+            assignedItems.push({ type: 'Equipment', ...equipment });
+          });
+
+        // Generate HTML
+        const html = generateEquipmentFormHTML(soldier, assignedItems);
+
+        // Create filename: soldier_id-first_name-last_name.html
+        const filename = `${soldier.soldier_id}-${soldier.first_name}-${soldier.last_name}.html`;
+
+        // Add to ZIP
+        zip.file(filename, html);
+      }
+
+      // Generate ZIP file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      // Create download link
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      link.download = `equipment-forms-${dateStr}.zip`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up
+      URL.revokeObjectURL(url);
+
+      alert(`Successfully generated ${soldiersWithEquipment.length} equipment forms!`);
+    } catch (error) {
+      console.error('Error generating ZIP:', error);
+      alert('Failed to generate ZIP file: ' + error.message);
+    } finally {
+      setIsGeneratingZip(false);
     }
   };
 
@@ -960,8 +1054,8 @@ export default function Soldiers() {
               <><ClipboardCopy className="w-4 h-4 mr-2" />Copy Emails for Invite</>
             )}
           </Button>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={handleBulkEmailEquipment}
             disabled={isSendingBulk}
             className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
@@ -975,6 +1069,24 @@ export default function Soldiers() {
               <>
                 <Mail className="w-4 h-4 mr-2" />
                 Email All Equipment Lists
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleDownloadAllForms}
+            disabled={isGeneratingZip}
+            className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200"
+          >
+            {isGeneratingZip ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 mr-2" />
+                Download all forms (ZIP)
               </>
             )}
           </Button>

@@ -836,7 +836,7 @@ export default function Soldiers() {
         unassignedGear={selectedSoldierForWelcome ? getFilteredUnassignedItems(selectedSoldierForWelcome).gear : []}
         unassignedDroneSets={selectedSoldierForWelcome ? getFilteredUnassignedItems(selectedSoldierForWelcome).droneSets : []}
         equipment={allEquipment}
-        onSuccess={handleFinalizeArrival}
+        onSuccess={loadAllData}
       />
       
       <UpdatePersonalDetailsDialog

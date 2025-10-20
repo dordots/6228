@@ -286,13 +286,13 @@ export default function UnifiedAssignmentDialog({
 
         // Serialized items (Weapons, Gear, Drones) - Simple assignment update
         for (const item of selectedWeapons) {
-            promises.push(Weapon.update(item.id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
+            promises.push(Weapon.update(item.weapon_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
         }
         for (const item of selectedGear) {
-            promises.push(SerializedGear.update(item.id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
+            promises.push(SerializedGear.update(item.gear_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
         }
         for (const item of selectedDroneSets) {
-            promises.push(DroneSet.update(item.id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
+            promises.push(DroneSet.update(item.drone_set_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
         }
 
         // FIXED LOGIC for non-serialized equipment
@@ -309,9 +309,9 @@ export default function UnifiedAssignmentDialog({
             // 1. Update (or delete) the source stock record
             const newStockQuantity = originalStockItem.quantity - equip.quantity;
             if (newStockQuantity > 0) {
-                promises.push(Equipment.update(originalStockItem.id, { quantity: newStockQuantity }));
+                promises.push(Equipment.update(originalStockItem.equipment_id, { quantity: newStockQuantity }));
             } else {
-                promises.push(Equipment.delete(originalStockItem.id));
+                promises.push(Equipment.delete(originalStockItem.equipment_id));
             }
 
             // 2. Find if soldier already has this equipment type (from the complete 'equipment' prop)
@@ -323,7 +323,7 @@ export default function UnifiedAssignmentDialog({
             if (soldierExistingItem) {
                 // 3a. If yes, update the quantity of soldier's existing record
                 const newSoldierQuantity = (soldierExistingItem.quantity || 0) + equip.quantity;
-                promises.push(Equipment.update(soldierExistingItem.id, { quantity: newSoldierQuantity }));
+                promises.push(Equipment.update(soldierExistingItem.equipment_id, { quantity: newSoldierQuantity }));
             } else {
                 // 3b. If no, create a new record for the soldier
                 promises.push(Equipment.create({
@@ -342,53 +342,64 @@ export default function UnifiedAssignmentDialog({
         // Use allSettled instead of all to handle cases where items don't exist in Firestore
         const results = await Promise.allSettled(promises);
 
-        // Log any failed updates
+        // Log any failed updates but don't fail the whole operation
         const failures = results.filter(r => r.status === 'rejected');
         if (failures.length > 0) {
             console.warn(`Some items failed to update (may not exist in Firestore):`, failures.map(f => f.reason?.message));
         }
 
         // CRITICAL: Update soldier status to "arrived" if currently "expected"
-        console.log(`Checking soldier status: ${soldier.enlistment_status}`);
-        if (soldier.enlistment_status === 'expected') {
-            console.log(`Updating soldier ${soldier.soldier_id} from 'expected' to 'arrived'`);
-            await Soldier.update(soldier.id, {
-                enlistment_status: 'arrived',
-                arrival_date: soldier.arrival_date || new Date().toISOString().split('T')[0]
-            });
-            console.log(`Successfully updated soldier ${soldier.soldier_id} status to 'arrived'`);
-        } else {
-            console.log(`Soldier ${soldier.soldier_id} status is already '${soldier.enlistment_status}', no update needed`);
-        }
-
-        const activityData = {
-            activity_type: "ASSIGN",
-            entity_type: "Soldier",
-            details: `Assigned ${assignedItemDetails.length} item(s) to ${soldier.first_name} ${soldier.last_name} (${soldier.soldier_id}).`,
-            user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
-            user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
-            soldier_id: soldier.soldier_id,
-            context: {
-                soldierId: soldier.soldier_id,
-                assignedItems: assignedItemDetails,
-                signature,
-            },
-            division_name: soldier.division_name,
-        };
-
-        const newActivityLog = await ActivityLog.create(activityData);
-
-        if (soldier.email && hasSelectedItems) {
-            try {
-                await sendSigningForm({
-                    activityId: newActivityLog.id,
-                    soldier: soldier
+        // Wrap in try-catch so failure here doesn't prevent dialog from closing
+        try {
+            console.log(`Checking soldier status: ${soldier.enlistment_status}`);
+            if (soldier.enlistment_status === 'expected') {
+                console.log(`Updating soldier ${soldier.soldier_id} from 'expected' to 'arrived'`);
+                await Soldier.update(soldier.soldier_id, {
+                    enlistment_status: 'arrived',
+                    arrival_date: soldier.arrival_date || new Date().toISOString().split('T')[0]
                 });
-            } catch (emailError) {
-                console.warn("Failed to send signing email, but assignment was successful:", emailError);
+                console.log(`Successfully updated soldier ${soldier.soldier_id} status to 'arrived'`);
+            } else {
+                console.log(`Soldier ${soldier.soldier_id} status is already '${soldier.enlistment_status}', no update needed`);
             }
+        } catch (soldierUpdateError) {
+            console.warn("Failed to update soldier status, but assignment was successful:", soldierUpdateError);
         }
 
+        // Create activity log - wrap in try-catch
+        try {
+            const activityData = {
+                activity_type: "ASSIGN",
+                entity_type: "Soldier",
+                details: `Assigned ${assignedItemDetails.length} item(s) to ${soldier.first_name} ${soldier.last_name} (${soldier.soldier_id}).`,
+                user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
+                user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
+                soldier_id: soldier.soldier_id,
+                context: {
+                    soldierId: soldier.soldier_id,
+                    assignedItems: assignedItemDetails,
+                    signature,
+                },
+                division_name: soldier.division_name,
+            };
+
+            const newActivityLog = await ActivityLog.create(activityData);
+
+            if (soldier.email && hasSelectedItems) {
+                try {
+                    await sendSigningForm({
+                        activityId: newActivityLog.id,
+                        soldier: soldier
+                    });
+                } catch (emailError) {
+                    console.warn("Failed to send signing email, but assignment was successful:", emailError);
+                }
+            }
+        } catch (activityLogError) {
+            console.warn("Failed to create activity log, but assignment was successful:", activityLogError);
+        }
+
+        // Always close dialog and refresh after successful assignment
         setIsLoading(false);
         showToast("Equipment assigned successfully!", "success");
 

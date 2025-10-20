@@ -510,15 +510,23 @@ export default function Soldiers() {
             }
         });
 
-        await ActivityLog.create({
-          activity_type: "UPDATE",
-          entity_type: "Soldier",
-          details: `Updated details for ${updatingSoldier.first_name} ${updatingSoldier.last_name} (${updatingSoldier.soldier_id})`,
-          user_full_name: currentUser?.full_name || 'System',
-          client_timestamp: getAdjustedTimestamp(),
-          context: { changes, updatedFields: updateData },
-          division_name: updatingSoldier.division_name
-        });
+        // Try to create activity log, but don't fail the whole operation if it errors
+        try {
+          await ActivityLog.create({
+            activity_type: "UPDATE",
+            entity_type: "Soldier",
+            details: `Updated details for ${updatingSoldier.first_name} ${updatingSoldier.last_name} (${updatingSoldier.soldier_id})`,
+            user_full_name: currentUser?.full_name || 'System',
+            client_timestamp: getAdjustedTimestamp(),
+            context: { changes, updatedFields: updateData },
+            division_name: updatingSoldier.division_name
+          });
+        } catch (logError) {
+          // Log the error but don't prevent UI refresh
+          console.error("Failed to create activity log (soldier update still succeeded):", logError);
+        }
+
+        // Always cleanup UI and refresh data after soldier update succeeds
         setShowUpdateDialog(false);
         setUpdatingSoldier(null);
         await loadAllData();

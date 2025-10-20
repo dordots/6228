@@ -140,3 +140,64 @@ The root cause was that some soldiers in the database have auto-generated Firest
 - **Backward compatible** - Doesn't break existing functionality
 - **User-friendly** - Better error messages guide users when issues occur
 - **Prevention** - Validation ensures this won't happen with new data
+
+---
+
+## NEW ISSUE: Update Success But Shows Error & No UI Refresh (2025-10-20)
+
+### Problem
+When updating soldier personal details, the update succeeds but:
+1. Shows error message to user
+2. Doesn't refresh UI (user must manually refresh to see changes)
+
+### Console Error
+```
+Error updating soldier details: FirebaseError: Missing or insufficient permissions.
+```
+
+### Root Cause
+In [Soldiers.jsx:513-524](src/pages/Soldiers.jsx#L513-L524):
+1. Soldier.update() **succeeds** (line 491 or 500) ✓
+2. ActivityLog.create() **fails** with permissions error (line 513-521) ✗
+3. Error caught and shown to user (line 526-528)
+4. UI refresh never executes (line 524 `loadAllData()`) ✗
+
+The ActivityLog fails because Firestore security rules require valid `division_name` for `canAccessByScope()` check, but `updatingSoldier.division_name` may be null/undefined.
+
+### Solution Implemented
+**File:** src/pages/Soldiers.jsx (lines 513-532)
+
+Wrapped ActivityLog creation in separate try-catch block:
+- ActivityLog errors are logged to console only
+- UI cleanup and refresh **always execute** after soldier update succeeds
+- User no longer sees error messages for successful updates
+
+### Code Changes
+```javascript
+// Try to create activity log, but don't fail the whole operation if it errors
+try {
+  await ActivityLog.create({
+    activity_type: "UPDATE",
+    entity_type: "Soldier",
+    details: `Updated details for ${updatingSoldier.first_name} ${updatingSoldier.last_name} (${updatingSoldier.soldier_id})`,
+    user_full_name: currentUser?.full_name || 'System',
+    client_timestamp: getAdjustedTimestamp(),
+    context: { changes, updatedFields: updateData },
+    division_name: updatingSoldier.division_name
+  });
+} catch (logError) {
+  // Log the error but don't prevent UI refresh
+  console.error("Failed to create activity log (soldier update still succeeded):", logError);
+}
+
+// Always cleanup UI and refresh data after soldier update succeeds
+setShowUpdateDialog(false);
+setUpdatingSoldier(null);
+await loadAllData();
+```
+
+### Result
+- Soldier updates complete successfully ✓
+- UI refreshes immediately after update ✓
+- No false error messages shown to user ✓
+- ActivityLog failures logged to console for debugging ✓

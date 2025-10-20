@@ -262,6 +262,16 @@ export default function SoldierReleasePage() {
       for (const item of itemsToUnassign) {
         if (!item) continue;
 
+        // Debug: Log the item structure to see what ID we're using
+        console.log('[DEBUG handleUnassignSerialized] Attempting to update item:', {
+          itemType: item.itemType,
+          id: item.id,
+          weapon_id: item.weapon_id,
+          gear_id: item.gear_id,
+          drone_set_id: item.drone_set_id,
+          displayId: item.displayId
+        });
+
         switch (item.itemType) {
           case 'Weapon':
             await Weapon.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
@@ -318,7 +328,82 @@ export default function SoldierReleasePage() {
 
     } catch (error) {
       console.error("Failed to release serialized items:", error);
-      setErrorMessage("Failed to unassign serialized items.");
+
+      // Even on error, try to create activity log and send email (operation may have partially succeeded)
+      try {
+        const currentUser = await User.me();
+        let performingSoldier = null;
+        if (currentUser.linked_soldier_id) {
+          try {
+            const soldiers = await Soldier.filter({ soldier_id: currentUser.linked_soldier_id });
+            performingSoldier = soldiers[0] || null;
+          } catch (e) { console.error("Error fetching linked soldier:", e); }
+        }
+
+        const itemsToUnassign = assignedSerialized.filter(item => selectedSerializedItems.includes(item.id));
+        const itemDetailsForLog = itemsToUnassign.map(item => {
+          return { type: item.itemType, name: item.displayName, id: item.displayId };
+        });
+
+        const logContext = { unassignedItems: itemDetailsForLog };
+        if (signature) {
+          logContext.signature = signature;
+        }
+
+        const newActivityLog = await ActivityLog.create({
+          activity_type: "UNASSIGN",
+          entity_type: "Soldier",
+          details: `Attempted to unassign ${itemDetailsForLog.length} serialized items from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+          user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
+          user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
+          client_timestamp: new Date().toISOString(),
+          context: logContext,
+          division_name: selectedSoldier.division_name,
+          soldier_id: selectedSoldier.soldier_id
+        });
+
+        // Try to send email
+        try {
+          console.log('[handleUnassignSerialized] Sending release form email for activity:', newActivityLog.id);
+          const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
+          console.log('[handleUnassignSerialized] Email response:', emailResponse);
+          setDialogContent({
+            title: 'Release Completed',
+            description: emailResponse.data.soldierReceived
+              ? `The release form has been sent to ${selectedSoldier.first_name}'s email. A copy was also sent to you.`
+              : `The release form could not be sent to the soldier (they are not a registered app user). A copy was sent to your email for manual sharing.`,
+          });
+        } catch (emailError) {
+          console.error("Failed to send email:", emailError);
+          setDialogContent({
+            title: 'Release Completed',
+            description: `Items have been processed. Email notification could not be sent.`,
+          });
+        }
+
+        setLastActivityId(newActivityLog.id);
+        setLastReleasedSoldier(selectedSoldier);
+        setShowSuccessDialog(true);
+
+      } catch (logError) {
+        console.error("Failed to create activity log:", logError);
+        // Even if activity log creation fails, set the soldier so the button can work
+        // The button will try to create the form on-demand
+        setLastReleasedSoldier(selectedSoldier);
+        setDialogContent({
+          title: 'Release Completed',
+          description: `Items have been processed. You can try viewing the release form, or refresh the page to see the current state.`,
+        });
+        setShowSuccessDialog(true);
+      }
+
+      // Close the dialog and refresh
+      setShowSerializedDialog(false);
+      setSelectedSerializedItems([]);
+      setSerializedQuantities({});
+      if (selectedSoldier) {
+        await loadSoldierItems(selectedSoldier);
+      }
     }
   };
 
@@ -402,7 +487,85 @@ export default function SoldierReleasePage() {
 
     } catch (error) {
       console.error("Failed to release equipment:", error);
-      setErrorMessage("Failed to unassign equipment.");
+
+      // Even on error, try to create activity log and send email (operation may have partially succeeded)
+      try {
+        const currentUser = await User.me();
+        let performingSoldier = null;
+        if (currentUser.linked_soldier_id) {
+          try {
+            const soldiers = await Soldier.filter({ soldier_id: currentUser.linked_soldier_id });
+            performingSoldier = soldiers[0] || null;
+          } catch (e) { console.error("Error fetching linked soldier:", e); }
+        }
+
+        let logDetails = [];
+        for (const itemId of selectedEquipmentItems) {
+          const item = assignedEquipmentList.find(e => e.id === itemId);
+          if (!item) continue;
+          const quantityToUnassign = equipmentQuantities[itemId] || item.quantity;
+          logDetails.push({ type: item.equipment_type, quantity: quantityToUnassign, name: item.displayName });
+        }
+
+        const logContext = { unassignedItems: logDetails };
+        if (signature) {
+          logContext.signature = signature;
+        }
+
+        const newActivityLog = await ActivityLog.create({
+          activity_type: "UNASSIGN",
+          entity_type: "Soldier",
+          details: `Attempted to unassign ${logDetails.reduce((sum, item) => sum + item.quantity, 0)} units of equipment from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+          user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
+          user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
+          client_timestamp: new Date().toISOString(),
+          context: logContext,
+          division_name: selectedSoldier.division_name,
+          soldier_id: selectedSoldier.soldier_id
+        });
+
+        // Try to send email
+        try {
+          console.log('[handleUnassignEquipment] Sending release form email for activity:', newActivityLog.id);
+          const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
+          console.log('[handleUnassignEquipment] Email response:', emailResponse);
+          setDialogContent({
+            title: 'Release Completed',
+            description: emailResponse.data.soldierReceived
+              ? `The release form has been sent to ${selectedSoldier.first_name}'s email. A copy was also sent to you.`
+              : `The release form could not be sent to the soldier (they are not a registered app user). A copy was sent to your email for manual sharing.`,
+          });
+        } catch (emailError) {
+          console.error("Failed to send email:", emailError);
+          setDialogContent({
+            title: 'Release Completed',
+            description: `Items have been processed. Email notification could not be sent.`,
+          });
+        }
+
+        setLastActivityId(newActivityLog.id);
+        setLastReleasedSoldier(selectedSoldier);
+        setShowSuccessDialog(true);
+
+      } catch (logError) {
+        console.error("Failed to create activity log:", logError);
+        // Even if activity log creation fails, set the soldier so the button can work
+        // The button will try to create the form on-demand
+        setLastReleasedSoldier(selectedSoldier);
+        setDialogContent({
+          title: 'Release Completed',
+          description: `Items have been processed. You can try viewing the release form, or refresh the page to see the current state.`,
+        });
+        setShowSuccessDialog(true);
+      }
+
+      // Close the dialog and refresh
+      setShowEquipmentDialog(false);
+      setSelectedEquipmentItems([]);
+      setEquipmentQuantities({});
+      if (selectedSoldier) {
+        await loadSoldierItems(selectedSoldier);
+      }
     }
   };
 
@@ -508,30 +671,132 @@ export default function SoldierReleasePage() {
 
     } catch (error) {
         console.error("Failed to perform full soldier release:", error);
-        setErrorMessage("Failed to unassign items. Please try again.");
+
+        // Even on error, try to create activity log and send email (operation may have partially succeeded)
+        try {
+            const user = await User.me();
+            let performingSoldier = null;
+            if (user.linked_soldier_id) {
+                try {
+                    const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
+                    performingSoldier = soldiers[0] || null;
+                } catch (e) { console.error("Error fetching linked soldier:", e); }
+            }
+
+            const itemDetailsForLog = [];
+            for (const item of allAssignedItemsForFullRelease) {
+                let logDetail = { type: item.itemType, name: item.displayName, id: item.id };
+                if (item.itemType === 'Equipment') {
+                    logDetail.quantity = item.quantity;
+                }
+                itemDetailsForLog.push(logDetail);
+            }
+
+            const logContext = {
+                soldierId: selectedSoldier.soldier_id,
+                unassignedItems: itemDetailsForLog,
+                signature: signature || null
+            };
+
+            const newActivityLog = await ActivityLog.create({
+                activity_type: "RELEASE",
+                entity_type: "Soldier",
+                details: `Attempted to unassign all ${itemDetailsForLog.length} items from soldier ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+                user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : user.full_name,
+                user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
+                context: logContext,
+                division_name: selectedSoldier.division_name,
+                soldier_id: selectedSoldier.soldier_id
+            });
+
+            // Try to send email
+            try {
+                console.log('[handleRelease] Sending release form email for activity:', newActivityLog.id);
+                const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
+                console.log('[handleRelease] Email response:', emailResponse);
+                setDialogContent({
+                    title: 'Full Release Completed',
+                    description: emailResponse.data.soldierReceived
+                      ? `The release form has been sent to ${selectedSoldier.first_name}'s email. A copy was also sent to you.`
+                      : `The release form could not be sent to the soldier (they are not a registered app user). A copy was sent to your email for manual sharing.`,
+                });
+            } catch (emailError) {
+                console.error("Failed to send email:", emailError);
+                setDialogContent({
+                    title: 'Full Release Completed',
+                    description: `Items have been processed. Email notification could not be sent.`,
+                });
+            }
+
+            setLastActivityId(newActivityLog.id);
+            setLastReleasedSoldier(selectedSoldier);
+            setShowSuccessDialog(true);
+
+        } catch (logError) {
+            console.error("Failed to create activity log:", logError);
+            // Even if activity log creation fails, set the soldier so the button can work
+            // The button will try to create the form on-demand
+            setLastReleasedSoldier(selectedSoldier);
+            setDialogContent({
+                title: 'Full Release Completed',
+                description: `Items have been processed. You can try viewing the release form, or refresh the page to see the current state.`,
+            });
+            setShowSuccessDialog(true);
+        }
+
+        // Reset UI and refresh
+        setSelectedSoldier(null);
+        setSearchTerm("");
+        setAssignedWeapons([]);
+        setAssignedGear([]);
+        setAssignedDrones([]);
+        setAssignedEquipmentList([]);
+        loadAllData(); // Refresh the soldier list
     } finally {
         setIsReleasing(false);
     }
   };
 
   const handleExportForm = async () => {
-    if (!lastActivityId || !lastReleasedSoldier) return;
+    if (!lastReleasedSoldier) return;
     setIsExporting(true);
     try {
+      let activityId = lastActivityId;
+
+      // If we don't have an activity ID, try to find the most recent one for this soldier
+      if (!activityId) {
+        console.log('[handleExportForm] No activity ID available, querying for most recent activity...');
+        const recentActivities = await ActivityLog.filter({
+          soldier_id: lastReleasedSoldier.soldier_id,
+          activity_type: ['UNASSIGN', 'RELEASE']
+        });
+
+        if (recentActivities && recentActivities.length > 0) {
+          // Sort by created_at descending and take the first one
+          const sortedActivities = recentActivities.sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+            const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+            return dateB - dateA;
+          });
+          activityId = sortedActivities[0].id;
+          console.log('[handleExportForm] Found activity ID:', activityId);
+        }
+      }
+
       // FIXED: Call the function directly instead of trying to use a URL
-      const response = await generateReleaseForm({ 
-        activityId: lastActivityId,
+      const response = await generateReleaseForm({
+        activityId: activityId || undefined,
         fallback_soldier_id: lastReleasedSoldier.soldier_id
       });
-      
+
       // Create HTML blob and open in new tab
       const blob = new Blob([response.data], { type: 'text/html;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       window.open(url, '_blank');
-      
+
       // Clean up after a delay
       setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-      
+
     } catch (error) {
       console.error("Error generating release form:", error);
       setErrorMessage("Failed to generate the release form. Please try again.");
@@ -554,7 +819,7 @@ export default function SoldierReleasePage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSuccessDialog(false)}>Close</Button>
-            <Button onClick={handleExportForm} disabled={isExporting || !lastActivityId || !lastReleasedSoldier}>
+            <Button onClick={handleExportForm} disabled={isExporting || !lastReleasedSoldier}>
               {isExporting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

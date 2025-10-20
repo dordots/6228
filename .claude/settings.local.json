@@ -28,7 +28,10 @@
       "Bash(firebase functions:list:*)",
       "Bash(npm run build:*)",
       "Bash(rg:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Grep",
+      "Read",
+      "Glob"
     ],
     "deny": []
   }

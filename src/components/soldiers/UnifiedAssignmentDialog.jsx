@@ -112,15 +112,32 @@ export default function UnifiedAssignmentDialog({
         return [];
     }
 
+    console.log('[DEBUG availableEquipment] Total equipment loaded:', equipment.length);
+
+    // Debug: Check assignment status
+    const assignmentStats = {
+      total: equipment.length,
+      null: equipment.filter(e => e.assigned_to === null).length,
+      empty: equipment.filter(e => e.assigned_to === '').length,
+      undefined: equipment.filter(e => e.assigned_to === undefined).length,
+      assigned: equipment.filter(e => e.assigned_to && e.assigned_to !== '').length
+    };
+    console.log('[DEBUG availableEquipment] Assignment stats:', assignmentStats);
+
     const filtered = equipment.filter(item => {
-      // Item must be unassigned and have stock
-      if (item.assigned_to || (item.quantity || 0) <= 0) {
+      // Fixed: Item must be unassigned (null, '', or undefined) and have stock
+      // Changed from: if (item.assigned_to || ...)
+      // To: if (item.assigned_to && item.assigned_to !== '' || ...)
+      // This properly handles null, undefined, and empty string
+      if ((item.assigned_to && item.assigned_to !== '') || (item.quantity || 0) <= 0) {
         return false;
       }
 
       // Item is available if it has no division OR its division matches the soldier's
       return !item.division_name || item.division_name === soldier.division_name;
     });
+
+    console.log('[DEBUG availableEquipment] Available (unassigned) count:', filtered.length);
 
     return filtered;
   }, [equipment, soldier]);

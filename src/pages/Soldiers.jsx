@@ -370,17 +370,73 @@ export default function Soldiers() {
 
   const unassignedWeapons = React.useMemo(() => {
     const safeWeapons = Array.isArray(weapons) ? weapons : [];
-    return safeWeapons.filter(w => w && (w.assigned_to === null || w.assigned_to === ''));
+
+    // Debug logging to diagnose assignment issues
+    console.log('[DEBUG unassignedWeapons] Total weapons loaded:', safeWeapons.length);
+    const assignmentStats = {
+      total: safeWeapons.length,
+      null: safeWeapons.filter(w => w.assigned_to === null).length,
+      empty: safeWeapons.filter(w => w.assigned_to === '').length,
+      undefined: safeWeapons.filter(w => w.assigned_to === undefined).length,
+      assigned: safeWeapons.filter(w => w.assigned_to && w.assigned_to !== '').length
+    };
+    console.log('[DEBUG unassignedWeapons] Assignment stats:', assignmentStats);
+
+    // Sample some assigned_to values
+    const sampleValues = safeWeapons.slice(0, 5).map(w => ({
+      weapon_id: w.weapon_id,
+      assigned_to: w.assigned_to,
+      type: typeof w.assigned_to
+    }));
+    console.log('[DEBUG unassignedWeapons] Sample assigned_to values:', sampleValues);
+
+    // Fixed filter: checks for null, empty string, AND undefined
+    const unassigned = safeWeapons.filter(w => w && !w.assigned_to);
+    console.log('[DEBUG unassignedWeapons] Unassigned count:', unassigned.length);
+
+    return unassigned;
   }, [weapons]);
 
   const unassignedGear = React.useMemo(() => {
     const safeGear = Array.isArray(serializedGear) ? serializedGear : [];
-    return safeGear.filter(g => g && (g.assigned_to === null || g.assigned_to === ''));
+
+    // Debug logging
+    console.log('[DEBUG unassignedGear] Total gear loaded:', safeGear.length);
+    const assignmentStats = {
+      total: safeGear.length,
+      null: safeGear.filter(g => g.assigned_to === null).length,
+      empty: safeGear.filter(g => g.assigned_to === '').length,
+      undefined: safeGear.filter(g => g.assigned_to === undefined).length,
+      assigned: safeGear.filter(g => g.assigned_to && g.assigned_to !== '').length
+    };
+    console.log('[DEBUG unassignedGear] Assignment stats:', assignmentStats);
+
+    // Fixed filter: checks for null, empty string, AND undefined
+    const unassigned = safeGear.filter(g => g && !g.assigned_to);
+    console.log('[DEBUG unassignedGear] Unassigned count:', unassigned.length);
+
+    return unassigned;
   }, [serializedGear]);
 
   const unassignedDroneSets = React.useMemo(() => {
     const safeDroneSets = Array.isArray(droneSets) ? droneSets : [];
-    return safeDroneSets.filter(ds => ds && (ds.assigned_to === null || ds.assigned_to === ''));
+
+    // Debug logging
+    console.log('[DEBUG unassignedDroneSets] Total drone sets loaded:', safeDroneSets.length);
+    const assignmentStats = {
+      total: safeDroneSets.length,
+      null: safeDroneSets.filter(ds => ds.assigned_to === null).length,
+      empty: safeDroneSets.filter(ds => ds.assigned_to === '').length,
+      undefined: safeDroneSets.filter(ds => ds.assigned_to === undefined).length,
+      assigned: safeDroneSets.filter(ds => ds.assigned_to && ds.assigned_to !== '').length
+    };
+    console.log('[DEBUG unassignedDroneSets] Assignment stats:', assignmentStats);
+
+    // Fixed filter: checks for null, empty string, AND undefined
+    const unassigned = safeDroneSets.filter(ds => ds && !ds.assigned_to);
+    console.log('[DEBUG unassignedDroneSets] Unassigned count:', unassigned.length);
+
+    return unassigned;
   }, [droneSets]);
 
   const getFilteredUnassignedItems = React.useCallback((soldier) => {

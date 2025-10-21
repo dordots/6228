@@ -170,14 +170,19 @@ export default function Weapons() {
     try {
       const updatePromises = weaponsToUpdate.map(w => Weapon.update(w.id, { weapon_type: newType }));
       await Promise.all(updatePromises);
-      
-      await ActivityLog.create({
-        activity_type: 'UPDATE',
-        entity_type: 'Weapon',
-        details: `Bulk renamed Weapon type from '${originalType}' to '${newType}'. Affected ${weaponsToUpdate.length} items.`,
-        user_full_name: currentUser.full_name,
-        division_name: 'N/A' // This is a cross-division action
-      });
+
+      // Try to create activity log, but don't fail rename if it errors
+      try {
+        await ActivityLog.create({
+          activity_type: 'UPDATE',
+          entity_type: 'Weapon',
+          details: `Bulk renamed Weapon type from '${originalType}' to '${newType}'. Affected ${weaponsToUpdate.length} items.`,
+          user_full_name: currentUser.full_name,
+          division_name: 'N/A' // This is a cross-division action
+        });
+      } catch (logError) {
+        console.error("Failed to create activity log (weapon rename succeeded):", logError);
+      }
 
       alert("Weapon types renamed successfully!");
       setShowRenameDialog(false);

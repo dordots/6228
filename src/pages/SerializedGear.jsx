@@ -41,7 +41,7 @@ export default function SerializedGearPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingGear, setEditingGear] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ type: "all", condition: "all", division: "all", armory_status: "all", assignment: "all" });
+  const [filters, setFilters] = useState({ type: "all", condition: "all", division: "all", armory_status: "all", assigned_to: "all" });
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -121,16 +121,21 @@ export default function SerializedGearPage() {
     try {
       const updatePromises = gearToUpdate.map(g => SerializedGear.update(g.id, { gear_type: newType }));
       await Promise.all(updatePromises);
-      
-      const adjustedTimestamp = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
-      await ActivityLog.create({
-        activity_type: 'UPDATE',
-        entity_type: 'SerializedGear',
-        details: `Bulk renamed Gear type from '${originalType}' to '${newType}'. Affected ${gearToUpdate.length} items.`,
-        user_full_name: currentUser.full_name,
-        client_timestamp: adjustedTimestamp,
-        division_name: 'N/A' // Or infer a common division if all updated gear belong to one, otherwise 'N/A'
-      });
+
+      // Try to create activity log, but don't fail rename if it errors
+      try {
+        const adjustedTimestamp = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+        await ActivityLog.create({
+          activity_type: 'UPDATE',
+          entity_type: 'SerializedGear',
+          details: `Bulk renamed Gear type from '${originalType}' to '${newType}'. Affected ${gearToUpdate.length} items.`,
+          user_full_name: currentUser.full_name,
+          client_timestamp: adjustedTimestamp,
+          division_name: 'N/A' // Or infer a common division if all updated gear belong to one, otherwise 'N/A'
+        });
+      } catch (logError) {
+        console.error("Failed to create activity log (gear rename succeeded):", logError);
+      }
 
       alert("Gear types renamed successfully!");
       setShowRenameDialog(false);
@@ -170,18 +175,46 @@ export default function SerializedGearPage() {
         alert(`Error: Gear ID "${serial}" is already in use.`);
         return;
       }
+
+      // Find assigned soldier for enrichment
+      const assignedSoldierForEnrichment = gearData.assigned_to
+        ? soldiers.find(s => s && s.soldier_id === gearData.assigned_to)
+        : null;
+
+      // Enrich gear data with all required fields to match schema of imported/existing gear
+      const enrichedGearData = {
+        ...gearData,
+        // Timestamp fields (ISO string format for consistency with imports)
+        created_date: new Date().toISOString(),
+        updated_date: new Date().toISOString(),
+        // User tracking fields
+        created_by: user.email || user.full_name,
+        created_by_id: user.id || user.uid,
+        // Default fields
+        armory_status: gearData.armory_status || "with_soldier",
+        is_sample: "false",
+        last_signed_by: assignedSoldierForEnrichment
+          ? `${assignedSoldierForEnrichment.first_name} ${assignedSoldierForEnrichment.last_name}`
+          : ""
+      };
+
       activityDetails = `Created new gear: ${gearType} (${gearId}), assigned to ${assignedSoldierName}, in ${divisionName}.`;
-      await SerializedGear.create(gearData);
+      await SerializedGear.create(enrichedGearData);
     }
-    
-    await ActivityLog.create({
-      activity_type: editingGear ? "UPDATE" : "CREATE",
-      entity_type: "SerializedGear",
-      details: activityDetails,
-      user_full_name: user.full_name,
-      client_timestamp: adjustedTimestamp,
-      division_name: gearData.division_name
-    });
+
+    // Try to create activity log, but don't fail operation if it errors
+    try {
+      await ActivityLog.create({
+        activity_type: editingGear ? "UPDATE" : "CREATE",
+        entity_type: "SerializedGear",
+        details: activityDetails,
+        user_full_name: user.full_name,
+        client_timestamp: adjustedTimestamp,
+        division_name: gearData.division_name || 'N/A'
+      });
+    } catch (logError) {
+      console.error("Failed to create activity log (gear operation succeeded):", logError);
+    }
 
     setShowForm(false);
     setEditingGear(null);
@@ -209,15 +242,22 @@ export default function SerializedGearPage() {
 
       const divisionName = gearItem.division_name || "Unknown Division";
 
-      await ActivityLog.create({
-        activity_type: "DELETE",
-        entity_type: "SerializedGear",
-        details: `Deleted gear: ${gearType} (${gearId}), previously assigned to ${assignedSoldierName}, in ${divisionName}.`,
-        user_full_name: user.full_name,
-        client_timestamp: adjustedTimestamp,
-        division_name: gearItem.division_name
-      });
       await SerializedGear.delete(gearItem.id);
+
+      // Try to create activity log, but don't fail delete if it errors
+      try {
+        await ActivityLog.create({
+          activity_type: "DELETE",
+          entity_type: "SerializedGear",
+          details: `Deleted gear: ${gearType} (${gearId}), previously assigned to ${assignedSoldierName}, in ${divisionName}.`,
+          user_full_name: user.full_name,
+          client_timestamp: adjustedTimestamp,
+          division_name: gearItem.division_name || 'N/A'
+        });
+      } catch (logError) {
+        console.error("Failed to create activity log (gear delete succeeded):", logError);
+      }
+
       loadData();
     } catch (error) {
       console.error("Error deleting gear:", error);
@@ -280,16 +320,22 @@ export default function SerializedGearPage() {
 
             const divisionName = gearToDelete.division_name || "Unknown Division";
 
-            await ActivityLog.create({
-              activity_type: "DELETE",
-              entity_type: "SerializedGear",
-              details: `Deleted gear: ${gearType} (${gearId}), previously assigned to ${assignedSoldierName}, in ${divisionName}.`,
-              user_full_name: user.full_name,
-              client_timestamp: adjustedTimestamp,
-              division_name: gearToDelete.division_name
-            });
             await SerializedGear.delete(id);
             successCount++;
+
+            // Try to create activity log, but don't fail bulk delete if it errors
+            try {
+              await ActivityLog.create({
+                activity_type: "DELETE",
+                entity_type: "SerializedGear",
+                details: `Deleted gear: ${gearType} (${gearId}), previously assigned to ${assignedSoldierName}, in ${divisionName}.`,
+                user_full_name: user.full_name,
+                client_timestamp: adjustedTimestamp,
+                division_name: gearToDelete.division_name || 'N/A'
+              });
+            } catch (logError) {
+              console.error("Failed to create activity log (gear bulk delete succeeded):", logError);
+            }
           } catch (deleteError) {
             console.error(`Error deleting gear ${id}:`, deleteError);
             if (deleteError.message?.includes('Object not found') || deleteError.response?.status === 404) {
@@ -411,10 +457,11 @@ export default function SerializedGearPage() {
       const matchesCondition = filters.condition === "all" || gearItem.status === filters.condition;
       const matchesDivision = filters.division === "all" || gearItem.division_name === filters.division;
       const matchesArmory = filters.armory_status === "all" || (gearItem.armory_status || 'with_soldier') === filters.armory_status;
-      const matchesAssignment = filters.assignment === "all" || 
-                                (filters.assignment === "assigned" ? !!gearItem.assigned_to : !gearItem.assigned_to);
+      const matchesAssignedTo = !filters.assigned_to || filters.assigned_to === 'all' ||
+        (filters.assigned_to === 'unassigned' && !gearItem.assigned_to) ||
+        (gearItem.assigned_to === filters.assigned_to);
 
-      return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesArmory && matchesAssignment;
+      return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesArmory && matchesAssignedTo;
     });
   }, [gear, soldiers, searchTerm, filters]);
 

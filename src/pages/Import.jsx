@@ -639,13 +639,174 @@ export default function ImportPage() {
         }));
       }
 
-      // Import serialized gear
+      // Import serialized gear with duplicate detection
       if (importStatus.serialized_gear.data.length > 0) {
-        const results = await processEntityImport('serialized_gear', importStatus.serialized_gear.data, SerializedGear.create.bind(SerializedGear), 'gear_id');
+        setImportProgress(prev => ({
+          ...prev,
+          currentEntity: 'serialized_gear',
+          entityProgress: {
+            ...prev.entityProgress,
+            serialized_gear: { total: importStatus.serialized_gear.data.length, processed: 0, success: 0, failed: 0, status: 'processing' }
+          }
+        }));
+
+        const results = [];
+        let gearIndex = 0;
+
+        for (const gear of importStatus.serialized_gear.data) {
+          try {
+            // Validate gear_id exists
+            if (!gear.gear_id || String(gear.gear_id).trim() === '') {
+              console.error('[Import] ERROR: Gear missing gear_id, skipping:', gear);
+
+              results.push({
+                id: 'UNKNOWN',
+                success: false,
+                error: 'Missing gear_id - this field is required',
+                data: gear
+              });
+
+              const errorDetail = {
+                entity: 'serialized_gear',
+                id: 'UNKNOWN',
+                message: 'Missing gear_id - this field is required',
+                data: gear
+              };
+              allErrors.push(errorDetail);
+
+              gearIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  serialized_gear: {
+                    ...prev.entityProgress.serialized_gear,
+                    processed: gearIndex,
+                    failed: prev.entityProgress.serialized_gear.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Check if gear already exists in database
+            console.log('[Import] Checking if gear exists:', gear.gear_id);
+            let existingGear = null;
+            try {
+              existingGear = await SerializedGear.findById(gear.gear_id);
+              console.log('[Import] findById result for gear_id', gear.gear_id, ':', existingGear);
+            } catch (findError) {
+              // Gear doesn't exist - this is expected for new gear
+              console.log('[Import] Gear does not exist (this is good for new imports)');
+            }
+
+            if (existingGear) {
+              console.warn('[Import] Gear already exists, skipping:', gear.gear_id, gear.gear_type);
+              console.warn('[Import] Existing gear data:', existingGear);
+
+              results.push({
+                id: gear.gear_id,
+                success: false,
+                error: `Gear with ID "${gear.gear_id}" already exists in database`,
+                data: gear
+              });
+
+              const errorDetail = {
+                entity: 'serialized_gear',
+                id: gear.gear_id,
+                message: `Gear with ID "${gear.gear_id}" already exists in database`,
+                data: gear
+              };
+              allErrors.push(errorDetail);
+
+              gearIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  serialized_gear: {
+                    ...prev.entityProgress.serialized_gear,
+                    processed: gearIndex,
+                    failed: prev.entityProgress.serialized_gear.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Gear doesn't exist - create it
+            console.log('[Import] Creating new gear:', gear.gear_id, gear.gear_type);
+            await SerializedGear.create(gear);
+
+            results.push({ id: gear.gear_id, success: true });
+
+            // Update progress
+            gearIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                serialized_gear: {
+                  ...prev.entityProgress.serialized_gear,
+                  processed: gearIndex,
+                  success: prev.entityProgress.serialized_gear.success + 1
+                }
+              }
+            }));
+          } catch (error) {
+            results.push({
+              id: gear.gear_id,
+              success: false,
+              error: error.message,
+              data: gear
+            });
+
+            const errorDetail = {
+              entity: 'serialized_gear',
+              id: gear.gear_id,
+              message: error.message,
+              data: gear
+            };
+            allErrors.push(errorDetail);
+
+            // Update progress with error
+            gearIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                serialized_gear: {
+                  ...prev.entityProgress.serialized_gear,
+                  processed: gearIndex,
+                  failed: prev.entityProgress.serialized_gear.failed + 1
+                }
+              },
+              errors: [...prev.errors, errorDetail]
+            }));
+          }
+        }
+
         importResults.push({ entity: 'serialized_gear', results });
         setImportStatus(prev => ({
           ...prev,
           serialized_gear: { ...prev.serialized_gear, status: 'completed' }
+        }));
+
+        // Mark entity as completed
+        setImportProgress(prev => ({
+          ...prev,
+          entityProgress: {
+            ...prev.entityProgress,
+            serialized_gear: { ...prev.entityProgress.serialized_gear, status: 'completed' }
+          }
         }));
       }
 

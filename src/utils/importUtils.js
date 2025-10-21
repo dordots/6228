@@ -119,7 +119,7 @@ export const validateEntityData = (data, entityType) => {
   // Define valid enum values
   const enumValues = {
     weapon_status: ['functioning', 'not_functioning'],
-    gear_status: ['available', 'assigned', 'maintenance', 'lost'],
+    gear_status: ['functioning', 'not_functioning'],
     drone_status: ['available', 'assigned', 'maintenance', 'lost'],
     armory_status: ['with_soldier', 'in_deposit'],
   };

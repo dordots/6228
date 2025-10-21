@@ -64,6 +64,7 @@ export default function DroneFilters({ filters, onFilterChange, droneSets = [], 
             <SelectItem value="Operational">Operational</SelectItem>
             <SelectItem value="Maintenance">Maintenance</SelectItem>
             <SelectItem value="Damaged">Damaged</SelectItem>
+            <SelectItem value="Missing">Missing</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -71,10 +72,10 @@ export default function DroneFilters({ filters, onFilterChange, droneSets = [], 
       <div className="w-48">
         <Select value={filters.armory_status} onValueChange={(val) => handleFilterChange('armory_status', val)}>
           <SelectTrigger>
-            <SelectValue placeholder="Armory Status" />
+            <SelectValue placeholder="Location" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="all">All Locations</SelectItem>
             <SelectItem value="with_soldier">With Soldier</SelectItem>
             <SelectItem value="in_deposit">In Deposit</SelectItem>
           </SelectContent>

@@ -111,7 +111,7 @@ export const validateEntityData = (data, entityType) => {
     soldiers: ['soldier_id', 'first_name', 'last_name'],
     weapons: ['weapon_id', 'weapon_type', 'status'],
     serialized_gear: ['gear_id', 'gear_type', 'status'],
-    drone_sets: ['drone_set_id', 'set_serial_number'],
+    drone_sets: ['set_serial_number'],
     drone_components: ['component_id', 'component_type'],
     equipment: ['equipment_id', 'equipment_type', 'quantity'],
   };
@@ -120,7 +120,7 @@ export const validateEntityData = (data, entityType) => {
   const enumValues = {
     weapon_status: ['functioning', 'not_functioning'],
     gear_status: ['functioning', 'not_functioning'],
-    drone_status: ['available', 'assigned', 'maintenance', 'lost'],
+    drone_status: ['operational', 'maintenance', 'damaged', 'missing'],
     armory_status: ['with_soldier', 'in_deposit'],
   };
   

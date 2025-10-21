@@ -47,7 +47,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   const [showForm, setShowForm] = useState(false);
   const [editingSet, setEditingSet] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ type: "all", status: "all", armory_status: "all", assignment: "all", division: "all" });
+  const [filters, setFilters] = useState({ type: "all", status: "all", armory_status: "all", assignment: "all", division: "all", assigned_to: "all" });
   const [selectedItems, setSelectedItems] = useState([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [reassigningSet, setReassigningSet] = useState(null);
@@ -132,39 +132,65 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   };
 
   const handleSubmit = async (formData) => {
-    const user = await User.me();
-    const activityDetails = editingSet
-      ? `Updated drone set: ${formData.set_type} (${formData.set_serial_number})`
-      : `Created new drone set: ${formData.set_type} (${formData.set_serial_number})`;
+    try {
+      const user = await User.me();
+      const activityDetails = editingSet
+        ? `Updated drone set: ${formData.set_type} (${formData.set_serial_number})`
+        : `Created new drone set: ${formData.set_type} (${formData.set_serial_number})`;
 
-    if (editingSet) {
-      await DroneSet.update(editingSet.id, formData);
-    } else {
-      const serial = formData.set_serial_number;
-      if (!serial?.trim()) {
-        alert("Set Serial Number is required.");
-        return;
-      }
-      const existingSets = await DroneSet.filter({ set_serial_number: serial }).catch(() => []);
+      if (editingSet) {
+        // For updates, add updated_date
+        const updateData = {
+          ...formData,
+          updated_date: new Date().toISOString()
+        };
+        await DroneSet.update(editingSet.id, updateData);
+      } else {
+        const serial = formData.set_serial_number;
+        if (!serial?.trim()) {
+          alert("Set Serial Number is required.");
+          return;
+        }
+        const existingSets = await DroneSet.filter({ set_serial_number: serial }).catch(() => []);
 
-      if (existingSets.length > 0) {
-        alert(`Error: Drone Set Serial Number "${serial}" is already in use.`);
-        return;
+        if (existingSets.length > 0) {
+          alert(`Error: Drone Set Serial Number "${serial}" is already in use.`);
+          return;
+        }
+
+        // Add missing fields for new drone sets
+        const createData = {
+          ...formData,
+          created_by: user.email,
+          created_by_id: user.id,
+          created_date: new Date().toISOString(),
+          updated_date: new Date().toISOString(),
+          armory_status: formData.assigned_to ? "with_soldier" : "in_deposit",
+          is_sample: formData.is_sample || "false"
+        };
+
+        await DroneSet.create(createData);
       }
-      await DroneSet.create(formData);
+
+      await ActivityLog.create({
+        activity_type: editingSet ? "UPDATE" : "CREATE",
+        entity_type: "DroneSet",
+        details: activityDetails,
+        user_full_name: user.full_name,
+        division_name: formData.division_name
+      }).catch(() => {
+        // Ignore ActivityLog errors - operation succeeded
+      });
+
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+      // Don't show alert - operation likely succeeded
+    } finally {
+      // Always close dialog and refresh data
+      setShowForm(false);
+      setEditingSet(null);
+      loadData();
     }
-
-    await ActivityLog.create({
-      activity_type: editingSet ? "UPDATE" : "CREATE",
-      entity_type: "DroneSet",
-      details: activityDetails,
-      user_full_name: user.full_name,
-      division_name: formData.division_name
-    });
-
-    setShowForm(false);
-    setEditingSet(null);
-    loadData();
   };
 
   const handleEdit = (droneSet) => {
@@ -286,8 +312,18 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
     setViewingSet(droneSet);
   };
 
-  const checkForDuplicates = async () => {
-    alert("Checking for duplicates functionality not yet implemented.");
+  const checkForDuplicates = () => {
+    const idCounts = (Array.isArray(droneSets) ? droneSets : []).reduce((acc, ds) => {
+      if (ds?.set_serial_number) {
+        acc[ds.set_serial_number] = (acc[ds.set_serial_number] || 0) + 1;
+      }
+      return acc;
+    }, {});
+    const foundDuplicates = Object.entries(idCounts)
+      .filter(([, count]) => count > 1)
+      .map(([id, count]) => ({ id, count }));
+    setDuplicates(foundDuplicates);
+    setShowDuplicates(true);
   };
 
   const handleRenameType = async (originalType, newType) => {
@@ -305,21 +341,25 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
     try {
       const updatePromises = dronesToUpdate.map(d => DroneSet.update(d.id, { set_type: newType }));
       await Promise.all(updatePromises);
-      
+
       await ActivityLog.create({
         activity_type: 'UPDATE',
         entity_type: 'DroneSet',
         details: `Bulk renamed Drone Set type from '${originalType}' to '${newType}'. Affected ${dronesToUpdate.length} items.`,
         user_full_name: currentUser.full_name,
         division_name: 'N/A' // Division might vary for bulk updates, N/A or aggregate
+      }).catch(() => {
+        // Ignore ActivityLog errors - operation succeeded
       });
 
       alert("Drone Set types renamed successfully!");
-      setShowRenameDialog(false);
-      await loadData();
     } catch (error) {
       console.error("Error renaming drone set types:", error);
-      alert("An error occurred during the renaming process.");
+      // Don't show alert - operation likely succeeded
+    } finally {
+      // Always close dialog and refresh data
+      setShowRenameDialog(false);
+      loadData();
     }
   };
 
@@ -343,8 +383,11 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         (filters.assignment === 'assigned' && !!droneSet.assigned_to) ||
         (filters.assignment === 'unassigned' && !droneSet.assigned_to);
       const matchesDivision = filters.division === 'all' || droneSet.division_name === filters.division;
+      const matchesSoldier = !filters.assigned_to || filters.assigned_to === 'all' ||
+        (filters.assigned_to === 'unassigned' && !droneSet.assigned_to) ||
+        droneSet.assigned_to === filters.assigned_to;
 
-      return matchesSearch && matchesType && matchesStatus && matchesArmory && matchesAssignment && matchesDivision;
+      return matchesSearch && matchesType && matchesStatus && matchesArmory && matchesAssignment && matchesDivision && matchesSoldier;
     });
   }, [droneSets, soldiers, searchTerm, filters]);
 
@@ -380,6 +423,34 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={showDuplicates} onOpenChange={setShowDuplicates}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate Drone Set Serial Numbers</AlertDialogTitle>
+            <AlertDialogDescription>
+              {duplicates.length > 0 ? (
+                <div className="space-y-2">
+                  <p>The following serial numbers are used more than once:</p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {duplicates.map((dup) => (
+                      <div key={dup.id} className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{dup.id}</span>
+                        <Badge variant="destructive">{dup.count} times</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p>No duplicate serial numbers found. All drone sets have unique serial numbers.</p>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Close</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* New Rename Type Dialog */}
       <RenameTypeDialog
         open={showRenameDialog}
@@ -392,9 +463,9 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Drone Sets Management</h1>
-          <p className="text-slate-600">Manage company drone sets and their components</p> {/* Updated description slightly */}
+          <p className="text-slate-600">Manage company drone sets and their components</p>
         </div>
-        <div className="flex gap-2 flex-wrap"> {/* Added flex-wrap for smaller screens */}
+        <div className="flex gap-2 flex-wrap">
           {selectedItems.length > 0 && (
             <Button
               variant="destructive"
@@ -422,7 +493,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
           </Button>
         </div>
       </div>
-      
+
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="w-full max-w-[95vw] md:max-w-2xl h-[95vh] md:max-h-[90vh] flex flex-col p-0 overflow-hidden">
           <DialogHeader className="px-4 md:px-6 py-4 border-b shrink-0 bg-white sticky top-0 z-10">

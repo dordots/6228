@@ -133,12 +133,14 @@ export default function DroneSetForm({
   const [formData, setFormData] = useState(
     droneSet || {
       set_serial_number: "",
-      set_type: "Avetta", 
+      set_type: "Avetta",
       status: "Operational",
       assigned_to: null,
-      division_name: "", 
+      division_name: "",
       components: {},
       comments: "",
+      armory_status: "in_deposit",
+      is_sample: "false",
     }
   );
 
@@ -152,12 +154,14 @@ export default function DroneSetForm({
     } else {
         setFormData({
             set_serial_number: "",
-            set_type: "Avetta", 
+            set_type: "Avetta",
             status: "Operational",
             assigned_to: null,
             division_name: "",
             components: {},
             comments: "",
+            armory_status: "in_deposit",
+            is_sample: "false",
         });
     }
   }, [droneSet]);
@@ -174,6 +178,8 @@ export default function DroneSetForm({
       if (field === 'assigned_to') {
         const newSoldier = Array.isArray(allSoldiers) ? allSoldiers.find(s => s.soldier_id === value) : null;
         newState.division_name = newSoldier ? newSoldier.division_name : "";
+        // Set armory_status based on assignment
+        newState.armory_status = value ? "with_soldier" : "in_deposit";
       }
       return newState;
     });
@@ -308,6 +314,7 @@ export default function DroneSetForm({
                 <SelectItem value="Operational">Operational</SelectItem>
                 <SelectItem value="Maintenance">Maintenance</SelectItem>
                 <SelectItem value="Damaged">Damaged</SelectItem>
+                <SelectItem value="Missing">Missing</SelectItem>
               </SelectContent>
             </Select>
           </div>

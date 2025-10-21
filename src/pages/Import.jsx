@@ -812,7 +812,90 @@ export default function ImportPage() {
 
       // Import drone sets
       if (importStatus.drone_sets.data.length > 0) {
-        const results = await processEntityImport('drone_sets', importStatus.drone_sets.data, DroneSet.create.bind(DroneSet), 'drone_set_id');
+        setImportProgress(prev => ({
+          ...prev,
+          currentEntity: 'drone_sets',
+          entityProgress: {
+            ...prev.entityProgress,
+            drone_sets: { total: importStatus.drone_sets.data.length, processed: 0, success: 0, failed: 0, status: 'processing' }
+          }
+        }));
+
+        // Fetch existing drone sets to check for duplicates
+        const existingDroneSets = await DroneSet.filter({}).catch(() => []);
+        const existingSerialNumbers = new Set(
+          existingDroneSets.map(ds => ds.set_serial_number).filter(Boolean)
+        );
+
+        const results = [];
+        let droneSetIndex = 0;
+
+        for (const droneSet of importStatus.drone_sets.data) {
+          try {
+            // Check if serial number already exists
+            if (droneSet.set_serial_number && existingSerialNumbers.has(droneSet.set_serial_number)) {
+              throw new Error(`Duplicate serial number: ${droneSet.set_serial_number} already exists`);
+            }
+
+            await DroneSet.create(droneSet);
+            results.push({ id: droneSet.drone_set_id, success: true });
+
+            // Update progress
+            droneSetIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                drone_sets: {
+                  ...prev.entityProgress.drone_sets,
+                  processed: droneSetIndex,
+                  success: prev.entityProgress.drone_sets.success + 1
+                }
+              }
+            }));
+          } catch (error) {
+            results.push({
+              id: droneSet.drone_set_id,
+              success: false,
+              error: error.message,
+              data: droneSet
+            });
+
+            const errorDetail = {
+              entity: 'drone_sets',
+              id: droneSet.drone_set_id,
+              message: error.message,
+              data: droneSet
+            };
+
+            // Update progress with error
+            droneSetIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                drone_sets: {
+                  ...prev.entityProgress.drone_sets,
+                  processed: droneSetIndex,
+                  failed: prev.entityProgress.drone_sets.failed + 1
+                }
+              },
+              errors: [...prev.errors, errorDetail]
+            }));
+          }
+        }
+
+        // Mark entity as completed
+        setImportProgress(prev => ({
+          ...prev,
+          entityProgress: {
+            ...prev.entityProgress,
+            drone_sets: { ...prev.entityProgress.drone_sets, status: 'completed' }
+          }
+        }));
+
         importResults.push({ entity: 'drone_sets', results });
         setImportStatus(prev => ({
           ...prev,

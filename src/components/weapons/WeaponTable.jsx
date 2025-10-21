@@ -34,12 +34,10 @@ export default function WeaponTable({
       {/* Skeleton cells adjusted to match the new column structure */}
       <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Weapon ID */}
       <TableCell><Skeleton className="h-4 w-32" /></TableCell> {/* Type */}
-      <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Status */}
       <TableCell><Skeleton className="h-4 w-40" /></TableCell> {/* Assigned To */}
       <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Division */}
+      <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Status */}
       <TableCell><Skeleton className="h-4 w-20" /></TableCell> {/* Armory Status */}
-      <TableCell><Skeleton className="h-4 w-32" /></TableCell> {/* Deposit Location */}
-      <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Last Signed By */}
       <TableCell className="text-center"><Skeleton className="h-8 w-8" /></TableCell> {/* Actions */}
     </TableRow>
   );
@@ -47,18 +45,15 @@ export default function WeaponTable({
   return (
     <div className="overflow-auto"> {/* Added wrapper div as per outline */}
       <Table>
-        <TableHeader> {/* Removed sticky and bg-slate-50 classes from TableHeader */}
+        <TableHeader>
           <TableRow>
-            {/* Removed the checkbox TableHead */}
-            <TableHead className="w-40">Weapon ID</TableHead> {/* Removed SortableHeader */}
+            <TableHead className="w-40">Weapon ID</TableHead>
             <TableHead className="w-48">Type</TableHead>
-            <TableHead className="w-32">Status</TableHead>
             <TableHead className="w-48">Assigned To</TableHead>
             <TableHead className="w-48">Division</TableHead>
-            <TableHead className="w-32">Armory Status</TableHead> {/* New column */}
-            <TableHead className="w-36">Deposit Location</TableHead> {/* New column for deposit location */}
-            <TableHead className="w-36">Last Signed By</TableHead> {/* New column */}
-            <TableHead className="w-20 text-center">Actions</TableHead> {/* Changed to text-center */}
+            <TableHead className="w-32">Status</TableHead>
+            <TableHead className="w-32">Armory Status</TableHead>
+            <TableHead className="w-20 text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -66,7 +61,7 @@ export default function WeaponTable({
             Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
           ) : !Array.isArray(weapons) || weapons.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="text-center h-24 text-slate-500"> {/* Colspan adjusted for 9 columns */}
+              <TableCell colSpan={7} className="text-center h-24 text-slate-500">
                 No weapons found.
               </TableCell>
             </TableRow>
@@ -75,14 +70,8 @@ export default function WeaponTable({
               const assignedSoldier = Array.isArray(soldiers) ? soldiers.find(s => s.soldier_id === weapon.assigned_to) : null;
               return (
                 <TableRow key={weapon.id} className="hover:bg-slate-50 group">
-                  {/* Removed checkbox TableCell */}
-                  <TableCell className="font-mono text-xs">{weapon.weapon_id}</TableCell> {/* Removed sticky classes */}
+                  <TableCell className="font-mono text-xs">{weapon.weapon_id}</TableCell>
                   <TableCell>{weapon.weapon_type}</TableCell>
-                  <TableCell>
-                    <Badge variant={weapon.status === 'functioning' ? 'success' : 'destructive'}>
-                      {weapon.status === 'functioning' ? 'FUNCTIONING' : 'NOT FUNCTIONING'}
-                    </Badge>
-                  </TableCell>
                   <TableCell>
                     {assignedSoldier ? (
                       `${assignedSoldier.first_name} ${assignedSoldier.last_name}`
@@ -91,27 +80,25 @@ export default function WeaponTable({
                     )}
                   </TableCell>
                   <TableCell>{weapon.division_name || 'N/A'}</TableCell>
-                  <TableCell> {/* Dedicated cell for Armory Status */}
+                  <TableCell>
+                    <Badge variant={weapon.status === 'functioning' ? 'success' : 'destructive'}>
+                      {weapon.status === 'functioning' ? 'FUNCTIONING' : 'NOT FUNCTIONING'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
                     {weapon.armory_status === 'in_deposit' ? (
                       <Badge variant="outline" className="text-xs font-normal text-amber-800 bg-amber-50 border-amber-200">
                         In Deposit
                       </Badge>
-                    ) : 'N/A'} {/* Display 'N/A' if not in deposit, or other relevant status */}
-                  </TableCell>
-                  <TableCell> {/* New cell for Deposit Location */}
-                    {weapon.deposit_location ? (
-                      <Badge variant="outline" className={`text-xs font-normal ${
-                        weapon.deposit_location === 'division_deposit'
-                          ? 'text-blue-800 bg-blue-50 border-blue-200'
-                          : 'text-purple-800 bg-purple-50 border-purple-200'
-                      }`}>
-                        {weapon.deposit_location === 'division_deposit' ? 'Division' : 'Armory'}
+                    ) : weapon.armory_status === 'with_soldier' ? (
+                      <Badge variant="outline" className="text-xs font-normal text-green-800 bg-green-50 border-green-200">
+                        With Soldier
                       </Badge>
-                    ) : 'N/A'}
+                    ) : (
+                      <span className="text-slate-500">Unknown</span>
+                    )}
                   </TableCell>
-                  <TableCell>{weapon.last_signed_by || 'N/A'}</TableCell> {/* Dedicated cell for Last Signed By */}
-                  {/* Removed Last Checked Date cell */}
-                  <TableCell className="text-center pr-4"> {/* Changed to text-center */}
+                  <TableCell className="text-center pr-4">
                     <div className="flex items-center justify-center gap-1"> {/* Added flex container for actions */}
                       {weapon.comments && ( // Conditionally render comments button
                         <Button variant="ghost" size="icon" onClick={() => onViewComment(weapon)}>

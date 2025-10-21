@@ -86,13 +86,65 @@ export default function Weapons() {
        const isAdmin = user?.role === 'admin';
        const isManager = user?.custom_role === 'manager';
        const userDivision = user?.department;
-       
+
+       // DEBUG: Log user details
+       console.log('=== WEAPON LOAD DEBUG ===');
+       console.log('Current User:', {
+         role: user?.role,
+         custom_role: user?.custom_role,
+         department: user?.department,
+         full_name: user?.full_name
+       });
+       console.log('Is Admin:', isAdmin);
+       console.log('Is Manager:', isManager);
+       console.log('User Division:', userDivision);
+
        const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
+
+       // DEBUG: Log the filter being applied
+       console.log('Database Filter Applied:', filter);
+       console.log('Filter explanation:', Object.keys(filter).length === 0
+         ? 'No filter - fetching ALL weapons (admin/manager)'
+         : `Filtering by division_name: "${filter.division_name}"`);
 
       const [weaponsData, soldiersData] = await Promise.all([
         Weapon.filter(filter, "-created_date").catch(() => []),
         Soldier.filter(filter).catch(() => [])
       ]);
+
+      // DEBUG: Log fetched data
+      console.log('Total weapons fetched from DB:', weaponsData?.length || 0);
+      console.log('Total soldiers fetched from DB:', soldiersData?.length || 0);
+
+      if (weaponsData && weaponsData.length > 0) {
+        // Sample first 5 weapons
+        console.log('Sample of first 5 weapons:', weaponsData.slice(0, 5).map(w => ({
+          id: w.id,
+          weapon_id: w.weapon_id,
+          weapon_type: w.weapon_type,
+          division_name: w.division_name,
+          assigned_to: w.assigned_to
+        })));
+
+        // Check for weapons with missing division_name
+        const weaponsWithoutDivision = weaponsData.filter(w => !w.division_name);
+        if (weaponsWithoutDivision.length > 0) {
+          console.warn('⚠️ Weapons with missing division_name:', weaponsWithoutDivision.length);
+          console.warn('Sample:', weaponsWithoutDivision.slice(0, 3).map(w => ({
+            id: w.id,
+            weapon_id: w.weapon_id,
+            weapon_type: w.weapon_type,
+            division_name: w.division_name
+          })));
+        }
+
+        // Show unique division names in fetched data
+        const uniqueDivisions = [...new Set(weaponsData.map(w => w.division_name).filter(Boolean))];
+        console.log('Unique divisions in fetched weapons:', uniqueDivisions);
+      }
+
+      console.log('=== END WEAPON LOAD DEBUG ===\n');
+
       setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
       setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
     } catch (error) {
@@ -190,14 +242,20 @@ export default function Weapons() {
         }
 
         await Weapon.update(editingWeapon.id, weaponData);
-        await ActivityLog.create({
-          activity_type: 'UPDATE',
-          entity_type: 'Weapon',
-          details: updateDetails,
-          user_full_name: user.full_name,
-          client_timestamp: timestampWithOffset,
-          division_name: weaponData.division_name
-        });
+
+        // Try to create activity log, but don't fail weapon update if it errors
+        try {
+          await ActivityLog.create({
+            activity_type: 'UPDATE',
+            entity_type: 'Weapon',
+            details: updateDetails,
+            user_full_name: user.full_name,
+            client_timestamp: timestampWithOffset,
+            division_name: weaponData.division_name || 'N/A'
+          });
+        } catch (logError) {
+          console.error("Failed to create activity log (weapon update succeeded):", logError);
+        }
       } else {
         if (!user?.permissions?.['equipment.create'] && user?.role !== 'admin') {
           alert("You do not have permission to create weapons.");
@@ -216,23 +274,52 @@ export default function Weapons() {
             return;
         }
 
-        await Weapon.create(weaponData);
+        // Find assigned soldier for enrichment
+        const assignedSoldier = weaponData.assigned_to
+          ? soldiers.find(s => s && s.soldier_id === weaponData.assigned_to)
+          : null;
+
+        // Enrich weapon data with all required fields to match schema of imported/existing weapons
+        const enrichedWeaponData = {
+          ...weaponData,
+          // Timestamp fields (ISO string format for consistency with imports)
+          created_date: new Date().toISOString(),
+          updated_date: new Date().toISOString(),
+          // User tracking fields
+          created_by: user.email || user.full_name,
+          created_by_id: user.id || user.uid,
+          // Default fields
+          armory_status: weaponData.armory_status || "with_soldier",
+          is_sample: "false",
+          last_signed_by: assignedSoldier
+            ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}`
+            : ""
+        };
+
+        await Weapon.create(enrichedWeaponData);
         let createDetails = `Weapon ${weaponData.weapon_type} (${weaponData.weapon_id}) was created.`;
         if (weaponData.assigned_to) {
-            const assignedSoldier = soldiers.find(s => s && s.soldier_id === weaponData.assigned_to);
             if (assignedSoldier) {
                 createDetails += ` It was assigned to ${assignedSoldier.first_name} ${assignedSoldier.last_name}.`;
             }
         }
-        await ActivityLog.create({
-          activity_type: 'CREATE',
-          entity_type: 'Weapon',
-          details: createDetails,
-          user_full_name: user.full_name,
-          client_timestamp: timestampWithOffset,
-          division_name: weaponData.division_name
-        });
+
+        // Try to create activity log, but don't fail weapon creation if it errors
+        try {
+          await ActivityLog.create({
+            activity_type: 'CREATE',
+            entity_type: 'Weapon',
+            details: createDetails,
+            user_full_name: user.full_name,
+            client_timestamp: timestampWithOffset,
+            division_name: enrichedWeaponData.division_name || 'N/A'
+          });
+        } catch (logError) {
+          console.error("Failed to create activity log (weapon creation succeeded):", logError);
+        }
       }
+
+      // Always close form and refresh after successful weapon creation/update
       setShowForm(false);
       setEditingWeapon(null);
       loadData();
@@ -439,8 +526,20 @@ export default function Weapons() {
 
   const filteredWeapons = useMemo(() => {
     if (!Array.isArray(weapons)) return [];
-    
-    return weapons.filter(weapon => {
+
+    // DEBUG: Log filtering process
+    console.log('=== CLIENT-SIDE FILTERING DEBUG ===');
+    console.log('Total weapons to filter:', weapons.length);
+    console.log('Active filters:', {
+      searchTerm: searchTerm || '(none)',
+      type: filters.type,
+      condition: filters.condition,
+      division: filters.division,
+      armory_status: filters.armory_status,
+      assigned_to: filters.assigned_to
+    });
+
+    const filtered = weapons.filter(weapon => {
       if (!weapon) return false;
       const assignedSoldier = Array.isArray(soldiers) ? soldiers.find(s => s && s.soldier_id === weapon.assigned_to) : null;
       const assignedSoldierName = assignedSoldier ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}` : '';
@@ -461,13 +560,64 @@ export default function Weapons() {
       const matchesCondition = filters.condition === "all" || weapon.status === filters.condition;
       const matchesDivision = filters.division === "all" || weapon.division_name === filters.division;
       const matchesArmory = filters.armory_status === "all" || (weapon.armory_status || 'with_soldier') === filters.armory_status;
-      
+
       const matchesAssignedTo = !filters.assigned_to || filters.assigned_to === 'all' ||
         (filters.assigned_to === 'unassigned' && !weapon.assigned_to) ||
         (weapon.assigned_to === filters.assigned_to);
 
       return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesArmory && matchesAssignedTo;
     });
+
+    // DEBUG: Show filtering results
+    console.log('Weapons after client-side filtering:', filtered.length);
+    console.log('Filtered out:', weapons.length - filtered.length, 'weapons');
+
+    // Show breakdown of what filters removed weapons
+    if (weapons.length !== filtered.length) {
+      const failedSearch = weapons.filter(w => {
+        if (!w) return false;
+        const assignedSoldier = Array.isArray(soldiers) ? soldiers.find(s => s && s.soldier_id === w.assigned_to) : null;
+        const assignedSoldierName = assignedSoldier ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}` : '';
+        const searchLower = searchTerm.toLowerCase();
+        const lastSignedByName = w.last_signed_by ? String(w.last_signed_by).toLowerCase() : '';
+        const comments = w.comments ? String(w.comments).toLowerCase() : '';
+
+        const matchesSearch = !searchTerm ||
+          (w.weapon_type && String(w.weapon_type).toLowerCase().includes(searchLower)) ||
+          (w.weapon_id && String(w.weapon_id).toLowerCase().includes(searchLower)) ||
+          (assignedSoldierName && assignedSoldierName.toLowerCase().includes(searchLower)) ||
+          (w.division_name && String(w.division_name).toLowerCase().includes(searchLower)) ||
+          (w.assigned_to && String(w.assigned_to).toLowerCase().includes(searchLower)) ||
+          (lastSignedByName && lastSignedByName.includes(searchLower)) ||
+          comments.includes(searchLower);
+
+        return !matchesSearch;
+      }).length;
+
+      const failedType = weapons.filter(w => w && !(filters.type === "all" || w.weapon_type === filters.type)).length;
+      const failedCondition = weapons.filter(w => w && !(filters.condition === "all" || w.status === filters.condition)).length;
+      const failedDivision = weapons.filter(w => w && !(filters.division === "all" || w.division_name === filters.division)).length;
+      const failedArmory = weapons.filter(w => w && !(filters.armory_status === "all" || (w.armory_status || 'with_soldier') === filters.armory_status)).length;
+      const failedAssignedTo = weapons.filter(w => {
+        if (!w) return false;
+        const matchesAssignedTo = !filters.assigned_to || filters.assigned_to === 'all' ||
+          (filters.assigned_to === 'unassigned' && !w.assigned_to) ||
+          (w.assigned_to === filters.assigned_to);
+        return !matchesAssignedTo;
+      }).length;
+
+      console.log('Filter breakdown (weapons excluded by each filter):');
+      if (failedSearch > 0) console.log(`  - Search term: ${failedSearch}`);
+      if (failedType > 0) console.log(`  - Type filter: ${failedType}`);
+      if (failedCondition > 0) console.log(`  - Condition filter: ${failedCondition}`);
+      if (failedDivision > 0) console.log(`  - Division filter: ${failedDivision}`);
+      if (failedArmory > 0) console.log(`  - Armory status filter: ${failedArmory}`);
+      if (failedAssignedTo > 0) console.log(`  - Assigned to filter: ${failedAssignedTo}`);
+    }
+
+    console.log('=== END CLIENT-SIDE FILTERING DEBUG ===\n');
+
+    return filtered;
   }, [weapons, soldiers, searchTerm, filters]);
 
 

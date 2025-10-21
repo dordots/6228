@@ -468,14 +468,174 @@ export default function ImportPage() {
         }));
       }
 
-      // Import weapons
+      // Import weapons with duplicate detection
       if (importStatus.weapons.data.length > 0) {
-        const results = await processEntityImport('weapons', importStatus.weapons.data, Weapon.create.bind(Weapon), 'weapon_id');
-        
+        setImportProgress(prev => ({
+          ...prev,
+          currentEntity: 'weapons',
+          entityProgress: {
+            ...prev.entityProgress,
+            weapons: { total: importStatus.weapons.data.length, processed: 0, success: 0, failed: 0, status: 'processing' }
+          }
+        }));
+
+        const results = [];
+        let weaponIndex = 0;
+
+        for (const weapon of importStatus.weapons.data) {
+          try {
+            // Validate weapon_id exists
+            if (!weapon.weapon_id || String(weapon.weapon_id).trim() === '') {
+              console.error('[Import] ERROR: Weapon missing weapon_id, skipping:', weapon);
+
+              results.push({
+                id: 'UNKNOWN',
+                success: false,
+                error: 'Missing weapon_id - this field is required',
+                data: weapon
+              });
+
+              const errorDetail = {
+                entity: 'weapons',
+                id: 'UNKNOWN',
+                message: 'Missing weapon_id - this field is required',
+                data: weapon
+              };
+              allErrors.push(errorDetail);
+
+              weaponIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  weapons: {
+                    ...prev.entityProgress.weapons,
+                    processed: weaponIndex,
+                    failed: prev.entityProgress.weapons.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Check if weapon already exists in database
+            console.log('[Import] Checking if weapon exists:', weapon.weapon_id);
+            let existingWeapon = null;
+            try {
+              existingWeapon = await Weapon.findById(weapon.weapon_id);
+              console.log('[Import] findById result for weapon_id', weapon.weapon_id, ':', existingWeapon);
+            } catch (findError) {
+              // Weapon doesn't exist - this is expected for new weapons
+              console.log('[Import] Weapon does not exist (this is good for new imports)');
+            }
+
+            if (existingWeapon) {
+              console.warn('[Import] Weapon already exists, skipping:', weapon.weapon_id, weapon.weapon_type);
+              console.warn('[Import] Existing weapon data:', existingWeapon);
+
+              results.push({
+                id: weapon.weapon_id,
+                success: false,
+                error: `Weapon with ID "${weapon.weapon_id}" already exists in database`,
+                data: weapon
+              });
+
+              const errorDetail = {
+                entity: 'weapons',
+                id: weapon.weapon_id,
+                message: `Weapon with ID "${weapon.weapon_id}" already exists in database`,
+                data: weapon
+              };
+              allErrors.push(errorDetail);
+
+              weaponIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  weapons: {
+                    ...prev.entityProgress.weapons,
+                    processed: weaponIndex,
+                    failed: prev.entityProgress.weapons.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Weapon doesn't exist - create it
+            console.log('[Import] Creating new weapon:', weapon.weapon_id, weapon.weapon_type);
+            await Weapon.create(weapon);
+
+            results.push({ id: weapon.weapon_id, success: true });
+
+            // Update progress
+            weaponIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                weapons: {
+                  ...prev.entityProgress.weapons,
+                  processed: weaponIndex,
+                  success: prev.entityProgress.weapons.success + 1
+                }
+              }
+            }));
+          } catch (error) {
+            results.push({
+              id: weapon.weapon_id,
+              success: false,
+              error: error.message,
+              data: weapon
+            });
+
+            const errorDetail = {
+              entity: 'weapons',
+              id: weapon.weapon_id,
+              message: error.message,
+              data: weapon
+            };
+            allErrors.push(errorDetail);
+
+            // Update progress with error
+            weaponIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                weapons: {
+                  ...prev.entityProgress.weapons,
+                  processed: weaponIndex,
+                  failed: prev.entityProgress.weapons.failed + 1
+                }
+              },
+              errors: [...prev.errors, errorDetail]
+            }));
+          }
+        }
+
         importResults.push({ entity: 'weapons', results });
         setImportStatus(prev => ({
           ...prev,
           weapons: { ...prev.weapons, status: 'completed' }
+        }));
+
+        // Mark entity as completed
+        setImportProgress(prev => ({
+          ...prev,
+          entityProgress: {
+            ...prev.entityProgress,
+            weapons: { ...prev.entityProgress.weapons, status: 'completed' }
+          }
         }));
       }
 

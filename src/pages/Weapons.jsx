@@ -489,26 +489,30 @@ export default function Weapons() {
 
       const timestampWithOffset = new Date(new Date().getTime() + 3 * 60 * 60 * 1000).toISOString();
 
-      // Log the reassignment activity
-      await ActivityLog.create({
-        activity_type: 'UPDATE', // Using 'UPDATE' is more accurate than 'ASSIGN' for a reassignment
-        entity_type: 'Weapon',
-        details: details,
-        user_full_name: user.full_name,
-        client_timestamp: timestampWithOffset,
-        division_name: newDivisionName // Use the derived new division name
-      });
-      
       // Prepare the payload to update the weapon
-      const updatePayload = { 
+      const updatePayload = {
         assigned_to: newSoldierId,
         division_name: newSoldier ? newSoldier.division_name : null,
         last_signed_by: newSoldier ? `${newSoldier.first_name} ${newSoldier.last_name}` : null,
       };
 
-      // Perform the update
+      // Perform the update first
       await Weapon.update(weapon.id, updatePayload);
-      
+
+      // Try to log the reassignment activity, but don't fail reassignment if it errors
+      try {
+        await ActivityLog.create({
+          activity_type: 'UPDATE', // Using 'UPDATE' is more accurate than 'ASSIGN' for a reassignment
+          entity_type: 'Weapon',
+          details: details,
+          user_full_name: user.full_name,
+          client_timestamp: timestampWithOffset,
+          division_name: newDivisionName // Use the derived new division name
+        });
+      } catch (logError) {
+        console.error("Failed to create activity log (weapon reassignment succeeded):", logError);
+      }
+
       // Close dialog and refresh data
       setShowReassignDialog(false);
       setReassigningWeapon(null);

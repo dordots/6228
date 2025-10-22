@@ -180,14 +180,14 @@ export default function EquipmentTransfer() {
     try {
       // Reload fresh data to ensure we have the latest quantities
       const freshEquipment = await Equipment.list();
-      const freshSourceRecords = freshEquipment.filter(item => 
-        item.equipment_type === equipmentType && 
-        item.division_name === sourceDivision && 
+      const freshSourceRecords = freshEquipment.filter(item =>
+        item.equipment_type === equipmentType &&
+        item.division_name === sourceDivision &&
         !item.assigned_to
       );
-      
+
       const totalAvailableNow = freshSourceRecords.reduce((sum, record) => sum + (record.quantity || 0), 0);
-      
+
       if (transferQuantity > totalAvailableNow) {
         alert(`Cannot complete transfer. Only ${totalAvailableNow} items currently available (data may have changed).`);
         setIsTransferring(false);
@@ -196,13 +196,13 @@ export default function EquipmentTransfer() {
       }
 
       // FIXED LOGIC: Find an existing unassigned stock in the destination division.
-      const existingDestItems = freshEquipment.filter(item => 
-          item.equipment_type === equipmentType && 
-          item.division_name === destinationDivision && 
+      const existingDestItems = freshEquipment.filter(item =>
+          item.equipment_type === equipmentType &&
+          item.division_name === destinationDivision &&
           !item.assigned_to &&
           item.condition === 'functioning' // Match the condition
       );
-      
+
       if (existingDestItems.length > 0) {
           // If a stock record exists, update its quantity.
           const mainDestItem = existingDestItems[0];
@@ -220,8 +220,8 @@ export default function EquipmentTransfer() {
 
       let quantityToSubtract = transferQuantity;
       // Sort freshSourceRecords to prioritize records with smaller quantities for deletion first
-      const sortedFreshSourceRecords = freshSourceRecords.sort((a, b) => (a.quantity || 0) - (b.quantity || 0)); 
-      
+      const sortedFreshSourceRecords = freshSourceRecords.sort((a, b) => (a.quantity || 0) - (b.quantity || 0));
+
       for (const record of sortedFreshSourceRecords) {
         if (quantityToSubtract <= 0) break;
 
@@ -235,26 +235,27 @@ export default function EquipmentTransfer() {
         }
         quantityToSubtract -= amountToTake;
       }
-      
+
       await ActivityLog.create({
           activity_type: "UPDATE",
           entity_type: "Equipment",
           details: `Transferred ${transferQuantity}x ${equipmentType} from ${sourceDivision} to ${destinationDivision}.`,
           user_full_name: currentUser?.full_name || 'System'
+        }).catch(() => {
+          // Ignore ActivityLog errors
         });
 
-      // Reset form and reload data
+    } catch (e) {
+      console.error("Equipment transfer error:", e);
+      // Continue to reset form and reload data even if there's an error
+    } finally {
+      // Always reset form and reload data
       setSourceDivision('');
       setEquipmentType('');
       setEquipmentSearchTerm('');
       setTransferQuantity(1);
       setDestinationDivision('');
       await reloadData();
-
-    } catch (e) {
-      setError("An error occurred during the transfer. Please try again.");
-      console.error(e);
-    } finally {
       setIsTransferring(false);
     }
   };

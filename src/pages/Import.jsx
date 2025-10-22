@@ -905,11 +905,177 @@ export default function ImportPage() {
 
       // Import drone components
       if (importStatus.drone_components.data.length > 0) {
-        const results = await processEntityImport('drone_components', importStatus.drone_components.data, DroneComponent.create.bind(DroneComponent), 'component_id');
+        setImportProgress(prev => ({
+          ...prev,
+          currentEntity: 'drone_components',
+          entityProgress: {
+            ...prev.entityProgress,
+            drone_components: { total: importStatus.drone_components.data.length, processed: 0, success: 0, failed: 0, status: 'processing' }
+          }
+        }));
+
+        const results = [];
+        let componentIndex = 0;
+
+        for (const component of importStatus.drone_components.data) {
+          try {
+            // Validate component_id exists
+            if (!component.component_id || String(component.component_id).trim() === '') {
+              console.error('[Import] ERROR: Component missing component_id, skipping:', component);
+
+              results.push({
+                id: 'UNKNOWN',
+                success: false,
+                error: 'Missing component_id - this field is required',
+                data: component
+              });
+
+              const errorDetail = {
+                entity: 'drone_components',
+                id: 'UNKNOWN',
+                message: 'Missing component_id - this field is required',
+                data: component
+              };
+              allErrors.push(errorDetail);
+
+              componentIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  drone_components: {
+                    ...prev.entityProgress.drone_components,
+                    processed: componentIndex,
+                    failed: prev.entityProgress.drone_components.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Check if component already exists in database
+            console.log('[Import] Checking if component exists:', component.component_id);
+            let existingComponent = null;
+            try {
+              existingComponent = await DroneComponent.findById(component.component_id);
+              console.log('[Import] findById result for component_id', component.component_id, ':', existingComponent);
+            } catch (findError) {
+              // Component doesn't exist - this is expected for new components
+              console.log('[Import] Component does not exist (this is good for new imports)');
+            }
+
+            if (existingComponent) {
+              console.warn('[Import] Component already exists, skipping:', component.component_id, component.component_type);
+              console.warn('[Import] Existing component data:', existingComponent);
+
+              results.push({
+                id: component.component_id,
+                success: false,
+                error: `Component with ID "${component.component_id}" already exists in database`,
+                data: component
+              });
+
+              const errorDetail = {
+                entity: 'drone_components',
+                id: component.component_id,
+                message: `Component with ID "${component.component_id}" already exists in database`,
+                data: component
+              };
+              allErrors.push(errorDetail);
+
+              componentIndex++;
+              setImportProgress(prev => ({
+                ...prev,
+                currentIndex: prev.currentIndex + 1,
+                entityProgress: {
+                  ...prev.entityProgress,
+                  drone_components: {
+                    ...prev.entityProgress.drone_components,
+                    processed: componentIndex,
+                    failed: prev.entityProgress.drone_components.failed + 1
+                  }
+                },
+                errors: [...prev.errors, errorDetail]
+              }));
+
+              continue;
+            }
+
+            // Component doesn't exist - create it
+            console.log('[Import] Creating new component:', component.component_id, component.component_type);
+            await DroneComponent.create(component);
+
+            results.push({ id: component.component_id, success: true });
+
+            // Update progress
+            componentIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                drone_components: {
+                  ...prev.entityProgress.drone_components,
+                  processed: componentIndex,
+                  success: prev.entityProgress.drone_components.success + 1
+                }
+              }
+            }));
+          } catch (error) {
+            results.push({
+              id: component.component_id,
+              success: false,
+              error: error.message,
+              data: component
+            });
+
+            const errorDetail = {
+              entity: 'drone_components',
+              id: component.component_id,
+              message: error.message,
+              data: component
+            };
+            allErrors.push(errorDetail);
+
+            // Update progress with error
+            componentIndex++;
+            setImportProgress(prev => ({
+              ...prev,
+              currentIndex: prev.currentIndex + 1,
+              entityProgress: {
+                ...prev.entityProgress,
+                drone_components: {
+                  ...prev.entityProgress.drone_components,
+                  processed: componentIndex,
+                  failed: prev.entityProgress.drone_components.failed + 1
+                }
+              },
+              errors: [...prev.errors, errorDetail]
+            }));
+          }
+        }
+
+        // Debug: Log results array to see what's in it
+        console.log('[Import] Drone components results array:', results);
+        console.log('[Import] Success count:', results.filter(r => r.success).length);
+        console.log('[Import] Failed count:', results.filter(r => !r.success).length);
+
         importResults.push({ entity: 'drone_components', results });
         setImportStatus(prev => ({
           ...prev,
           drone_components: { ...prev.drone_components, status: 'completed' }
+        }));
+
+        // Mark entity as completed
+        setImportProgress(prev => ({
+          ...prev,
+          entityProgress: {
+            ...prev.entityProgress,
+            drone_components: { ...prev.entityProgress.drone_components, status: 'completed' }
+          }
         }));
       }
 

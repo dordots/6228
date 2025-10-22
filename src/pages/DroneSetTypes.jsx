@@ -124,14 +124,23 @@ export default function DroneSetTypesPage() {
     }
     try {
       const user = await User.me();
-      await ActivityLog.create({
-        activity_type: "DELETE",
-        entity_type: "DroneSetType",
-        details: `Deleted drone set type: ${type.type_name}`,
-        user_full_name: user.full_name,
-        division_name: "N/A"
-      });
+
+      // Delete the type FIRST
       await DroneSetType.delete(type.id);
+
+      // Then try to log activity (but don't fail if it doesn't work)
+      try {
+        await ActivityLog.create({
+          activity_type: "DELETE",
+          entity_type: "DroneSetType",
+          details: `Deleted drone set type: ${type.type_name}`,
+          user_full_name: user.full_name,
+          division_name: user.department || "N/A"
+        });
+      } catch (logError) {
+        console.warn("Failed to log delete activity:", logError);
+      }
+
       loadData();
     } catch (error) {
       console.error("Error deleting drone set type:", error);
@@ -166,14 +175,21 @@ export default function DroneSetTypesPage() {
         const typeToDelete = droneSetTypes.find(t => t.id === id);
         if (typeToDelete) {
           try {
-            await ActivityLog.create({
-              activity_type: "DELETE",
-              entity_type: "DroneSetType",
-              details: `Deleted drone set type: ${typeToDelete.type_name}`,
-              user_full_name: user.full_name,
-              division_name: "N/A"
-            });
+            // Delete the type FIRST
             await DroneSetType.delete(id);
+
+            // Then try to log activity (but don't fail if it doesn't work)
+            try {
+              await ActivityLog.create({
+                activity_type: "DELETE",
+                entity_type: "DroneSetType",
+                details: `Deleted drone set type: ${typeToDelete.type_name}`,
+                user_full_name: user.full_name,
+                division_name: user.department || "N/A"
+              });
+            } catch (logError) {
+              console.warn("Failed to log delete activity:", logError);
+            }
           } catch (deleteError) {
             console.error(`Error deleting drone set type ${id}:`, deleteError);
           }

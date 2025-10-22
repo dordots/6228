@@ -158,36 +158,57 @@ export default function EquipmentPage() {
 
 
   const handleSubmit = async (equipmentData) => {
-    const user = await User.me(); // Fetched user for activity log
-    const activityDetails = editingEquipment
-      ? `Updated equipment: ${equipmentData.equipment_type} (ID: ${editingEquipment.id || 'N/A'})`
-      : `Created new equipment: ${equipmentData.equipment_type}`;
+    try {
+      const user = await User.me(); // Fetched user for activity log
+      const activityDetails = editingEquipment
+        ? `Updated equipment: ${equipmentData.equipment_type} (ID: ${editingEquipment.id || 'N/A'})`
+        : `Created new equipment: ${equipmentData.equipment_type}`;
 
-    if (editingEquipment) {
-      await Equipment.update(editingEquipment.id, equipmentData);
-    } else {
-      // Only check for duplicate serial numbers if the equipment type requires one (is in SERIALIZED_ITEMS)
-      if (equipmentData.serial_number && SERIALIZED_ITEMS.includes(equipmentData.equipment_type)) {
-        const existing = await Equipment.filter({ serial_number: equipmentData.serial_number });
-        if (existing.length > 0) {
-          alert(`Error: Equipment with Serial Number "${equipmentData.serial_number}" already exists.`);
-          return;
+      if (editingEquipment) {
+        const updateData = {
+          ...equipmentData,
+          updated_date: new Date().toISOString()
+        };
+        await Equipment.update(editingEquipment.id, updateData);
+      } else {
+        // Only check for duplicate serial numbers if the equipment type requires one (is in SERIALIZED_ITEMS)
+        if (equipmentData.serial_number && SERIALIZED_ITEMS.includes(equipmentData.equipment_type)) {
+          const existing = await Equipment.filter({ serial_number: equipmentData.serial_number });
+          if (existing.length > 0) {
+            alert(`Error: Equipment with Serial Number "${equipmentData.serial_number}" already exists.`);
+            return;
+          }
         }
+
+        // Enrich equipment data with all required system fields
+        const createData = {
+          ...equipmentData,
+          created_by: user.email || user.full_name,
+          created_by_id: user.id || user.uid,
+          created_date: new Date().toISOString(),
+          updated_date: new Date().toISOString(),
+          is_sample: "false"
+        };
+        await Equipment.create(createData);
       }
-      await Equipment.create(equipmentData);
+
+      await ActivityLog.create({
+        activity_type: editingEquipment ? "UPDATE" : "CREATE",
+        entity_type: "Equipment",
+        details: activityDetails,
+        user_full_name: user?.full_name || 'System',
+        division_name: equipmentData.division_name
+      }).catch(() => {
+        // Ignore ActivityLog errors
+      });
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+      // Continue to close dialog and refresh even if there's an error
+    } finally {
+      setShowForm(false);
+      setEditingEquipment(null);
+      loadData();
     }
-
-    await ActivityLog.create({
-      activity_type: editingEquipment ? "UPDATE" : "CREATE",
-      entity_type: "Equipment",
-      details: activityDetails,
-      user_full_name: user?.full_name || 'System', // Use user?.full_name with fallback
-      division_name: equipmentData.division_name
-    });
-
-    setShowForm(false);
-    setEditingEquipment(null);
-    loadData();
   };
 
   const handleEdit = (equipmentItem) => {

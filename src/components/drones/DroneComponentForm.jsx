@@ -52,7 +52,7 @@ export default function DroneComponentForm({ component, onSubmit, onCancel, exis
       ...formData,
       component_type: finalComponentType,
     };
-    
+
     onSubmit(finalData);
   };
 

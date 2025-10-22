@@ -8,7 +8,7 @@ import { Weapon } from "@/api/entities";
 import { SerializedGear } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Search, Trash2, ArrowLeft, Edit } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import DroneComponentTable from "../components/drones/DroneComponentTable";
 import DroneComponentForm from "../components/drones/DroneComponentForm";
 import DroneComponentFilters from "../components/drones/DroneComponentFilters";
+import RenameTypeDialog from "../components/common/RenameTypeDialog";
 
 export default function DroneComponents() {
   const [components, setComponents] = useState([]);
@@ -31,6 +32,7 @@ export default function DroneComponents() {
   const [filters, setFilters] = useState({ type: "all", status: "all" });
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
 
 
   useEffect(() => {
@@ -45,11 +47,15 @@ export default function DroneComponents() {
     fetchUser();
   }, []);
 
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager';
+
   const existingComponentTypes = useMemo(() => {
     if (!Array.isArray(components)) return [];
     const types = new Set(components.map(c => c.component_type).filter(Boolean));
     return Array.from(types).sort();
   }, [components]);
+
+  const componentTypes = existingComponentTypes;
 
   const loadData = async () => {
     setIsLoading(true);
@@ -78,45 +84,65 @@ export default function DroneComponents() {
   };
 
   const handleSubmit = async (componentData) => {
-    const user = await User.me();
-    const activityDetails = editingComponent
-      ? `Updated drone component: ${componentData.component_type} (${componentData.component_id})`
-      : `Created new drone component: ${componentData.component_type} (${componentData.component_id})`;
+    try {
+      const user = await User.me();
+      const activityDetails = editingComponent
+        ? `Updated drone component: ${componentData.component_type} (${componentData.component_id})`
+        : `Created new drone component: ${componentData.component_type} (${componentData.component_id})`;
 
-    if (editingComponent) {
-      await DroneComponent.update(editingComponent.id, componentData);
-    } else {
-        const serial = componentData.component_id;
-        const type = componentData.component_type;
+      if (editingComponent) {
+        const updateData = {
+          ...componentData,
+          updated_date: new Date().toISOString()
+        };
+        await DroneComponent.update(editingComponent.id, updateData);
+      } else {
+          const serial = componentData.component_id;
+          const type = componentData.component_type;
 
-        if (!serial?.trim()) {
-            alert("Component ID is required.");
-            return;
-        }
-        // Check for existing drone components with the same serial number AND type
-        const existingComponents = await DroneComponent.filter({ 
-            component_id: serial,
-            component_type: type 
-        }).catch(() => []);
+          if (!serial?.trim()) {
+              alert("Component ID is required.");
+              return;
+          }
+          // Check for existing drone components with the same serial number AND type
+          const existingComponents = await DroneComponent.filter({
+              component_id: serial,
+              component_type: type
+          }).catch(() => []);
 
-        if (existingComponents.length > 0) {
-            alert(`Error: A drone component with ID "${serial}" and Type "${type}" already exists.`);
-            return;
-        }
-      await DroneComponent.create(componentData);
+          if (existingComponents.length > 0) {
+              alert(`Error: A drone component with ID "${serial}" and Type "${type}" already exists.`);
+              return;
+          }
+
+          const createData = {
+            ...componentData,
+            created_by: user.email,
+            created_by_id: user.id,
+            created_date: new Date().toISOString(),
+            updated_date: new Date().toISOString(),
+            is_sample: "false"
+          };
+          await DroneComponent.create(createData);
+      }
+
+      await ActivityLog.create({
+        activity_type: editingComponent ? "UPDATE" : "CREATE",
+        entity_type: "DroneComponent",
+        details: activityDetails,
+        user_full_name: user.full_name,
+        division_name: user.department // Log component changes under user's division
+      }).catch(() => {
+        // Ignore ActivityLog errors
+      });
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+      // Continue to close dialog and refresh even if there's an error
+    } finally {
+      setShowForm(false);
+      setEditingComponent(null);
+      loadData();
     }
-    
-    await ActivityLog.create({
-      activity_type: editingComponent ? "UPDATE" : "CREATE",
-      entity_type: "DroneComponent",
-      details: activityDetails,
-      user_full_name: user.full_name,
-      division_name: user.department // Log component changes under user's division
-    });
-
-    setShowForm(false);
-    setEditingComponent(null);
-    loadData();
   };
 
   const handleEdit = (component) => {
@@ -146,12 +172,50 @@ export default function DroneComponents() {
     }
   };
 
+  const handleRenameType = async (originalType, newType) => {
+    if (!isAdminOrManager) {
+      alert("You do not have permission to perform this action.");
+      return;
+    }
+
+    const componentsToUpdate = components.filter(c => c.component_type === originalType);
+    if (componentsToUpdate.length === 0) {
+      alert("No drone components found with the original type.");
+      return;
+    }
+
+    try {
+      const updatePromises = componentsToUpdate.map(c => DroneComponent.update(c.id, { component_type: newType }));
+      await Promise.all(updatePromises);
+
+      // Try to create activity log, but don't fail rename if it errors
+      try {
+        await ActivityLog.create({
+          activity_type: 'UPDATE',
+          entity_type: 'DroneComponent',
+          details: `Bulk renamed Drone Component type from '${originalType}' to '${newType}'. Affected ${componentsToUpdate.length} items.`,
+          user_full_name: currentUser.full_name,
+          division_name: 'N/A' // This is a cross-division action
+        });
+      } catch (logError) {
+        console.error("Failed to create activity log (rename succeeded):", logError);
+      }
+
+      alert("Drone component types renamed successfully!");
+      setShowRenameDialog(false);
+      await loadData();
+    } catch (error) {
+      console.error("Error renaming drone component types:", error);
+      alert("An error occurred during the renaming process.");
+    }
+  };
+
   const checkForDuplicates = async () => {
     setIsLoading(true);
     try {
       const allComponents = await DroneComponent.list();
       const componentMap = new Map();
-      
+
       // Group components by ID and Type
       allComponents.forEach(component => {
         if (!component.component_id || !component.component_type) return; // Skip invalid records
@@ -289,6 +353,15 @@ export default function DroneComponents() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Rename Type Dialog */}
+      <RenameTypeDialog
+        open={showRenameDialog}
+        onOpenChange={setShowRenameDialog}
+        itemTypes={componentTypes}
+        entityName="Drone Component"
+        onRename={handleRenameType}
+      />
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Drone Components</h1>
@@ -306,8 +379,13 @@ export default function DroneComponents() {
               Delete Selected ({selectedItems.length})
             </Button>
           )}
-          <Button 
-            variant="outline" 
+          {isAdminOrManager && (
+            <Button variant="outline" onClick={() => setShowRenameDialog(true)}>
+              <Edit className="w-4 h-4 mr-2" /> Rename Type
+            </Button>
+          )}
+          <Button
+            variant="outline"
             onClick={checkForDuplicates}
             className="text-gray-700 hover:text-gray-800 border-gray-300 hover:border-gray-400"
           >

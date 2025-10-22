@@ -113,7 +113,7 @@ export const validateEntityData = (data, entityType) => {
     serialized_gear: ['gear_id', 'gear_type', 'status'],
     drone_sets: ['set_serial_number'],
     drone_components: ['component_id', 'component_type'],
-    equipment: ['equipment_id', 'equipment_type', 'quantity'],
+    equipment: ['equipment_type', 'quantity'],
   };
   
   // Define valid enum values
@@ -126,6 +126,25 @@ export const validateEntityData = (data, entityType) => {
   
   const fields = requiredFields[entityType] || [];
   
+  // Check for duplicate equipment_id in equipment
+  if (entityType === 'equipment') {
+    const idMap = new Map();
+    data.forEach((row, index) => {
+      if (row.equipment_id && row.equipment_id.toString().trim() !== '') {
+        const equipmentId = row.equipment_id.toString().trim();
+        if (idMap.has(equipmentId)) {
+          errors.push({
+            row: index + 2,
+            field: 'equipment_id',
+            message: `Duplicate equipment_id found: "${equipmentId}" (also appears in row ${idMap.get(equipmentId)})`
+          });
+        } else {
+          idMap.set(equipmentId, index + 2);
+        }
+      }
+    });
+  }
+
   data.forEach((row, index) => {
     // Check required fields
     fields.forEach(field => {
@@ -137,7 +156,7 @@ export const validateEntityData = (data, entityType) => {
         });
       }
     });
-    
+
     // Entity-specific validations
     switch (entityType) {
       case 'soldiers':
@@ -224,10 +243,6 @@ export const validateEntityData = (data, entityType) => {
             field: 'quantity',
             message: 'Quantity must be a number'
           });
-        }
-        // Generate equipment_id if not provided
-        if (!row.equipment_id) {
-          row.equipment_id = `EQ_${row.equipment_type}_${Date.now()}_${index}`;
         }
         break;
     }

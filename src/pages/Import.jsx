@@ -169,12 +169,20 @@ export default function ImportPage() {
         [entityName]: { total: entityData.length, processed: 0, success: 0, failed: 0, status: 'processing' }
       }
     }));
-    
+
     const results = [];
     let entityIndex = 0;
-    
+
     for (const item of entityData) {
       try {
+        // For equipment, check if 'id' field already exists in database
+        if (entityName === 'equipment' && item.id && item.id.trim() !== '') {
+          const existingEquipment = await Equipment.filter({ id: item.id }).catch(() => []);
+          if (existingEquipment && existingEquipment.length > 0) {
+            throw new Error(`Equipment with id "${item.id}" already exists in database`);
+          }
+        }
+
         await createFunction(item);
         results.push({ id: item[idField], success: true });
         
@@ -1081,7 +1089,7 @@ export default function ImportPage() {
 
       // Import equipment
       if (importStatus.equipment.data.length > 0) {
-        const results = await processEntityImport('equipment', importStatus.equipment.data, Equipment.create.bind(Equipment), 'equipment_id');
+        const results = await processEntityImport('equipment', importStatus.equipment.data, Equipment.create.bind(Equipment), 'id');
         importResults.push({ entity: 'equipment', results });
         setImportStatus(prev => ({
           ...prev,
@@ -1669,7 +1677,7 @@ export default function ImportPage() {
                     />
                     <ImportStep
                       title="Equipment"
-                      description="Equipment_YYYY-MM-DD.csv - equipment_id, equipment_type, quantity, division_name"
+                      description="Equipment_YYYY-MM-DD.csv - id, equipment_type, quantity, division_name"
                       fileType="equipment"
                       status={importStatus.equipment}
                       onUpload={handleFileUpload}

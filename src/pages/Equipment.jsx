@@ -108,21 +108,22 @@ export default function EquipmentPage() {
     try {
       const updatePromises = equipmentToUpdate.map(e => Equipment.update(e.id, { equipment_type: newType }));
       await Promise.all(updatePromises);
-      
+
       await ActivityLog.create({
         activity_type: 'UPDATE',
         entity_type: 'Equipment',
         details: `Bulk renamed Equipment type from '${originalType}' to '${newType}'. Affected ${equipmentToUpdate.length} items.`,
         user_full_name: currentUser?.full_name || 'System',
-        division_name: 'N/A' // Or currentUser.department if applicable, 'N/A' for a global change
+        division_name: 'N/A'
+      }).catch(() => {
+        // Ignore ActivityLog errors
       });
-
-      alert("Equipment types renamed successfully!");
-      setShowRenameDialog(false);
-      await loadData();
     } catch (error) {
       console.error("Error renaming equipment types:", error);
-      alert("An error occurred during the renaming process.");
+      // Continue to close dialog and refresh even if there's an error
+    } finally {
+      setShowRenameDialog(false);
+      await loadData();
     }
   };
 
@@ -240,18 +241,19 @@ export default function EquipmentPage() {
 
   const checkForDuplicates = () => {
     const safeEquipment = Array.isArray(equipment) ? equipment : [];
-    // Only check for duplicates for serialized items
-    const serializedEquipment = safeEquipment.filter(e => e && e.serial_number && SERIALIZED_ITEMS.includes(e.equipment_type));
+    // Only check for duplicates if serial_number is not empty
+    const equipmentWithSerial = safeEquipment.filter(e => e && e.serial_number && e.serial_number.trim() !== '');
 
-    const idCounts = serializedEquipment.reduce((acc, e) => {
-      if (e && e.serial_number) {
-        acc[e.serial_number] = (acc[e.serial_number] || 0) + 1;
-      }
+    const idCounts = equipmentWithSerial.reduce((acc, e) => {
+      const serial = e.serial_number.trim();
+      acc[serial] = (acc[serial] || 0) + 1;
       return acc;
     }, {});
+
     const foundDuplicates = Object.entries(idCounts)
       .filter(([, count]) => count > 1)
       .map(([serialNum, count]) => ({ serial_number: serialNum, count }));
+
     setDuplicates(foundDuplicates);
     setShowDuplicates(true);
   };

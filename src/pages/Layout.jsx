@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Shield, Users, Wrench, Target, BarChart3, User, Binoculars, Upload, ClipboardCheck, Joystick, Puzzle, ArrowLeft, Package, Home, ArrowRightLeft, History, Download, Lock, Calendar, LogOut } from "lucide-react";
+import { Shield, Users, Wrench, Target, BarChart3, User, Binoculars, Upload, ClipboardCheck, Joystick, Puzzle, ArrowLeft, Package, Home, ArrowRightLeft, History, Download, Lock, Calendar, LogOut, Settings } from "lucide-react";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
 import TotpVerificationPrompt from "@/components/auth/TotpVerificationPrompt";
 import { User as UserEntity } from "@/api/entities";
@@ -97,15 +97,21 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       icon: Binoculars,
       permission: 'equipment.view',
     },
-    { 
-      title: "Drones", 
-      url: createPageUrl("Drones"), 
+    {
+      title: "Drones",
+      url: createPageUrl("Drones"),
       icon: Joystick,
       permission: 'equipment.view',
     },
-    { 
-      title: "Drone Components", 
-      url: createPageUrl("DroneComponents"), 
+    {
+      title: "Drone Set Types",
+      url: createPageUrl("DroneSetTypes"),
+      icon: Settings,
+      permission: 'equipment.view',
+    },
+    {
+      title: "Drone Components",
+      url: createPageUrl("DroneComponents"),
       icon: Puzzle,
       permission: 'equipment.view',
     },

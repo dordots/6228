@@ -8,20 +8,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Save, X, ChevronDown } from "lucide-react";
 import ComboBox from "@/components/common/ComboBox";
 import { Textarea } from "@/components/ui/textarea";
-
-const DRONE_COMPONENTS = {
-  Avetta: {
-    drone_1: "Avetta Drone",
-    drone_2: "Avetta Drone", 
-    goggles: "Avetta Goggles",
-    remote_control: "Avetta Remote",
-  },
-  Evo: {
-    evo_drone: "Evo Drone",
-    evo_remote_control: "Evo Remote Control",
-    bomb_dropper: "Evo Bomb Dropper",
-  },
-};
+import { DroneSetType } from "@/api/entities";
 
 function SimpleSearchableSelect({ 
   label, 
@@ -121,19 +108,20 @@ function SimpleSearchableSelect({
   );
 }
 
-export default function DroneSetForm({ 
-  droneSet, 
-  unassignedComponents = [], 
-  allComponents = [], 
-  allSoldiers = [], 
+export default function DroneSetForm({
+  droneSet,
+  unassignedComponents = [],
+  allComponents = [],
+  allSoldiers = [],
   divisions = [],
-  onSubmit, 
-  onCancel 
+  onSubmit,
+  onCancel
 }) {
+  const [droneSetTypes, setDroneSetTypes] = useState([]);
   const [formData, setFormData] = useState(
     droneSet || {
       set_serial_number: "",
-      set_type: "Avetta",
+      set_type: "",
       status: "Operational",
       assigned_to: null,
       division_name: "",
@@ -144,9 +132,29 @@ export default function DroneSetForm({
     }
   );
 
+  // Load drone set types from database
+  useEffect(() => {
+    const loadTypes = async () => {
+      try {
+        const types = await DroneSetType.list();
+        setDroneSetTypes(Array.isArray(types) ? types : []);
+
+        // Set default type if editing or if types are available
+        if (!droneSet && types.length > 0 && !formData.set_type) {
+          setFormData(prev => ({ ...prev, set_type: types[0].type_name }));
+        }
+      } catch (error) {
+        console.error("Error loading drone set types:", error);
+        setDroneSetTypes([]);
+      }
+    };
+    loadTypes();
+  }, [droneSet]);
+
   const currentComponentSlots = useMemo(() => {
-    return DRONE_COMPONENTS[formData.set_type] || {};
-  }, [formData.set_type]);
+    const selectedType = droneSetTypes.find(t => t.type_name === formData.set_type);
+    return selectedType?.component_slots || {};
+  }, [formData.set_type, droneSetTypes]);
 
   useEffect(() => {
     if (droneSet) {
@@ -298,13 +306,24 @@ export default function DroneSetForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="set_type">Set Type *</Label>
-            <Select value={formData.set_type} onValueChange={(value) => handleChange('set_type', value)} required>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Avetta">Avetta</SelectItem>
-                <SelectItem value="Evo">Evo</SelectItem>
-              </SelectContent>
-            </Select>
+            {droneSetTypes.length === 0 ? (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                <p className="text-sm text-amber-800">
+                  No drone set types available. Please create drone set types first in the "Drone Set Types" page.
+                </p>
+              </div>
+            ) : (
+              <Select value={formData.set_type} onValueChange={(value) => handleChange('set_type', value)} required>
+                <SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger>
+                <SelectContent>
+                  {droneSetTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.type_name}>
+                      {type.type_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>

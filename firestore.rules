@@ -101,7 +101,15 @@ service cloud.firestore {
       allow update: if hasPermission('equipment.update') && canAccessByScope(resource.data);
       allow delete: if hasPermission('equipment.delete') && canAccessByScope(resource.data);
     }
-    
+
+    // Drone set types collection - configuration data
+    match /drone_set_types/{typeID} {
+      allow read: if hasPermission('equipment.view');
+      allow create: if hasPermission('equipment.create');
+      allow update: if hasPermission('equipment.update');
+      allow delete: if hasPermission('equipment.delete');
+    }
+
     // Activity logs - read with permission, write for authenticated
     match /activity_logs/{logID} {
       allow read: if hasPermission('system.history') && canAccessByScope(resource.data);

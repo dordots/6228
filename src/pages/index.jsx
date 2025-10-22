@@ -22,6 +22,8 @@ import Maintenance from "./Maintenance";
 
 import Drones from "./Drones";
 
+import DroneSetTypes from "./DroneSetTypes";
+
 import DroneComponents from "./DroneComponents";
 
 import DataExport from "./DataExport";
@@ -75,9 +77,11 @@ const PAGES = {
     Maintenance: Maintenance,
     
     Drones: Drones,
-    
+
+    DroneSetTypes: DroneSetTypes,
+
     DroneComponents: DroneComponents,
-    
+
     DataExport: DataExport,
     
     UserManagement: UserManagement,
@@ -164,9 +168,11 @@ function PagesContent() {
                 <Route path="/Maintenance" element={<Maintenance />} />
                 
                 <Route path="/Drones" element={<Drones />} />
-                
+
+                <Route path="/DroneSetTypes" element={<DroneSetTypes />} />
+
                 <Route path="/DroneComponents" element={<DroneComponents />} />
-                
+
                 <Route path="/DataExport" element={<DataExport />} />
                 
                 <Route path="/UserManagement" element={<UserManagement />} />

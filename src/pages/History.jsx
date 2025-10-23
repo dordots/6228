@@ -37,6 +37,7 @@ const activityIcons = {
   INSPECT: <Wrench className="w-4 h-4 text-yellow-600" />,
   DEPOSIT: <Target className="w-4 h-4 text-blue-600" />,
   RELEASE: <Target className="w-4 h-4 text-green-600" />,
+  IMPORT: <Upload className="w-4 h-4 text-purple-600" />,
   default: <Clock className="w-4 h-4 text-slate-500" />
 };
 
@@ -49,6 +50,7 @@ const activityTypeColors = {
   INSPECT: 'bg-yellow-100 text-yellow-800',
   DEPOSIT: 'bg-blue-100 text-blue-800',
   RELEASE: 'bg-green-100 text-green-800',
+  IMPORT: 'bg-purple-100 text-purple-800',
 };
 
 const entityIcons = {
@@ -236,7 +238,7 @@ const ActivityDetailsDialog = ({ activity, open, onOpenChange }) => {
     if (!activity) return null;
     const { context } = activity;
     const processedDetails = processActivityDetails(activity.details);
-    const displayTime = formatUtcToIsraelTime(activity.created_date);
+    const displayTime = formatUtcToIsraelTime(activity.created_at);
     const allItems = extractAllActivityItems(processedDetails.text, context);
     const allEntities = getAllInvolvedEntities(processedDetails.text, context);
 
@@ -410,7 +412,7 @@ export default function HistoryPage() {
 
                 console.log('History filter applied:', filter, 'User:', currentUser?.full_name, 'Division:', userDivision, 'Is Admin:', isAdmin, 'Is Manager:', isManager);
 
-                const activityData = await ActivityLog.filter(filter, '-created_date', 500);
+                const activityData = await ActivityLog.filter(filter, '-created_at', 500);
                 setActivities(Array.isArray(activityData) ? activityData : []);
                 
                 // Extract unique user names from activities
@@ -545,7 +547,7 @@ export default function HistoryPage() {
                                             onClick={() => handleActivityClick(activity)}
                                         >
                                             <TableCell className="font-medium text-slate-700 text-xs">
-                                                {formatUtcToIsraelTime(activity.created_date)}
+                                                {formatUtcToIsraelTime(activity.created_at)}
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className={`font-mono text-xs ${activityTypeColors[activity.activity_type]}`}>

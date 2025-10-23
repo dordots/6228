@@ -123,10 +123,19 @@ export default function DailyVerificationPage() {
     try {
       await DailyVerification.create({
         soldier_id: soldier.soldier_id,
+        soldier_name: `${soldier.first_name} ${soldier.last_name}`,
         verification_date: today,
+        created_date: today,
         verified_by_user_id: currentUser.id,
         verified_by_user_name: currentUser.full_name,
+        verified_by: currentUser.full_name,
         division_name: soldier.division_name,
+        status: 'verified',
+        weapons_checked: [],
+        equipment_checked: [],
+        gear_checked: [],
+        drone_sets_checked: [],
+        signature: null,
       });
       // Refresh all data to ensure UI is up-to-date
       await loadData();

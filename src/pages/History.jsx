@@ -14,7 +14,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, PlusCircle, Edit, Trash2, CheckCircle, Wrench, Target, Clock, Users, Shield, Package } from 'lucide-react';
+import { Search, PlusCircle, Edit, Trash2, CheckCircle, Wrench, Target, Clock, Users, Shield, Package, Upload } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import {

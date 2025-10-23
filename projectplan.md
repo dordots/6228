@@ -843,3 +843,385 @@ Firebase function expects:
 - [SoldierRelease.jsx:365-370](src/pages/SoldierRelease.jsx#L365-L370) - handleUnassignSerialized email params
 - [SoldierRelease.jsx:610-615](src/pages/SoldierRelease.jsx#L610-L615) - handleUnassignEquipment email params
 - [SoldierRelease.jsx:877-882](src/pages/SoldierRelease.jsx#L877-L882) - handleRelease email params
+
+---
+
+# Project Plan: Fix Unassigned Tab in Armory Deposit/Release
+
+**Date**: 2025-10-23
+**Task**: Fix the "Unassigned" tab to show items with status `with_soldier` but not assigned, and allow depositing them to division or central armory
+
+## Problem Statement
+The "Unassigned" tab in the Armory Deposit/Release page was not working correctly:
+1. **Wrong Filter**: It was loading items with status `in_deposit` (already deposited) instead of `with_soldier` (unassigned but available for deposit)
+2. **Wrong Action**: The tab was set up for "Release" action (moving from deposit to with_soldier) instead of "Deposit" action (moving from with_soldier to deposit)
+3. **Missing Feature**: No deposit location selection (division deposit vs central armory)
+
+## Todo List
+- [x] Update unassignedFilter in ArmoryDeposit.jsx to fetch items with status 'with_soldier'
+- [x] Rename handleReleaseUnassigned to handleDepositUnassigned and update logic
+- [x] Update UnassignedDepositTab.jsx to support deposit action with location selection
+
+## Changes Made
+
+### File 1: [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx)
+
+#### Change 1: Updated Filter (Line 54)
+**Before:**
+```javascript
+const unassignedFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
+```
+
+**After:**
+```javascript
+const unassignedFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };
+```
+
+**Impact:** Now loads weapons, gears, and drone sets that are with_soldier status but not assigned to anyone.
+
+#### Change 2: Renamed and Updated Handler Function (Lines 178-213)
+**Before:** `handleReleaseUnassigned`
+- Changed status from `'with_soldier'` (release)
+- No deposit_location parameter
+- ActivityLog type: "RELEASE"
+
+**After:** `handleDepositUnassigned`
+```javascript
+const handleDepositUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature, depositLocation }) => {
+  try {
+    const currentUser = await User.me();
+    const updatePayload = {
+      armory_status: 'in_deposit',
+      assigned_to: null,
+      deposit_location: depositLocation
+    };
+
+    // Update weapons, gear, and drones...
+
+    const locationText = depositLocation === 'division_deposit' ? 'Division Deposit' : 'Central Armory Deposit';
+
+    await ActivityLog.create({
+      activity_type: "DEPOSIT",
+      entity_type: "Armory",
+      details: `Deposited unassigned items to ${locationText}: ${actionItems.join(', ')}. Signature: ${signature}`,
+      user_full_name: currentUser?.full_name || 'System'
+    });
+
+    await loadData();
+  } catch (error) {
+    console.error("Error depositing unassigned items:", error);
+  }
+};
+```
+
+**Impact:** Function now deposits items to specified location instead of releasing them.
+
+#### Change 3: Updated Tab Configuration (Lines 291-294, 386)
+**Line 293:** Changed tab title from "Unassigned in Deposit" to "Unassigned"
+**Line 386:** Updated onSubmit prop to `handleDepositUnassigned`
+
+### File 2: [UnassignedDepositTab.jsx](src/components/armory/UnassignedDepositTab.jsx)
+
+#### Change 1: Added Imports (Lines 6-7)
+```javascript
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+```
+
+#### Change 2: Added Deposit Location State (Lines 51, 60)
+```javascript
+const [depositLocation, setDepositLocation] = useState("division_deposit");
+
+useEffect(() => {
+  // ... existing resets ...
+  setDepositLocation("division_deposit");
+}, [items]);
+```
+
+#### Change 3: Updated handleSubmit Function (Lines 76-107)
+**Added:**
+- Changed validation message: "deposit" instead of "release" (line 84)
+- Added deposit location validation (lines 88-91)
+- Added depositLocation to onSubmit payload (line 98)
+- Reset depositLocation in cleanup (line 106)
+
+```javascript
+if (!depositLocation) {
+  alert("Please select a deposit location.");
+  return;
+}
+
+onSubmit({
+  weaponIds: selectedWeaponIds,
+  gearIds: selectedGearIds,
+  droneSetIds: selectedDroneSetIds,
+  signature,
+  depositLocation, // Added
+});
+```
+
+#### Change 4: Updated UI Text (Lines 123-130, 146-156)
+**Card Title (Line 123):**
+```javascript
+Deposit Unassigned Equipment
+<p>Select unassigned items to deposit into division or central armory.</p>
+```
+
+**Empty States:**
+- "No unassigned items found to deposit"
+- "No unassigned weapons to deposit"
+- "No unassigned gear to deposit"
+- "No unassigned drone sets to deposit"
+
+#### Change 5: Added Deposit Location Selection UI (Lines 162-180)
+```javascript
+<div className="space-y-4 pt-4 border-t">
+  <div className="space-y-3">
+    <Label className="text-base font-semibold">Deposit Location</Label>
+    <RadioGroup value={depositLocation} onValueChange={setDepositLocation}>
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="division_deposit" id="division" />
+        <Label htmlFor="division" className="font-normal cursor-pointer">
+          Division Deposit
+        </Label>
+      </div>
+      <div className="flex items-center space-x-2">
+        <RadioGroupItem value="central_armory" id="central" />
+        <Label htmlFor="central" className="font-normal cursor-pointer">
+          Central Armory Deposit
+        </Label>
+      </div>
+    </RadioGroup>
+  </div>
+</div>
+```
+
+#### Change 6: Updated Signature Section Text (Line 185)
+```javascript
+Please sign to confirm the deposit of the selected equipment.
+```
+
+#### Change 7: Updated Button Text (Line 195)
+```javascript
+Deposit Selected Items
+```
+
+## Result
+
+The "Unassigned" tab now works as expected:
+
+### What It Shows
+- ✅ Weapons with status `with_soldier` and `assigned_to: null`
+- ✅ Gears with status `with_soldier` and `assigned_to: null`
+- ✅ Drone sets with status `with_soldier` and `assigned_to: null`
+
+### What Users Can Do
+1. ✅ View unassigned items across three tabs (Weapons, Gear, Drones)
+2. ✅ Select multiple items to deposit
+3. ✅ Choose deposit location:
+   - Division Deposit
+   - Central Armory Deposit
+4. ✅ Provide signature for confirmation
+5. ✅ Submit to deposit items
+
+### What Happens on Submit
+1. ✅ Items' `armory_status` changed from `with_soldier` to `in_deposit`
+2. ✅ Items' `deposit_location` set to chosen location
+3. ✅ Items remain `assigned_to: null` (still unassigned)
+4. ✅ ActivityLog created with type "DEPOSIT" and entity "Armory"
+5. ✅ Form clears and data reloads
+
+## Impact Assessment
+- **User Impact**: Positive - feature now works as intended
+- **Code Complexity**: Minimal - simple filter and action changes
+- **Maintainability**: Improved - clearer function names and purpose
+- **Simplicity**: All changes are minimal and focused
+- **Files Modified**: Only 2 files touched
+- **Lines Changed**: ~50 lines total across both files
+
+---
+
+# Project Plan: Add "Release Unassigned" Tab
+
+**Date**: 2025-10-23
+**Task**: Add a "Release Unassigned" tab to release items from deposit back to general inventory
+
+## Problem Statement
+The Armory Deposit/Release page had a "Deposit Unassigned" tab but was missing the opposite functionality: a "Release Unassigned" tab to release items that are in deposit (status `in_deposit`) but unassigned back to general inventory (status `with_soldier`).
+
+## Todo List
+- [x] Create UnassignedReleaseTab component for releasing items from deposit
+- [x] Add new state for items in deposit (unassigned) in ArmoryDeposit.jsx
+- [x] Create handleReleaseUnassigned function to change status from in_deposit to with_soldier
+- [x] Add 'Release Unassigned' tab to the TabsList in ArmoryDeposit.jsx
+- [x] Update Unassigned tab to use unassignedToDeposit state instead of unassignedInDeposit
+
+## Changes Made
+
+### File 1: Created [UnassignedReleaseTab.jsx](src/components/armory/UnassignedReleaseTab.jsx)
+
+**New component** - Similar structure to UnassignedDepositTab but for releasing items:
+
+**Key Features:**
+- Purple theme (border-purple-200, text-purple-900) to distinguish from deposit tab
+- Shows items with status `in_deposit` and `assigned_to: null`
+- Displays deposit location (Division/Central) for each item
+- Allows multi-selection across three tabs: Weapons, Gear, Drones
+- Requires signature for confirmation
+- Releases items back to status `with_soldier` (removes deposit_location)
+
+### File 2: Updated [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx)
+
+#### Change 1: Added Import (Line 18)
+```javascript
+import UnassignedReleaseTab from "../components/armory/UnassignedReleaseTab";
+```
+
+#### Change 2: Added State Variables (Lines 25-26)
+```javascript
+const [unassignedToDeposit, setUnassignedToDeposit] = useState({ weapons: [], gear: [], droneSets: [] });
+const [unassignedInDeposit, setUnassignedInDeposit] = useState({ weapons: [], gear: [], droneSets: [] });
+```
+
+**Renamed** `unassignedInDeposit` to `unassignedToDeposit` for clarity.
+**Added** new `unassignedInDeposit` for items already in deposit.
+
+#### Change 3: Updated loadData Function (Lines 56-89)
+```javascript
+const unassignedToDepositFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };
+const unassignedInDepositFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
+
+// Load both sets of unassigned items
+const [
+  soldiersData, weaponsData, gearData, droneSetsData,
+  unassignedToDepositWeapons, unassignedToDepositGear, unassignedToDepositDrones,
+  unassignedInDepositWeapons, unassignedInDepositGear, unassignedInDepositDrones
+] = await Promise.all([...]);
+
+setUnassignedToDeposit({
+  weapons: Array.isArray(unassignedToDepositWeapons) ? unassignedToDepositWeapons : [],
+  gear: Array.isArray(unassignedToDepositGear) ? unassignedToDepositGear : [],
+  droneSets: Array.isArray(unassignedToDepositDrones) ? unassignedToDepositDrones : [],
+});
+setUnassignedInDeposit({
+  weapons: Array.isArray(unassignedInDepositWeapons) ? unassignedInDepositWeapons : [],
+  gear: Array.isArray(unassignedInDepositGear) ? unassignedInDepositGear : [],
+  droneSets: Array.isArray(unassignedInDepositDrones) ? unassignedInDepositDrones : [],
+});
+```
+
+**Impact:** Now loads TWO separate sets of unassigned items - one for deposit, one for release.
+
+#### Change 4: Added handleReleaseUnassigned Function (Lines 228-261)
+```javascript
+const handleReleaseUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature }) => {
+  try {
+    const currentUser = await User.me();
+    const updatePayload = {
+      armory_status: 'with_soldier',
+      assigned_to: null,
+      deposit_location: null
+    };
+
+    // Update all selected items
+    for (const weaponId of weaponIds) {
+      await Weapon.update(weaponId, updatePayload);
+    }
+    // ... same for gear and drones
+
+    // Create activity log
+    await ActivityLog.create({
+      activity_type: "RELEASE",
+      entity_type: "Armory",
+      details: `Released unassigned items from deposit: ${actionItems.join(', ')}. Signature: ${signature}`,
+      user_full_name: currentUser?.full_name || 'System'
+    });
+
+    await loadData();
+  } catch (error) {
+    console.error("Error releasing unassigned items:", error);
+  }
+};
+```
+
+**Impact:** Changes items from `in_deposit` to `with_soldier` and clears `deposit_location`.
+
+#### Change 5: Updated TabsList (Lines 330-347)
+```javascript
+<TabsList className="grid w-full grid-cols-4">  {/* Changed from grid-cols-3 to grid-cols-4 */}
+  <TabsTrigger value="deposit" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700">
+    <Package className="w-4 h-4 mr-2"/>
+    Deposit into Armory
+  </TabsTrigger>
+  <TabsTrigger value="release" className="data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
+    <PackageOpen className="w-4 h-4 mr-2"/>
+    Release from Armory
+  </TabsTrigger>
+  <TabsTrigger value="unassigned" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700">
+    <ArchiveRestore className="w-4 h-4 mr-2"/>
+    Deposit Unassigned  {/* Renamed from just "Unassigned" */}
+  </TabsTrigger>
+  <TabsTrigger value="release-unassigned" className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700">
+    <PackageOpen className="w-4 h-4 mr-2"/>
+    Release Unassigned  {/* NEW TAB */}
+  </TabsTrigger>
+</TabsList>
+```
+
+#### Change 6: Updated Tab Content (Lines 434-449)
+```javascript
+<TabsContent value="unassigned">
+  <UnassignedDepositTab
+    items={unassignedToDeposit}  {/* Changed from unassignedInDeposit */}
+    isLoading={isLoading}
+    onSubmit={handleDepositUnassigned}
+    onRefresh={loadData}
+  />
+</TabsContent>
+<TabsContent value="release-unassigned">  {/* NEW TAB CONTENT */}
+  <UnassignedReleaseTab
+    items={unassignedInDeposit}
+    isLoading={isLoading}
+    onSubmit={handleReleaseUnassigned}
+    onRefresh={loadData}
+  />
+</TabsContent>
+```
+
+## Result
+
+The Armory Deposit/Release page now has FOUR tabs:
+
+### 1. Deposit into Armory (Blue)
+- Shows soldiers with equipment (`with_soldier` status, assigned)
+- Deposits their equipment to armory
+
+### 2. Release from Armory (Green)
+- Shows soldiers with equipment in deposit (`in_deposit` status, assigned)
+- Releases their equipment back to them
+
+### 3. Deposit Unassigned (Amber)
+- Shows weapons/gear/drones with `with_soldier` status, NOT assigned
+- Deposits them to division or central armory
+
+### 4. Release Unassigned (Purple) - NEW
+- Shows weapons/gear/drones with `in_deposit` status, NOT assigned
+- Releases them back to `with_soldier` status
+- Displays current deposit location (Division/Central)
+- Clears deposit_location on release
+
+## Division Filter Behavior
+Both unassigned tabs respect user permissions:
+- **Admins**: See ALL items across all divisions
+- **Non-admins with department**: See only items from their division
+- **Non-admins without department**: See ALL items
+
+This matches the behavior of the assigned "Deposit" and "Release" tabs.
+
+## Impact Assessment
+- **User Impact**: Positive - complete workflow now available
+- **Code Complexity**: Minimal - mirrors existing deposit tab structure
+- **Maintainability**: Good - consistent pattern across all tabs
+- **Simplicity**: Changes are focused and follow existing patterns
+- **Files Modified**: 2 files (1 new component, 1 updated page)
+- **Lines Changed**: ~180 lines (170 new component + 10 updates to page)

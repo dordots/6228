@@ -3,29 +3,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Target, Binoculars, Joystick, ArchiveRestore } from "lucide-react";
+import { Target, Binoculars, Joystick, PackageOpen } from "lucide-react";
 import SignatureCanvas from "../soldiers/SignatureCanvas";
 
 const ItemRow = ({ item, isSelected, onSelect, type }) => {
-    let name, id;
+    let name, id, location;
     switch (type) {
         case 'weapon':
             name = item.weapon_type;
             id = item.weapon_id;
+            location = item.deposit_location;
             break;
         case 'gear':
             name = item.gear_type;
             id = item.gear_id;
+            location = item.deposit_location;
             break;
         case 'droneSet':
             name = `${item.set_type} Set`;
             id = item.set_serial_number;
+            location = item.deposit_location;
             break;
         default:
             return null;
     }
+
+    const locationLabel = location === 'division_deposit' ? 'Division' : location === 'central_armory' ? 'Central' : 'Unknown';
 
     return (
         <div className="flex items-center justify-between p-3 border border-slate-200 rounded-lg hover:bg-slate-50">
@@ -37,18 +40,18 @@ const ItemRow = ({ item, isSelected, onSelect, type }) => {
                 <div>
                     <p className="font-medium">{name}</p>
                     <p className="text-sm text-slate-600">ID: {id}</p>
+                    <p className="text-xs text-slate-500">Location: {locationLabel}</p>
                 </div>
             </div>
         </div>
     );
 };
 
-export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
+export default function UnassignedReleaseTab({ items, isLoading, onSubmit }) {
     const [selectedWeaponIds, setSelectedWeaponIds] = useState([]);
     const [selectedGearIds, setSelectedGearIds] = useState([]);
     const [selectedDroneSetIds, setSelectedDroneSetIds] = useState([]);
     const [signature, setSignature] = useState("");
-    const [depositLocation, setDepositLocation] = useState("division_deposit");
     const [activeTab, setActiveTab] = useState("weapons");
 
     useEffect(() => {
@@ -57,9 +60,8 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
         setSelectedGearIds([]);
         setSelectedDroneSetIds([]);
         setSignature("");
-        setDepositLocation("division_deposit");
     }, [items]);
-    
+
     const handleSelect = (id, type) => {
         const selectorMap = {
             weapon: [selectedWeaponIds, setSelectedWeaponIds],
@@ -81,12 +83,7 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
 
         const totalSelected = selectedWeaponIds.length + selectedGearIds.length + selectedDroneSetIds.length;
         if (totalSelected === 0) {
-            alert("Please select at least one item to deposit.");
-            return;
-        }
-
-        if (!depositLocation) {
-            alert("Please select a deposit location.");
+            alert("Please select at least one item to release.");
             return;
         }
 
@@ -95,7 +92,6 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
             gearIds: selectedGearIds,
             droneSetIds: selectedDroneSetIds,
             signature,
-            depositLocation,
         });
 
         // Clear state after submission
@@ -103,31 +99,30 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
         setSelectedGearIds([]);
         setSelectedDroneSetIds([]);
         setSignature("");
-        setDepositLocation("division_deposit");
     };
 
     if (isLoading) {
         return <p className="text-center py-8 text-slate-500">Loading items...</p>;
     }
-    
+
     const { weapons = [], gear = [], droneSets = [] } = items || {};
-    
+
     const allItemsEmpty = weapons.length === 0 && gear.length === 0 && droneSets.length === 0;
 
     return (
-        <Card className="border-amber-200">
+        <Card className="border-purple-200">
             <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-amber-900">
-                    <ArchiveRestore className="w-6 h-6"/>
+                <CardTitle className="flex items-center gap-3 text-purple-900">
+                    <PackageOpen className="w-6 h-6"/>
                     <div>
-                        Deposit Unassigned Equipment
-                        <p className="text-sm font-normal text-slate-600 mt-1">Select unassigned items to deposit into division or central armory.</p>
+                        Release Unassigned Equipment
+                        <p className="text-sm font-normal text-slate-600 mt-1">Select unassigned items in deposit to release back to general inventory.</p>
                     </div>
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
                 {allItemsEmpty ? (
-                     <p className="text-center py-8 text-slate-500">No unassigned items found to deposit.</p>
+                     <p className="text-center py-8 text-slate-500">No unassigned items found in deposit.</p>
                 ) : (
                     <>
                         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -143,46 +138,26 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
                                 </TabsTrigger>
                             </TabsList>
                             <TabsContent value="weapons" className="space-y-3 pt-4">
-                                {weapons.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned weapons to deposit.</p> :
+                                {weapons.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned weapons in deposit.</p> :
                                 weapons.map(w => <ItemRow key={w.id} item={w} isSelected={selectedWeaponIds.includes(w.id)} onSelect={() => handleSelect(w.id, 'weapon')} type="weapon" />)
                                 }
                             </TabsContent>
                              <TabsContent value="gear" className="space-y-3 pt-4">
-                                {gear.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned gear to deposit.</p> :
+                                {gear.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned gear in deposit.</p> :
                                 gear.map(g => <ItemRow key={g.id} item={g} isSelected={selectedGearIds.includes(g.id)} onSelect={() => handleSelect(g.id, 'gear')} type="gear" />)
                                 }
                             </TabsContent>
                              <TabsContent value="drones" className="space-y-3 pt-4">
-                                {droneSets.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned drone sets to deposit.</p> :
+                                {droneSets.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned drone sets in deposit.</p> :
                                 droneSets.map(ds => <ItemRow key={ds.id} item={ds} isSelected={selectedDroneSetIds.includes(ds.id)} onSelect={() => handleSelect(ds.id, 'droneSet')} type="droneSet" />)
                                 }
                             </TabsContent>
                         </Tabs>
 
                         <div className="space-y-4 pt-4 border-t">
-                            <div className="space-y-3">
-                                <Label className="text-base font-semibold">Deposit Location</Label>
-                                <RadioGroup value={depositLocation} onValueChange={setDepositLocation}>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="division_deposit" id="division" />
-                                        <Label htmlFor="division" className="font-normal cursor-pointer">
-                                            Division Deposit
-                                        </Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="central_armory" id="central" />
-                                        <Label htmlFor="central" className="font-normal cursor-pointer">
-                                            Central Armory Deposit
-                                        </Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t">
                             <h3 className="text-lg font-semibold">Signature Required</h3>
                             <p className="text-sm text-slate-600">
-                                Please sign to confirm the deposit of the selected equipment.
+                                Please sign to confirm the release of the selected equipment from deposit.
                             </p>
                             <SignatureCanvas onSignatureChange={setSignature} />
                         </div>
@@ -190,9 +165,9 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
                         <div className="flex justify-end gap-3">
                             <Button
                                 onClick={handleSubmit}
-                                className="bg-amber-600 hover:bg-amber-700"
+                                className="bg-purple-600 hover:bg-purple-700"
                             >
-                                Deposit Selected Items
+                                Release Selected Items
                             </Button>
                         </div>
                     </>

@@ -14,13 +14,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, Package, PackageOpen, User as UserIcon, ArchiveRestore } from "lucide-react";
 
 import DepositReleaseDialog from "../components/armory/DepositReleaseDialog";
-import UnassignedDepositTab from "../components/armory/UnassignedDepositTab"; // New component import
+import UnassignedDepositTab from "../components/armory/UnassignedDepositTab";
+import UnassignedReleaseTab from "../components/armory/UnassignedReleaseTab";
 
 export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
   const [soldiers, setSoldiers] = useState([]);
   const [weapons, setWeapons] = useState([]);
   const [gear, setGear] = useState([]);
   const [droneSets, setDroneSets] = useState([]);
+  const [unassignedToDeposit, setUnassignedToDeposit] = useState({ weapons: [], gear: [], droneSets: [] });
   const [unassignedInDeposit, setUnassignedInDeposit] = useState({ weapons: [], gear: [], droneSets: [] });
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("deposit");
@@ -51,29 +53,39 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       const userDivision = currentUserData?.department;
       
       const filter = isAdmin || !userDivision ? {} : { division_name: userDivision };
-      const unassignedFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
+      const unassignedToDepositFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };
+      const unassignedInDepositFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
 
       const [
         soldiersData, weaponsData, gearData, droneSetsData,
-        unassignedWeapons, unassignedGear, unassignedDrones
+        unassignedToDepositWeapons, unassignedToDepositGear, unassignedToDepositDrones,
+        unassignedInDepositWeapons, unassignedInDepositGear, unassignedInDepositDrones
       ] = await Promise.all([
         Soldier.filter(filter),
         Weapon.filter(filter),
         SerializedGear.filter(filter),
         DroneSet.filter(filter),
-        Weapon.filter(unassignedFilter),
-        SerializedGear.filter(unassignedFilter),
-        DroneSet.filter(unassignedFilter),
+        Weapon.filter(unassignedToDepositFilter),
+        SerializedGear.filter(unassignedToDepositFilter),
+        DroneSet.filter(unassignedToDepositFilter),
+        Weapon.filter(unassignedInDepositFilter),
+        SerializedGear.filter(unassignedInDepositFilter),
+        DroneSet.filter(unassignedInDepositFilter),
       ]);
 
       setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
       setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
       setGear(Array.isArray(gearData) ? gearData : []);
       setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
+      setUnassignedToDeposit({
+          weapons: Array.isArray(unassignedToDepositWeapons) ? unassignedToDepositWeapons : [],
+          gear: Array.isArray(unassignedToDepositGear) ? unassignedToDepositGear : [],
+          droneSets: Array.isArray(unassignedToDepositDrones) ? unassignedToDepositDrones : [],
+      });
       setUnassignedInDeposit({
-          weapons: Array.isArray(unassignedWeapons) ? unassignedWeapons : [],
-          gear: Array.isArray(unassignedGear) ? unassignedGear : [],
-          droneSets: Array.isArray(unassignedDrones) ? unassignedDrones : [],
+          weapons: Array.isArray(unassignedInDepositWeapons) ? unassignedInDepositWeapons : [],
+          gear: Array.isArray(unassignedInDepositGear) ? unassignedInDepositGear : [],
+          droneSets: Array.isArray(unassignedInDepositDrones) ? unassignedInDepositDrones : [],
       });
     } catch (error) {
       console.error("Error loading data:", error);
@@ -81,6 +93,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       setWeapons([]);
       setGear([]);
       setDroneSets([]);
+      setUnassignedToDeposit({ weapons: [], gear: [], droneSets: [] });
       setUnassignedInDeposit({ weapons: [], gear: [], droneSets: [] });
     }
     setIsLoading(false);
@@ -175,10 +188,10 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
     }
   };
 
-  const handleReleaseUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature }) => {
+  const handleDepositUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature, depositLocation }) => {
     try {
       const currentUser = await User.me();
-      const updatePayload = { armory_status: 'with_soldier', assigned_to: null }; // Ensure assigned_to remains null
+      const updatePayload = { armory_status: 'in_deposit', assigned_to: null, deposit_location: depositLocation };
 
       for (const weaponId of weaponIds) {
         await Weapon.update(weaponId, updatePayload);
@@ -189,16 +202,53 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       for (const droneSetId of droneSetIds) {
         await DroneSet.update(droneSetId, updatePayload);
       }
-      
+
       const actionItems = [];
       if (weaponIds.length > 0) actionItems.push(`${weaponIds.length} weapon(s)`);
       if (gearIds.length > 0) actionItems.push(`${gearIds.length} gear item(s)`);
       if (droneSetIds.length > 0) actionItems.push(`${droneSetIds.length} drone set(s)`);
-      
+
+      const locationText = depositLocation === 'division_deposit' ? 'Division Deposit' : 'Central Armory Deposit';
+
+      if (actionItems.length > 0) {
+          await ActivityLog.create({
+              activity_type: "DEPOSIT",
+              entity_type: "Armory",
+              details: `Deposited unassigned items to ${locationText}: ${actionItems.join(', ')}. Signature: ${signature}`,
+              user_full_name: currentUser?.full_name || 'System'
+          });
+      }
+
+      await loadData();
+    } catch (error) {
+        console.error("Error depositing unassigned items:", error);
+    }
+  };
+
+  const handleReleaseUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature }) => {
+    try {
+      const currentUser = await User.me();
+      const updatePayload = { armory_status: 'with_soldier', assigned_to: null, deposit_location: null };
+
+      for (const weaponId of weaponIds) {
+        await Weapon.update(weaponId, updatePayload);
+      }
+      for (const gearId of gearIds) {
+        await SerializedGear.update(gearId, updatePayload);
+      }
+      for (const droneSetId of droneSetIds) {
+        await DroneSet.update(droneSetId, updatePayload);
+      }
+
+      const actionItems = [];
+      if (weaponIds.length > 0) actionItems.push(`${weaponIds.length} weapon(s)`);
+      if (gearIds.length > 0) actionItems.push(`${gearIds.length} gear item(s)`);
+      if (droneSetIds.length > 0) actionItems.push(`${droneSetIds.length} drone set(s)`);
+
       if (actionItems.length > 0) {
           await ActivityLog.create({
               activity_type: "RELEASE",
-              entity_type: "Equipment", // Kept "Equipment" as this function was not part of the outlined change to "Armory"
+              entity_type: "Armory",
               details: `Released unassigned items from deposit: ${actionItems.join(', ')}. Signature: ${signature}`,
               user_full_name: currentUser?.full_name || 'System'
           });
@@ -277,7 +327,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="deposit" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700">
             <Package className="w-4 h-4 mr-2"/>
             Deposit into Armory
@@ -288,7 +338,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           </TabsTrigger>
           <TabsTrigger value="unassigned" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700">
             <ArchiveRestore className="w-4 h-4 mr-2"/>
-            Unassigned in Deposit
+            Deposit Unassigned
+          </TabsTrigger>
+          <TabsTrigger value="release-unassigned" className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700">
+            <PackageOpen className="w-4 h-4 mr-2"/>
+            Release Unassigned
           </TabsTrigger>
         </TabsList>
         <TabsContent value="deposit">
@@ -379,6 +433,14 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         </TabsContent>
         <TabsContent value="unassigned">
           <UnassignedDepositTab
+            items={unassignedToDeposit}
+            isLoading={isLoading}
+            onSubmit={handleDepositUnassigned}
+            onRefresh={loadData}
+          />
+        </TabsContent>
+        <TabsContent value="release-unassigned">
+          <UnassignedReleaseTab
             items={unassignedInDeposit}
             isLoading={isLoading}
             onSubmit={handleReleaseUnassigned}

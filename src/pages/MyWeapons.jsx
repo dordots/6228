@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Weapon } from "@/api/entities";
+import { Weapon, Soldier } from "@/api/entities";
 import { User } from "@/api/entities";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,14 +21,37 @@ export default function MyWeaponsPage() {
       const user = await User.me();
       setCurrentUser(user);
 
-      if (user.custom_role !== 'soldier' || !user.linked_soldier_id) {
+      if (user.custom_role !== 'soldier') {
+        setWeapons([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Find soldier by matching email or phone
+      let soldierId = null;
+
+      if (user.email) {
+        const soldiersByEmail = await Soldier.filter({ email: user.email });
+        if (soldiersByEmail && soldiersByEmail.length > 0) {
+          soldierId = soldiersByEmail[0].soldier_id;
+        }
+      }
+
+      if (!soldierId && user.phoneNumber) {
+        const soldiersByPhone = await Soldier.filter({ phone_number: user.phoneNumber });
+        if (soldiersByPhone && soldiersByPhone.length > 0) {
+          soldierId = soldiersByPhone[0].soldier_id;
+        }
+      }
+
+      if (!soldierId) {
         setWeapons([]);
         setIsLoading(false);
         return;
       }
 
       // Load weapons assigned to this soldier
-      const myWeapons = await Weapon.filter({ assigned_to: user.linked_soldier_id });
+      const myWeapons = await Weapon.filter({ assigned_to: soldierId });
       setWeapons(Array.isArray(myWeapons) ? myWeapons : []);
 
     } catch (error) {
@@ -46,7 +69,7 @@ export default function MyWeaponsPage() {
     );
   }
 
-  if (currentUser?.custom_role !== 'soldier' || !currentUser?.linked_soldier_id) {
+  if (currentUser?.custom_role !== 'soldier') {
     return (
       <div className="p-6">
         <Alert>

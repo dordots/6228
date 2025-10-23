@@ -10,7 +10,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Users, Shield, Mail, Calendar, Search, UserPlus, Settings, Edit, ArrowLeft, Building, UsersIcon } from "lucide-react";
+import { Users, Shield, Mail, Calendar, Search, UserPlus, Settings, Building, UsersIcon } from "lucide-react";
 import { format } from "date-fns";
 
 // Define roles with their display properties
@@ -39,16 +39,13 @@ const ROLES = {
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
-  const [divisions, setDivisions] = useState([]);
-  const [teams, setTeams] = useState([]);
   const [soldiers, setSoldiers] = useState([]);
+  const [soldierMap, setSoldierMap] = useState({}); // Map of soldier_id to soldier data
   const [currentUser, setCurrentUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [editingUser, setEditingUser] = useState(null);
-  const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
   const [newUserData, setNewUserData] = useState({
     phoneNumber: "",
@@ -83,25 +80,29 @@ export default function UserManagement() {
       setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
 
       if (Array.isArray(soldiersData)) {
-        // Extract unique divisions
-        const uniqueDivisions = [...new Set(soldiersData.map(s => s.division_name).filter(Boolean))];
-        setDivisions(uniqueDivisions.sort());
-
-        // Extract unique teams
-        const uniqueTeams = [...new Set(soldiersData.map(s => s.team_name).filter(Boolean))];
-        setTeams(uniqueTeams.sort());
+        // Create a map for quick lookup by email and phone
+        const soldierLookup = {};
+        soldiersData.forEach(soldier => {
+          // Map by email (lowercase for case-insensitive matching)
+          if (soldier.email) {
+            soldierLookup[soldier.email.toLowerCase()] = soldier;
+          }
+          // Map by phone number
+          if (soldier.phone_number) {
+            soldierLookup[soldier.phone_number] = soldier;
+          }
+        });
+        setSoldierMap(soldierLookup);
       } else {
-        setDivisions([]);
-        setTeams([]);
+        setSoldierMap({});
       }
 
     } catch (error) {
       console.error("Error loading data:", error);
-      setError("Failed to load users or divisions");
+      setError("Failed to load users or soldiers");
       setUsers([]);
       setSoldiers([]);
-      setDivisions([]);
-      setTeams([]);
+      setSoldierMap({});
     }
     setIsLoading(false);
   };
@@ -121,27 +122,6 @@ export default function UserManagement() {
     }
   };
 
-  const handleAssignmentUpdate = async (userId, division, team) => {
-    try {
-      await User.update(userId, {
-        permissions: {
-          division: division || null,
-          team: team || null
-        }
-      });
-      setShowAssignmentDialog(false);
-      setEditingUser(null);
-      await loadData();
-    } catch (error) {
-      console.error("Error updating user assignment:", error);
-      setError("Failed to update user assignment");
-    }
-  };
-
-  const openAssignmentDialog = (user) => {
-    setEditingUser(user);
-    setShowAssignmentDialog(true);
-  };
 
   const handleCreateUser = async () => {
     setError("");
@@ -153,12 +133,33 @@ export default function UserManagement() {
     }
 
     try {
+      const linkedSoldierId = (newUserData.linkedSoldierId && newUserData.linkedSoldierId !== "none") ? newUserData.linkedSoldierId : null;
+
+      // Find matching soldier by phone or email to get division/team
+      let division = null;
+      let team = null;
+
+      // Try to find soldier by phone number
+      let matchingSoldier = soldierMap[newUserData.phoneNumber];
+
+      // If not found by phone, try by email (if provided)
+      if (!matchingSoldier && newUserData.email) {
+        matchingSoldier = soldierMap[newUserData.email.toLowerCase()];
+      }
+
+      if (matchingSoldier) {
+        division = matchingSoldier.division_name || null;
+        team = matchingSoldier.team_name || null;
+      }
+
       await User.create({
         phoneNumber: newUserData.phoneNumber,
         role: newUserData.role,
         customRole: newUserData.role,
-        linkedSoldierId: (newUserData.linkedSoldierId && newUserData.linkedSoldierId !== "none") ? newUserData.linkedSoldierId : null,
-        displayName: newUserData.displayName || null
+        linkedSoldierId: linkedSoldierId,
+        displayName: newUserData.displayName || null,
+        division: division,
+        team: team
       });
 
       setSuccess("User created successfully!");
@@ -195,8 +196,39 @@ export default function UserManagement() {
     const role = getUserRole(user);
     const roleConfig = ROLES[role];
     if (!roleConfig) return <Badge>Unknown Role</Badge>;
-    
+
     return <Badge className={roleConfig.badge}>{roleConfig.label}</Badge>;
+  };
+
+  // Find soldier matching user by email or phone
+  const findMatchingSoldier = (user) => {
+    if (!user) return null;
+
+    // Try to match by email first (case-insensitive)
+    if (user.email) {
+      const soldier = soldierMap[user.email.toLowerCase()];
+      if (soldier) return soldier;
+    }
+
+    // Try to match by phone number
+    if (user.phoneNumber) {
+      const soldier = soldierMap[user.phoneNumber];
+      if (soldier) return soldier;
+    }
+
+    return null;
+  };
+
+  // Get division from matching soldier
+  const getUserDivision = (user) => {
+    const soldier = findMatchingSoldier(user);
+    return soldier?.division_name || null;
+  };
+
+  // Get team from matching soldier
+  const getUserTeam = (user) => {
+    const soldier = findMatchingSoldier(user);
+    return soldier?.team_name || null;
   };
 
   const isCurrentUserAdmin = currentUser?.role === 'admin';
@@ -348,30 +380,6 @@ export default function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Assignment Dialog */}
-      <Dialog open={showAssignmentDialog} onOpenChange={setShowAssignmentDialog}>
-        <DialogContent className="w-full max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Update Assignment - {editingUser?.full_name}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {editingUser && (
-              <UserAssignmentForm
-                user={editingUser}
-                divisions={divisions}
-                teams={teams}
-                onSave={handleAssignmentUpdate}
-                onCancel={() => setShowAssignmentDialog(false)}
-                canAssignDivision={isCurrentUserAdmin}
-                currentUserDivision={currentUser?.division}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Role Information */}
       <Card className="border-slate-200 shadow-sm">
         <CardHeader className="border-b border-slate-200">
@@ -476,20 +484,20 @@ export default function UserManagement() {
                           {getRoleBadge(user)}
                         </TableCell>
                         <TableCell>
-                          {user.division ? (
+                          {getUserDivision(user) ? (
                             <Badge variant="outline" className="flex items-center gap-1">
                               <Building className="w-3 h-3" />
-                              {user.division}
+                              {getUserDivision(user)}
                             </Badge>
                           ) : (
                             <span className="text-slate-400">Not assigned</span>
                           )}
                         </TableCell>
                         <TableCell>
-                          {user.team ? (
+                          {getUserTeam(user) ? (
                             <Badge variant="outline" className="flex items-center gap-1">
                               <UsersIcon className="w-3 h-3" />
-                              {user.team}
+                              {getUserTeam(user)}
                             </Badge>
                           ) : (
                             <span className="text-slate-400">-</span>
@@ -504,38 +512,28 @@ export default function UserManagement() {
                         <TableCell>
                           <div className="flex gap-2">
                             {canEditUser && user.id !== currentUser?.id ? (
-                              <>
-                                <Select
-                                  value={role}
-                                  onValueChange={(newRole) => handleRoleUpdate(
-                                    user.id, 
-                                    newRole,
-                                    user.division,
-                                    user.team
+                              <Select
+                                value={role}
+                                onValueChange={(newRole) => handleRoleUpdate(
+                                  user.id,
+                                  newRole,
+                                  getUserDivision(user),
+                                  getUserTeam(user)
+                                )}
+                                disabled={!isCurrentUserAdmin}
+                              >
+                                <SelectTrigger className="w-32">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="soldier">Soldier</SelectItem>
+                                  <SelectItem value="team_leader">Team Leader</SelectItem>
+                                  <SelectItem value="division_manager">Division Manager</SelectItem>
+                                  {isCurrentUserAdmin && (
+                                    <SelectItem value="admin">Admin</SelectItem>
                                   )}
-                                  disabled={!isCurrentUserAdmin}
-                                >
-                                  <SelectTrigger className="w-32">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="soldier">Soldier</SelectItem>
-                                    <SelectItem value="team_leader">Team Leader</SelectItem>
-                                    <SelectItem value="division_manager">Division Manager</SelectItem>
-                                    {isCurrentUserAdmin && (
-                                      <SelectItem value="admin">Admin</SelectItem>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => openAssignmentDialog(user)}
-                                >
-                                  <Edit className="w-4 h-4 mr-1" />
-                                  Assign
-                                </Button>
-                              </>
+                                </SelectContent>
+                              </Select>
                             ) : (
                               <span className="text-sm text-slate-500">
                                 {user.id === currentUser?.id ? 'Current user' : 'No permission'}
@@ -552,80 +550,6 @@ export default function UserManagement() {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function UserAssignmentForm({ user, divisions, teams, onSave, onCancel, canAssignDivision, currentUserDivision }) {
-  const [division, setDivision] = useState(user?.division || 'none');
-  const [team, setTeam] = useState(user?.team || 'none');
-  
-  // Filter divisions based on user's permission
-  const availableDivisions = canAssignDivision ? divisions : [currentUserDivision].filter(Boolean);
-  
-  // Filter teams based on selected division
-  const availableTeams = teams; // In a real app, you'd filter by division
-
-  const handleSave = () => {
-    // Convert 'none' back to null when saving
-    onSave(
-      user.id, 
-      division === 'none' ? null : division, 
-      team === 'none' ? null : team
-    );
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="division">Division</Label>
-        <Select
-          value={division}
-          onValueChange={setDivision}
-          disabled={!canAssignDivision && division !== currentUserDivision}
-        >
-          <SelectTrigger id="division">
-            <SelectValue placeholder="Select a division" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No Division</SelectItem>
-            {availableDivisions.map((div) => (
-              <SelectItem key={div} value={div}>
-                {div}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="team">Team</Label>
-        <Select
-          value={team}
-          onValueChange={setTeam}
-        >
-          <SelectTrigger id="team">
-            <SelectValue placeholder="Select a team" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No Team</SelectItem>
-            {availableTeams.map((tm) => (
-              <SelectItem key={tm} value={tm}>
-                {tm}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
-          Save Assignment
-        </Button>
-      </div>
     </div>
   );
 }

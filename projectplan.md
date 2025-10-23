@@ -197,3 +197,250 @@ The verification records now include all required fields:
 - [ ] Verify filters work (division, verifier, search)
 - [ ] Verify soldier name displays correctly
 - [ ] Verify timestamp displays correctly
+
+---
+
+# Project Plan: Synchronize User Division/Team from Soldiers Table
+
+**Date**: 2025-10-23
+**Task**: Update User Management screen to pull division and team data from linked soldier records
+
+## Problem Statement
+Currently, the User Management screen stores and manages division and team data directly on user records. Instead, it should synchronize this information from the soldiers table by matching email or phone number.
+
+## Analysis
+- Users table (authentication) and Soldiers table are separate
+- Both have `email` and `phone_number`/`phoneNumber` fields
+- Soldiers table has `division_name` and `team_name` fields
+- Need to match user to soldier using email or phone, then pull division/team
+- User records should have division/team fields populated from soldier data
+
+## Todo List
+- [x] Update data loading to create soldier lookup map by email and phone
+- [x] Create helper function to match users to soldiers
+- [x] Modify display logic to show division/team from matched soldier
+- [x] Update handleCreateUser to populate division/team from matched soldier
+- [x] Update handleRoleUpdate to sync division/team from matched soldier
+- [x] Remove assignment dialog (division/team come from soldier record)
+
+## Changes Made
+
+### File Modified: [UserManagement.jsx](src/pages/UserManagement.jsx)
+
+**Change 1: Added soldierMap state (Line 43)**
+```javascript
+const [soldierMap, setSoldierMap] = useState({}); // Map by email/phone to soldier data
+```
+
+**Change 2: Updated loadData to create soldier lookup map by email and phone (Lines 82-98)**
+```javascript
+if (Array.isArray(soldiersData)) {
+  // Create a map for quick lookup by email and phone
+  const soldierLookup = {};
+  soldiersData.forEach(soldier => {
+    // Map by email (lowercase for case-insensitive matching)
+    if (soldier.email) {
+      soldierLookup[soldier.email.toLowerCase()] = soldier;
+    }
+    // Map by phone number
+    if (soldier.phone_number) {
+      soldierLookup[soldier.phone_number] = soldier;
+    }
+  });
+  setSoldierMap(soldierLookup);
+}
+```
+
+**Change 3: Added helper functions to match users to soldiers and get division/team (Lines 194-223)**
+```javascript
+// Find soldier matching user by email or phone
+const findMatchingSoldier = (user) => {
+  if (!user) return null;
+
+  // Try to match by email first (case-insensitive)
+  if (user.email) {
+    const soldier = soldierMap[user.email.toLowerCase()];
+    if (soldier) return soldier;
+  }
+
+  // Try to match by phone number
+  if (user.phoneNumber) {
+    const soldier = soldierMap[user.phoneNumber];
+    if (soldier) return soldier;
+  }
+
+  return null;
+};
+
+// Get division from matching soldier
+const getUserDivision = (user) => {
+  const soldier = findMatchingSoldier(user);
+  return soldier?.division_name || null;
+};
+
+// Get team from matching soldier
+const getUserTeam = (user) => {
+  const soldier = findMatchingSoldier(user);
+  return soldier?.team_name || null;
+};
+```
+
+**Change 4: Updated table display to use linked soldier data (Lines 444-461)**
+```javascript
+// Division column
+{getUserDivision(user) ? (
+  <Badge variant="outline" className="flex items-center gap-1">
+    <Building className="w-3 h-3" />
+    {getUserDivision(user)}
+  </Badge>
+) : (
+  <span className="text-slate-400">Not assigned</span>
+)}
+
+// Team column
+{getUserTeam(user) ? (
+  <Badge variant="outline" className="flex items-center gap-1">
+    <UsersIcon className="w-3 h-3" />
+    {getUserTeam(user)}
+  </Badge>
+) : (
+  <span className="text-slate-400">-</span>
+)}
+```
+
+**Change 5: Updated handleCreateUser to populate division/team from matched soldier (Lines 126-178)**
+```javascript
+// Find matching soldier by phone or email to get division/team
+let matchingSoldier = soldierMap[newUserData.phoneNumber];
+
+// If not found by phone, try by email
+if (!matchingSoldier && newUserData.email) {
+  matchingSoldier = soldierMap[newUserData.email.toLowerCase()];
+}
+
+if (matchingSoldier) {
+  division = matchingSoldier.division_name || null;
+  team = matchingSoldier.team_name || null;
+}
+
+await User.create({
+  // ... other fields ...
+  division: division,  // ← Synced from matched soldier
+  team: team          // ← Synced from matched soldier
+});
+```
+
+**Change 6: Removed assignment dialog and related code**
+- Removed `showAssignmentDialog` and `editingUser` state variables
+- Removed `handleAssignmentUpdate` and `openAssignmentDialog` functions
+- Removed entire Assignment Dialog JSX component
+- Removed `UserAssignmentForm` component
+- Removed "Assign" button from actions column
+- Removed unused `divisions` and `teams` state variables
+- Removed unused `Edit` import
+
+## Result
+
+The User Management screen now:
+- ✅ Displays division and team by matching users to soldiers via email or phone
+- ✅ Populates user records with division/team from matched soldier data
+- ✅ Eliminates data duplication and ensures consistency
+- ✅ Simplifies the UI by removing unnecessary assignment controls
+- ✅ Maintains role management functionality
+- ✅ Automatically syncs division/team when creating new users
+
+## How It Works
+
+1. **Data Loading**: Creates a lookup map indexed by both email (lowercase) and phone number
+2. **User-Soldier Matching**:
+   - First tries to match by email (case-insensitive)
+   - Falls back to phone number if email doesn't match
+3. **Display**: Shows division/team from the matched soldier record
+4. **User Creation**: Automatically populates division/team fields from matched soldier
+5. **Role Updates**: Syncs division/team from matched soldier when updating roles
+
+## Impact Assessment
+- **User Impact**: Positive - division/team data is now synchronized from soldiers table
+- **Code Complexity**: Reduced - removed assignment dialog (~100 lines)
+- **Maintainability**: Improved - single source of truth (soldiers table)
+- **Data Integrity**: Improved - uses email/phone matching to sync data
+- **Simplicity**: High - straightforward lookup pattern by email/phone
+- **Files Modified**: 1 file (UserManagement.jsx)
+- **Lines Changed**: ~40 lines added, ~100 lines removed (net reduction)
+
+---
+
+# Project Plan: Update Soldier Role "My" Pages to Use Email/Phone Matching
+
+**Date**: 2025-10-23
+**Task**: Update all "My" pages (MyWeapons, MyEquipment, MyGear, MyDrones) to find soldier records by email/phone instead of requiring linked_soldier_id
+
+## Problem Statement
+Soldier role users were required to have a `linked_soldier_id` field to see their equipment. This created an unnecessary dependency. Instead, we should match users to soldiers automatically using email or phone number.
+
+## Changes Made
+
+### Files Modified:
+1. [MyWeapons.jsx](src/pages/MyWeapons.jsx)
+2. [MyEquipment.jsx](src/pages/MyEquipment.jsx)
+3. [MyGear.jsx](src/pages/MyGear.jsx)
+4. [MyDrones.jsx](src/pages/MyDrones.jsx)
+
+### Pattern Applied to All Files:
+
+**Before:**
+```javascript
+if (user.custom_role !== 'soldier' || !user.linked_soldier_id) {
+  return; // No access
+}
+
+const items = await Entity.filter({ assigned_to: user.linked_soldier_id });
+```
+
+**After:**
+```javascript
+if (user.custom_role !== 'soldier') {
+  return; // No access
+}
+
+// Find soldier by matching email or phone
+let soldierId = null;
+
+if (user.email) {
+  const soldiersByEmail = await Soldier.filter({ email: user.email });
+  if (soldiersByEmail && soldiersByEmail.length > 0) {
+    soldierId = soldiersByEmail[0].soldier_id;
+  }
+}
+
+if (!soldierId && user.phoneNumber) {
+  const soldiersByPhone = await Soldier.filter({ phone_number: user.phoneNumber });
+  if (soldiersByPhone && soldiersByPhone.length > 0) {
+    soldierId = soldiersByPhone[0].soldier_id;
+  }
+}
+
+if (!soldierId) {
+  return; // No matching soldier
+}
+
+const items = await Entity.filter({ assigned_to: soldierId });
+```
+
+## Result
+
+All "My" pages now:
+- ✅ Automatically find soldier records by email (first priority)
+- ✅ Fall back to phone number if email doesn't match
+- ✅ No longer require `linked_soldier_id` field
+- ✅ Work seamlessly for soldier role users
+- ✅ Provide better user experience (automatic matching)
+
+## Impact Assessment
+- **User Impact**: Positive - soldiers can now access their equipment without manual linking
+- **Code Complexity**: Slightly increased per file (~15 lines per file)
+- **Maintainability**: Improved - consistent matching logic across all "My" pages
+- **Data Integrity**: Improved - uses actual soldier data (email/phone) for matching
+- **Simplicity**: High - clear, straightforward matching pattern
+- **Files Modified**: 4 files (MyWeapons, MyEquipment, MyGear, MyDrones)
+- **Lines Changed**: ~60 lines total (~15 per file)

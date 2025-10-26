@@ -5,44 +5,88 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
-      return isAuthenticated() && 
+      return isAuthenticated() &&
         request.auth.uid == userId;
     }
-    
+
+    // Get user data from Firestore users collection
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Check if user document exists in Firestore
+    function hasUserDocument() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Check if user is admin (checks both custom claims and Firestore)
     function isAdmin() {
-      return isAuthenticated() && 
-        request.auth.token.role == 'admin';
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        (hasUserDocument() && getUserData().role == 'admin')
+      );
     }
-    
+
+    // Check if user has a specific permission (checks both custom claims and Firestore)
     function hasPermission(permission) {
-      return isAuthenticated() && 
-        (isAdmin() || 
-         request.auth.token.permissions[permission] == true);
+      return isAuthenticated() && (
+        isAdmin() ||
+        request.auth.token.permissions[permission] == true ||
+        (hasUserDocument() && getUserData().permissions[permission] == true)
+      );
     }
     
-    function isLinkedToSoldier(soldierId) {
-      return isAuthenticated() && 
-        request.auth.token.linked_soldier_id == soldierId;
+    // Get user scope (checks both custom claims and Firestore)
+    function getUserScope() {
+      return request.auth.token.scope != null
+        ? request.auth.token.scope
+        : (hasUserDocument() ? getUserData().scope : 'self');
     }
-    
+
+    // Get user division (checks both custom claims and Firestore)
+    function getUserDivision() {
+      return request.auth.token.division != null
+        ? request.auth.token.division
+        : (hasUserDocument() ? getUserData().division : null);
+    }
+
+    // Get user team (checks both custom claims and Firestore)
+    function getUserTeam() {
+      return request.auth.token.team != null
+        ? request.auth.token.team
+        : (hasUserDocument() ? getUserData().team : null);
+    }
+
+    // Check if user is linked to a specific soldier (by soldier's id field matching user UID)
+    function isUserLinkedToResource(resourceData) {
+      return isAuthenticated() && (
+        // Check if resource's soldier has id field matching user UID
+        ('id' in resourceData && resourceData.id == request.auth.uid) ||
+        // Check if equipment is assigned to a soldier whose id matches user UID
+        ('assigned_to' in resourceData && resourceData.assigned_to == request.auth.uid) ||
+        // Backward compatibility: check linked_soldier_id
+        ('soldier_id' in resourceData && request.auth.token.linked_soldier_id == resourceData.soldier_id) ||
+        ('assigned_to' in resourceData && request.auth.token.linked_soldier_id == resourceData.assigned_to)
+      );
+    }
+
     // Scope-based access control
     function canAccessByScope(resourceData) {
       return isAuthenticated() && (
         isAdmin() ||
-        (request.auth.token.scope == 'global') ||
-        (request.auth.token.scope == 'division' && (
-          request.auth.token.division == resourceData.division_name || 
-          request.auth.token.division == resourceData.division)) ||
-        (request.auth.token.scope == 'team' && (
-          (request.auth.token.division == resourceData.division_name && 
-           request.auth.token.team == resourceData.team_name) ||
-          (request.auth.token.division == resourceData.division && 
-           request.auth.token.team == resourceData.team))) ||
-        (request.auth.token.scope == 'self' && (
-          isLinkedToSoldier(resourceData.soldier_id) ||
-          isLinkedToSoldier(resourceData.assigned_to) ||
+        (getUserScope() == 'global') ||
+        (getUserScope() == 'division' && (
+          getUserDivision() == resourceData.division_name ||
+          getUserDivision() == resourceData.division)) ||
+        (getUserScope() == 'team' && (
+          (getUserDivision() == resourceData.division_name &&
+           getUserTeam() == resourceData.team_name) ||
+          (getUserDivision() == resourceData.division &&
+           getUserTeam() == resourceData.team))) ||
+        (getUserScope() == 'self' && (
+          isUserLinkedToResource(resourceData) ||
           isOwner(resourceData.created_by)))
       );
     }

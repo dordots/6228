@@ -1,12 +1,67 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
+// Helper function to check if user is admin (checks both custom claims and Firestore)
+async function isUserAdmin(context) {
+  if (!context.auth) return false;
+
+  // Check custom claims first (fast)
+  if (context.auth.token.role === 'admin') {
+    return true;
+  }
+
+  // Check Firestore users collection as fallback
+  try {
+    const db = admin.firestore();
+    const userDoc = await db.collection('users').doc(context.auth.uid).get();
+
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      return userData.role === 'admin';
+    }
+  } catch (error) {
+    console.error('Error checking admin status from Firestore:', error);
+  }
+
+  return false;
+}
+
+// Helper function to check if user has a specific permission
+async function hasUserPermission(context, permission) {
+  if (!context.auth) return false;
+
+  // Check if admin first
+  if (await isUserAdmin(context)) {
+    return true;
+  }
+
+  // Check custom claims
+  if (context.auth.token.permissions?.[permission] === true) {
+    return true;
+  }
+
+  // Check Firestore users collection
+  try {
+    const db = admin.firestore();
+    const userDoc = await db.collection('users').doc(context.auth.uid).get();
+
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      return userData.permissions?.[permission] === true;
+    }
+  } catch (error) {
+    console.error('Error checking permission from Firestore:', error);
+  }
+
+  return false;
+}
+
 // Create a new user with phone number and assign role/permissions
 exports.createPhoneUser = functions
   .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
   .https.onCall(async (data, context) => {
     // Check if caller is admin
-    if (!context.auth || context.auth.token.role !== 'admin') {
+    if (!(await isUserAdmin(context))) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'Only admins can create users'
@@ -88,9 +143,27 @@ exports.listUsers = functions
       );
     }
 
-    const isAdmin = context.auth.token.role === 'admin';
-    const canManageUsers = context.auth.token.permissions?.['system.users'];
-    const isDivisionManager = context.auth.token.custom_role === 'division_manager';
+    // Check custom claims first (fast)
+    let isAdmin = context.auth.token.role === 'admin';
+    let canManageUsers = context.auth.token.permissions?.['system.users'];
+    let isDivisionManager = context.auth.token.custom_role === 'division_manager';
+
+    // If not authorized via custom claims, check Firestore users collection
+    if (!isAdmin && !canManageUsers && !isDivisionManager) {
+      try {
+        const db = admin.firestore();
+        const userDoc = await db.collection('users').doc(context.auth.uid).get();
+
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          isAdmin = userData.role === 'admin';
+          canManageUsers = userData.permissions?.['system.users'] === true;
+          isDivisionManager = userData.custom_role === 'division_manager';
+        }
+      } catch (error) {
+        console.error('Error reading user permissions from Firestore:', error);
+      }
+    }
 
     if (!isAdmin && !canManageUsers && !isDivisionManager) {
       throw new functions.https.HttpsError(
@@ -150,7 +223,7 @@ exports.updateUserRole = functions
   .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
   .https.onCall(async (data, context) => {
     // Check if caller is admin
-    if (!context.auth || context.auth.token.role !== 'admin') {
+    if (!(await isUserAdmin(context))) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'Only admins can update user roles'
@@ -214,9 +287,23 @@ exports.updateUserPermissions = functions
   .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
   .https.onCall(async (data, context) => {
     // Check if caller is admin or division manager
-    if (!context.auth || 
-        (context.auth.token.role !== 'admin' && 
-         context.auth.token.custom_role !== 'division_manager')) {
+    const isAdmin = await isUserAdmin(context);
+    let isDivisionManager = context.auth?.token?.custom_role === 'division_manager';
+
+    // Check Firestore if not in custom claims
+    if (!isDivisionManager && context.auth) {
+      try {
+        const db = admin.firestore();
+        const userDoc = await db.collection('users').doc(context.auth.uid).get();
+        if (userDoc.exists) {
+          isDivisionManager = userDoc.data().custom_role === 'division_manager';
+        }
+      } catch (error) {
+        console.error('Error checking division manager status:', error);
+      }
+    }
+
+    if (!isAdmin && !isDivisionManager) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'Only admins and division managers can update user assignments'
@@ -274,7 +361,7 @@ exports.deleteUser = functions
   .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
   .https.onCall(async (data, context) => {
     // Check if caller is admin
-    if (!context.auth || context.auth.token.role !== 'admin') {
+    if (!(await isUserAdmin(context))) {
       throw new functions.https.HttpsError(
         'permission-denied',
         'Only admins can delete users'
@@ -327,8 +414,8 @@ exports.getUserByPhone = functions
       );
     }
 
-    const isAdmin = context.auth.token.role === 'admin';
-    const canManageUsers = context.auth.token.permissions?.can_manage_users;
+    const isAdmin = await isUserAdmin(context);
+    const canManageUsers = await hasUserPermission(context, 'system.users');
 
     if (!isAdmin && !canManageUsers) {
       throw new functions.https.HttpsError(
@@ -395,7 +482,7 @@ exports.setAdminByPhone = functions
       
       const hasAdmin = adminCheck.exists && adminCheck.data().hasAdmin;
       
-      if (hasAdmin && (!context.auth || context.auth.token.role !== 'admin')) {
+      if (hasAdmin && !(await isUserAdmin(context))) {
         throw new functions.https.HttpsError(
           'permission-denied',
           'Admin already exists. Only admins can create new admins.'

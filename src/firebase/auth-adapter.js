@@ -1,4 +1,4 @@
-import { 
+import {
   signInWithEmailAndPassword,
   signInWithPhoneNumber,
   createUserWithEmailAndPassword,
@@ -10,7 +10,8 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from './config';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, functions, db } from './config';
 
 // Auth state management
 let currentUser = null;
@@ -117,29 +118,43 @@ export const User = {
         // Get custom claims (force refresh to get latest claims from server)
         const idTokenResult = await user.getIdTokenResult(forceRefresh);
         const claims = idTokenResult.claims;
-        
-        // Return user object with custom fields
+
+        // Fetch user data from Firestore users collection
+        let firestoreUserData = null;
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            firestoreUserData = userDocSnap.data();
+          }
+        } catch (error) {
+          console.warn('Error fetching user data from Firestore:', error);
+        }
+
+        // Prioritize Firestore data over custom claims for permissions
+        // But keep custom claims as fallback
         return {
           id: user.uid,
           uid: user.uid,
           email: user.email,
           phone: user.phoneNumber,
           displayName: user.displayName,
-          // Add custom claims
-          totp_enabled: claims.totp_enabled || false,
-          role: claims.role,
-          custom_role: claims.custom_role,
-          permissions: claims.permissions,
-          scope: claims.scope,
-          division: claims.division,
-          team: claims.team,
-          linked_soldier_id: claims.linked_soldier_id,
+          // Use Firestore data if available, otherwise fall back to custom claims
+          totp_enabled: firestoreUserData?.totp_enabled ?? claims.totp_enabled ?? false,
+          role: firestoreUserData?.role ?? claims.role,
+          custom_role: firestoreUserData?.custom_role ?? claims.custom_role,
+          permissions: firestoreUserData?.permissions ?? claims.permissions,
+          scope: firestoreUserData?.scope ?? claims.scope,
+          division: firestoreUserData?.division ?? claims.division,
+          team: firestoreUserData?.team ?? claims.team,
+          linked_soldier_id: firestoreUserData?.linked_soldier_id ?? claims.linked_soldier_id,
           // Add other user properties
           emailVerified: user.emailVerified,
           metadata: user.metadata
         };
       };
-      
+
       if (currentUser) {
         const fullUser = await getFullUser(currentUser);
         resolve(fullUser);

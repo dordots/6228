@@ -219,25 +219,21 @@ export default function Layout({ children, currentPageName }) {
         const user = await UserEntity.me();
         setCurrentUser(user);
 
-        // Check if user has linked soldier
-        if (user.linked_soldier_id) {
-          try {
-            const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
-            const soldier = soldiers[0];
-            
-            // Validate soldier object before setting
-            if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
-              setLinkedSoldier(soldier);
-            } else {
-              console.warn("Invalid soldier object received:", soldier);
-              setLinkedSoldier(null);
-            }
-          } catch (error) {
-            console.error("Error loading linked soldier:", error);
-            setLinkedSoldier(null); // Ensure it's null on error
+        // Check if user has linked soldier by matching user UID to soldier's id field
+        try {
+          const soldiers = await Soldier.filter({ id: user.uid });
+          const soldier = soldiers[0];
+
+          // Validate soldier object before setting
+          if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
+            setLinkedSoldier(soldier);
+          } else {
+            // No soldier linked to this user UID
+            setLinkedSoldier(null);
           }
-        } else {
-            setLinkedSoldier(null); // No linked soldier ID
+        } catch (error) {
+          console.error("Error loading linked soldier:", error);
+          setLinkedSoldier(null); // Ensure it's null on error
         }
 
         if (user.totp_enabled) {

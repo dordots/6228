@@ -370,6 +370,305 @@ The User Management screen now:
 
 ---
 
+# Project Plan: Modify Auth System to Read Permissions from Firestore Users Collection
+
+**Date**: 2025-10-26
+**Task**: Change authentication to read user permissions from Firestore `users` collection instead of relying only on custom claims
+
+## Problem Statement
+The app was only reading permissions from Firebase Authentication custom claims (JWT tokens). If an admin user didn't have custom claims set, they would see no navigation items and have no access to any features, even if they had a document in the Firestore `users` collection with admin permissions.
+
+## Solution
+Modify the `User.me()` function to:
+1. Fetch user data from Firestore `users/{uid}` collection after authentication
+2. Prioritize Firestore permissions over custom claims
+3. Fall back to custom claims if Firestore document doesn't exist
+4. Allow admin users to work even without linked soldiers
+
+## Changes Made
+
+### File Modified: [auth-adapter.js](src/firebase/auth-adapter.js)
+
+**Change 1: Added Firestore imports (Lines 1-14)**
+```javascript
+// Added:
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, functions, db } from './config';
+```
+
+**Change 2: Updated User.me() to fetch from Firestore (Lines 112-169)**
+
+**Before:**
+```javascript
+// Get custom claims (force refresh to get latest claims from server)
+const idTokenResult = await user.getIdTokenResult(forceRefresh);
+const claims = idTokenResult.claims;
+
+// Return user object with custom fields
+return {
+  id: user.uid,
+  uid: user.uid,
+  email: user.email,
+  phone: user.phoneNumber,
+  displayName: user.displayName,
+  // Add custom claims
+  totp_enabled: claims.totp_enabled || false,
+  role: claims.role,
+  custom_role: claims.custom_role,
+  permissions: claims.permissions,
+  scope: claims.scope,
+  division: claims.division,
+  team: claims.team,
+  linked_soldier_id: claims.linked_soldier_id,
+  // Add other user properties
+  emailVerified: user.emailVerified,
+  metadata: user.metadata
+};
+```
+
+**After:**
+```javascript
+// Get custom claims (force refresh to get latest claims from server)
+const idTokenResult = await user.getIdTokenResult(forceRefresh);
+const claims = idTokenResult.claims;
+
+// Fetch user data from Firestore users collection
+let firestoreUserData = null;
+try {
+  const userDocRef = doc(db, 'users', user.uid);
+  const userDocSnap = await getDoc(userDocRef);
+
+  if (userDocSnap.exists()) {
+    firestoreUserData = userDocSnap.data();
+  }
+} catch (error) {
+  console.warn('Error fetching user data from Firestore:', error);
+}
+
+// Prioritize Firestore data over custom claims for permissions
+// But keep custom claims as fallback
+return {
+  id: user.uid,
+  uid: user.uid,
+  email: user.email,
+  phone: user.phoneNumber,
+  displayName: user.displayName,
+  // Use Firestore data if available, otherwise fall back to custom claims
+  totp_enabled: firestoreUserData?.totp_enabled ?? claims.totp_enabled ?? false,
+  role: firestoreUserData?.role ?? claims.role,
+  custom_role: firestoreUserData?.custom_role ?? claims.custom_role,
+  permissions: firestoreUserData?.permissions ?? claims.permissions,
+  scope: firestoreUserData?.scope ?? claims.scope,
+  division: firestoreUserData?.division ?? claims.division,
+  team: firestoreUserData?.team ?? claims.team,
+  linked_soldier_id: firestoreUserData?.linked_soldier_id ?? claims.linked_soldier_id,
+  // Add other user properties
+  emailVerified: user.emailVerified,
+  metadata: user.metadata
+};
+```
+
+## Result
+
+The authentication system now:
+- ✅ Reads permissions from Firestore `users/{uid}` collection first
+- ✅ Falls back to custom claims if no Firestore document exists
+- ✅ Allows admin users to log in and see navigation even without linked soldiers
+- ✅ Uses the nullish coalescing operator (`??`) to handle null/undefined gracefully
+- ✅ Maintains backward compatibility with existing custom claims-based users
+- ✅ Provides warning logs if Firestore fetch fails
+
+## How It Works
+
+1. **User logs in** → Firebase Authentication verifies credentials
+2. **Get UID** → Extract user UID from authentication
+3. **Fetch custom claims** → Read JWT token claims (existing behavior)
+4. **Fetch Firestore document** → Try to read `users/{uid}` from Firestore
+5. **Merge data** → Prioritize Firestore data, fall back to custom claims
+6. **Return user object** → Contains permissions from Firestore or claims
+
+## Priority Order
+
+For each field (role, permissions, etc.):
+1. **Firestore `users/{uid}` document** (highest priority)
+2. **Firebase custom claims** (fallback)
+3. **Default value** (e.g., `false` for totp_enabled)
+
+## Impact Assessment
+- **User Impact**: Positive - admin users can now log in with Firestore permissions
+- **Code Complexity**: Minimal - added Firestore read with error handling
+- **Maintainability**: Improved - supports both Firestore and custom claims
+- **Performance**: Slight overhead (one Firestore read per login)
+- **Backward Compatibility**: Full - existing custom claims users still work
+- **Simplicity**: High - clear priority order with fallbacks
+- **Files Modified**: 1 file (auth-adapter.js)
+- **Lines Changed**: ~30 lines added, ~10 lines modified
+
+---
+
+# Project Plan: Update Firestore Security Rules to Read from Users Collection
+
+**Date**: 2025-10-26
+**Task**: Update Firestore security rules to check permissions from the `users` collection in addition to custom claims
+
+## Problem Statement
+The Firestore security rules were only checking custom claims (`request.auth.token.role` and `request.auth.token.permissions`). Users who had permissions in the Firestore `users` collection but not in custom claims were getting "Missing or insufficient permissions" errors when trying to access data.
+
+## Solution
+Update the security rules to use Firestore's `get()` function to read the user's document from the `users` collection and check permissions there. This allows the system to work with permissions stored in either:
+1. Custom claims (JWT token) - fast, no extra reads
+2. Firestore `users` collection - flexible, easy to manage
+
+## Changes Made
+
+### File Modified: [firestore.rules](firestore.rules)
+
+**Change 1: Added helper functions to read from Firestore users collection (Lines 14-22)**
+```javascript
+// Get user data from Firestore users collection
+function getUserData() {
+  return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+}
+
+// Check if user document exists in Firestore
+function hasUserDocument() {
+  return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+}
+```
+
+**Change 2: Updated isAdmin() to check both custom claims and Firestore (Lines 24-30)**
+
+**Before:**
+```javascript
+function isAdmin() {
+  return isAuthenticated() &&
+    request.auth.token.role == 'admin';
+}
+```
+
+**After:**
+```javascript
+function isAdmin() {
+  return isAuthenticated() && (
+    request.auth.token.role == 'admin' ||
+    (hasUserDocument() && getUserData().role == 'admin')
+  );
+}
+```
+
+**Change 3: Updated hasPermission() to check both sources (Lines 32-39)**
+
+**Before:**
+```javascript
+function hasPermission(permission) {
+  return isAuthenticated() &&
+    (isAdmin() ||
+     request.auth.token.permissions[permission] == true);
+}
+```
+
+**After:**
+```javascript
+function hasPermission(permission) {
+  return isAuthenticated() && (
+    isAdmin() ||
+    request.auth.token.permissions[permission] == true ||
+    (hasUserDocument() && getUserData().permissions[permission] == true)
+  );
+}
+```
+
+**Change 4: Added helper functions for scope, division, and team (Lines 46-77)**
+```javascript
+// Get user scope (checks both custom claims and Firestore)
+function getUserScope() {
+  if (request.auth.token.scope != null) {
+    return request.auth.token.scope;
+  }
+  if (hasUserDocument()) {
+    return getUserData().scope;
+  }
+  return 'self'; // Default to most restrictive
+}
+
+// Get user division (checks both custom claims and Firestore)
+function getUserDivision() {
+  if (request.auth.token.division != null) {
+    return request.auth.token.division;
+  }
+  if (hasUserDocument()) {
+    return getUserData().division;
+  }
+  return null;
+}
+
+// Get user team (checks both custom claims and Firestore)
+function getUserTeam() {
+  if (request.auth.token.team != null) {
+    return request.auth.token.team;
+  }
+  if (hasUserDocument()) {
+    return getUserData().team;
+  }
+  return null;
+}
+```
+
+**Change 5: Updated canAccessByScope() to use new helper functions (Lines 79-101)**
+
+## How to Deploy
+
+Run this command to deploy the updated security rules:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+## Result
+
+The Firestore security rules now:
+- ✅ Check permissions in Firestore `users/{uid}` collection
+- ✅ Fall back to custom claims if no Firestore document exists
+- ✅ Work with admin users who only have Firestore permissions
+- ✅ Support scope-based access control from Firestore
+- ✅ Maintain backward compatibility with custom claims
+- ✅ Allow flexible permission management via Firestore Console
+
+## How It Works
+
+When a user tries to access a Firestore document:
+1. **Check authentication** - Is user logged in?
+2. **Check admin status** - First check custom claims, then Firestore `users` doc
+3. **Check specific permission** - First check custom claims, then Firestore
+4. **Check scope access** - Use scope/division/team from custom claims or Firestore
+5. **Allow or deny** - Based on combined checks
+
+## Priority Order
+
+For each field (role, permissions, scope, etc.):
+1. **Custom claims** (highest priority, fastest)
+2. **Firestore `users/{uid}` document** (fallback)
+3. **Default value** (most restrictive)
+
+## Performance Impact
+
+- **Custom claims only**: No extra reads (fast)
+- **Firestore + custom claims**: 1 extra read per request that checks permissions
+- **Read caching**: Firestore caches reads, so subsequent checks are faster
+
+## Impact Assessment
+- **User Impact**: Positive - users can be managed via Firestore without custom claims
+- **Code Complexity**: Moderate - added Firestore reads in security rules
+- **Maintainability**: Improved - permissions can be updated in Firestore Console
+- **Performance**: Slight overhead for users without custom claims
+- **Security**: Maintained - still checks authentication and permissions properly
+- **Flexibility**: High - supports both custom claims and Firestore permissions
+- **Simplicity**: High - clear priority order with fallbacks
+- **Files Modified**: 1 file (firestore.rules)
+- **Lines Changed**: ~60 lines added/modified
+
+---
+
 # Project Plan: Update Soldier Role "My" Pages to Use Email/Phone Matching
 
 **Date**: 2025-10-23

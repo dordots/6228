@@ -514,8 +514,9 @@ export default function Layout({ children, currentPageName }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900 text-sm truncate">
-                    {linkedSoldier && linkedSoldier.first_name ? `${linkedSoldier.first_name} ${linkedSoldier.last_name || ''}` :
-                     currentUser?.custom_role === 'soldier' ? 'Soldier Account' : 'Command User'}
+                    {currentUser?.displayName ||
+                     (linkedSoldier && linkedSoldier.first_name ? `${linkedSoldier.first_name} ${linkedSoldier.last_name || ''}` :
+                      currentUser?.custom_role === 'soldier' ? 'Soldier Account' : 'Command User')}
                   </p>
                   <p className="text-xs text-slate-500 truncate">
                     {linkedSoldier && linkedSoldier.soldier_id ? `ID: ${linkedSoldier.soldier_id}` :

@@ -131,7 +131,7 @@ export default function DroneComponents() {
         entity_type: "DroneComponent",
         details: activityDetails,
         user_full_name: user.full_name,
-        division_name: user.department // Log component changes under user's division
+        division_name: user.division // Log component changes under user's division
       }).catch(() => {
         // Ignore ActivityLog errors
       });
@@ -162,7 +162,7 @@ export default function DroneComponents() {
         entity_type: "DroneComponent",
         details: `Deleted drone component: ${component.component_type} (${component.component_id})`,
         user_full_name: user.full_name,
-        division_name: user.department // Log component changes under user's division
+        division_name: user.division // Log component changes under user's division
       });
       await DroneComponent.delete(component.id);
       loadData();

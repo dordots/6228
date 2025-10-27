@@ -50,7 +50,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
     try {
       const currentUserData = await User.me(); // Fetch current user again to ensure permissions for data loading
       const isAdmin = currentUserData?.role === 'admin';
-      const userDivision = currentUserData?.department;
+      const userDivision = currentUserData?.division;
       
       const filter = isAdmin || !userDivision ? {} : { division_name: userDivision };
       const unassignedToDepositFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };

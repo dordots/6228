@@ -89,7 +89,7 @@ export default function Soldiers() {
       const currentUser = await User.me();
       const isAdmin = currentUser?.role === 'admin';
       const isManager = currentUser?.custom_role === 'manager';
-      const userDivision = currentUser?.department;
+      const userDivision = currentUser?.division;
 
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
 

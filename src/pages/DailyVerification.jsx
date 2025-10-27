@@ -42,10 +42,10 @@ export default function DailyVerificationPage() {
       const hasPower = user?.role === 'admin' || user?.custom_role === 'manager';
       setIsManagerOrAdmin(hasPower);
 
-      const divisionFilter = hasPower ? {} : { division_name: user.department };
+      const divisionFilter = hasPower ? {} : { division_name: user.division };
       const verificationFilter = { 
         verification_date: today, 
-        ...(hasPower ? {} : { division_name: user.department })
+        ...(hasPower ? {} : { division_name: user.division })
       };
 
       const [soldiersData, weaponsData, gearData, verificationsData] = await Promise.all([
@@ -65,15 +65,15 @@ export default function DailyVerificationPage() {
         const divisions = [...new Set(safeSoldiers.map(s => s.division_name).filter(Boolean))].sort();
         setAllDivisions(divisions);
         // Set initial division to user's own, or the first in the list
-        if (user.department && divisions.includes(user.department)) {
-          setSelectedDivision(user.department);
+        if (user.division && divisions.includes(user.division)) {
+          setSelectedDivision(user.division);
         } else if (divisions.length > 0) {
           setSelectedDivision(divisions[0]);
         } else {
           setSelectedDivision(""); // No divisions found
         }
       } else {
-        setSelectedDivision(user.department);
+        setSelectedDivision(user.division);
       }
 
     } catch (error) {
@@ -192,7 +192,7 @@ export default function DailyVerificationPage() {
     );
   }
   
-  if (!currentUser?.department && !isManagerOrAdmin) {
+  if (!currentUser?.division && !isManagerOrAdmin) {
      return (
       <div className="p-6">
         <Alert>

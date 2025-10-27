@@ -12,51 +12,46 @@ service cloud.firestore {
     }
 
     // Get user data from Firestore users collection
+    // NOTE: Simplified to use custom claims only (no Firestore fallback)
+    // Custom claims are set by syncUserOnSignIn and contain all necessary data
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return null; // Custom claims are the source of truth
     }
 
     // Check if user document exists in Firestore
+    // NOTE: Simplified to use custom claims only (no Firestore fallback)
     function hasUserDocument() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      return false; // Not needed - using custom claims only
     }
 
-    // Check if user is admin (checks both custom claims and Firestore)
+    // Check if user is admin (uses custom claims only)
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.role == 'admin' ||
-        (hasUserDocument() && getUserData().role == 'admin')
-      );
+      return isAuthenticated() && request.auth.token.role == 'admin';
     }
 
-    // Check if user has a specific permission (checks both custom claims and Firestore)
+    // Check if user has a specific permission (uses custom claims only)
     function hasPermission(permission) {
       return isAuthenticated() && (
         isAdmin() ||
-        request.auth.token.permissions[permission] == true ||
-        (hasUserDocument() && getUserData().permissions[permission] == true)
+        request.auth.token.permissions[permission] == true
       );
     }
-    
-    // Get user scope (checks both custom claims and Firestore)
+
+    // Get user scope (uses custom claims only)
     function getUserScope() {
       return request.auth.token.scope != null
         ? request.auth.token.scope
-        : (hasUserDocument() ? getUserData().scope : 'self');
+        : 'self'; // Default to 'self' if not set
     }
 
-    // Get user division (checks both custom claims and Firestore)
+    // Get user division (uses custom claims only)
     function getUserDivision() {
-      return request.auth.token.division != null
-        ? request.auth.token.division
-        : (hasUserDocument() ? getUserData().division : null);
+      return request.auth.token.division;
     }
 
-    // Get user team (checks both custom claims and Firestore)
+    // Get user team (uses custom claims only)
     function getUserTeam() {
-      return request.auth.token.team != null
-        ? request.auth.token.team
-        : (hasUserDocument() ? getUserData().team : null);
+      return request.auth.token.team;
     }
 
     // Check if user is linked to a specific soldier (by soldier's id field matching user UID)

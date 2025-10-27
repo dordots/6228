@@ -85,14 +85,14 @@ export default function Weapons() {
        setCurrentUser(user);
        const isAdmin = user?.role === 'admin';
        const isManager = user?.custom_role === 'manager';
-       const userDivision = user?.department;
+       const userDivision = user?.division;
 
        // DEBUG: Log user details
        console.log('=== WEAPON LOAD DEBUG ===');
        console.log('Current User:', {
          role: user?.role,
          custom_role: user?.custom_role,
-         department: user?.department,
+         department: user?.division,
          full_name: user?.full_name
        });
        console.log('Is Admin:', isAdmin);

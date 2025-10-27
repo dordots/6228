@@ -45,7 +45,7 @@ export default function Dashboard() {
       setCurrentUser(user);
       const isAdmin = user?.role === 'admin';
       const isManager = user?.custom_role === 'manager';
-      const userDivisionName = user?.department;
+      const userDivisionName = user?.division;
       
       setUserDivision(userDivisionName);
       

@@ -45,10 +45,11 @@ export default function Dashboard() {
       setCurrentUser(user);
       const isAdmin = user?.role === 'admin';
       const isManager = user?.custom_role === 'manager';
+      const isDivisionManager = user?.custom_role === 'division_manager';
       const userDivisionName = user?.division;
-      
+
       setUserDivision(userDivisionName);
-      
+
       // Build filter based on user permissions and selected division filter
       let filter = {};
       if (isAdmin || isManager) {
@@ -195,7 +196,7 @@ export default function Dashboard() {
     return Array.from(divisions).sort();
   }, [soldiers, currentUser]); // currentUser is a dependency now, as it determines filter availability
 
-  const isManagerOrAdmin = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager';
+  const isManagerOrAdmin = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager' || currentUser?.custom_role === 'division_manager';
 
   const divisionOptionsForFilter = [
     { value: "all", label: "All Divisions" },

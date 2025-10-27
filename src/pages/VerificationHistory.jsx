@@ -33,10 +33,11 @@ export default function VerificationHistoryPage() {
     try {
       const user = await User.me();
       setCurrentUser(user);
-      
+
       const isAdmin = user?.role === 'admin';
       const isManager = user?.custom_role === 'manager';
-      const userDivision = user?.department;
+      const isDivisionManager = user?.custom_role === 'division_manager';
+      const userDivision = user?.division;
 
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
 

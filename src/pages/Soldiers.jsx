@@ -89,6 +89,7 @@ export default function Soldiers() {
       const currentUser = await User.me();
       const isAdmin = currentUser?.role === 'admin';
       const isManager = currentUser?.custom_role === 'manager';
+      const isDivisionManager = currentUser?.custom_role === 'division_manager';
       const userDivision = currentUser?.division;
 
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
@@ -146,7 +147,8 @@ export default function Soldiers() {
       const currentUser = await User.me();
       const isAdmin = currentUser?.role === 'admin';
       const isManager = currentUser?.custom_role === 'manager';
-      const userDivision = currentUser?.department;
+      const isDivisionManager = currentUser?.custom_role === 'division_manager';
+      const userDivision = currentUser?.division;
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
 
       const data = await Soldier.filter(filter, "-created_date"); 

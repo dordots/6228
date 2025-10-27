@@ -47,7 +47,7 @@ export default function DroneComponents() {
     fetchUser();
   }, []);
 
-  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager';
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager' || currentUser?.custom_role === 'division_manager';
 
   const existingComponentTypes = useMemo(() => {
     if (!Array.isArray(components)) return [];
@@ -296,7 +296,7 @@ export default function DroneComponents() {
               entity_type: "DroneComponent",
               details: `Deleted drone component: ${componentToDelete.component_type} (${componentToDelete.component_id})`,
               user_full_name: user.full_name,
-              division_name: user.department
+              division_name: user.division
             });
             await DroneComponent.delete(id);
           } catch (error) {

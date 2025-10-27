@@ -61,7 +61,7 @@ export default function DroneSetTypesPage() {
     setIsLoading(false);
   };
 
-  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager';
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager' || currentUser?.custom_role === 'division_manager';
 
   const handleSubmit = async (formData) => {
     try {
@@ -135,7 +135,7 @@ export default function DroneSetTypesPage() {
           entity_type: "DroneSetType",
           details: `Deleted drone set type: ${type.type_name}`,
           user_full_name: user.full_name,
-          division_name: user.department || "N/A"
+          division_name: user.division || "N/A"
         });
       } catch (logError) {
         console.warn("Failed to log delete activity:", logError);
@@ -185,7 +185,7 @@ export default function DroneSetTypesPage() {
                 entity_type: "DroneSetType",
                 details: `Deleted drone set type: ${typeToDelete.type_name}`,
                 user_full_name: user.full_name,
-                division_name: user.department || "N/A"
+                division_name: user.division || "N/A"
               });
             } catch (logError) {
               console.warn("Failed to log delete activity:", logError);

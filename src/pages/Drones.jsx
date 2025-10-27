@@ -76,8 +76,9 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       const user = await User.me();
       const isAdmin = user?.role === 'admin';
       const isManager = user?.custom_role === 'manager';
-      const userDivision = user?.department;
-      
+      const isDivisionManager = user?.custom_role === 'division_manager';
+      const userDivision = user?.division;
+
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
 
       const [droneSetsData, componentsData, soldiersData] = await Promise.all([
@@ -102,7 +103,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
     return [...new Set(soldiers.map(s => s.division_name).filter(Boolean))].sort();
   }, [soldiers]);
 
-  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager'; // New variable for permission checks
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager' || currentUser?.custom_role === 'division_manager';
 
   const droneSetTypes = useMemo(() => {
     const safeDrones = Array.isArray(droneSets) ? droneSets : [];

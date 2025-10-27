@@ -39,7 +39,7 @@ export default function DailyVerificationPage() {
       const user = await User.me();
       setCurrentUser(user);
 
-      const hasPower = user?.role === 'admin' || user?.custom_role === 'manager';
+      const hasPower = user?.role === 'admin' || user?.custom_role === 'manager' || user?.custom_role === 'division_manager';
       setIsManagerOrAdmin(hasPower);
 
       const divisionFilter = hasPower ? {} : { division_name: user.division };

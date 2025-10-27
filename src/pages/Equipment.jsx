@@ -66,10 +66,11 @@ export default function EquipmentPage() {
       setCurrentUser(user); // Store current user in state
 
       const isAdmin = user?.role === 'admin';
-      const isManager = user?.custom_role === 'manager'; // Corrected check
-      const userDivision = user?.department;
+      const isManager = user?.custom_role === 'manager';
+      const isDivisionManager = user?.custom_role === 'division_manager';
+      const userDivision = user?.division;
 
-      // Managers and admins see all divisions, users see only their division
+      // Admins and managers see all divisions, division managers and users see only their division
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
 
       const [equipmentData, soldiersData] = await Promise.allSettled([
@@ -348,7 +349,7 @@ export default function EquipmentPage() {
     return sortableItems;
   }, [filteredEquipment, sortConfig, soldiers]);
 
-  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager';
+  const isAdminOrManager = currentUser?.role === 'admin' || currentUser?.custom_role === 'manager' || currentUser?.custom_role === 'division_manager';
 
   return (
     <div className="p-6 space-y-6">

@@ -34,7 +34,8 @@ export default function DivisionsPage() {
     try {
       const currentUser = await User.me();
       const isAdmin = currentUser?.role === 'admin';
-      const isManager = currentUser?.custom_role === 'manager'; // Corrected check
+      const isManager = currentUser?.custom_role === 'manager';
+      const isDivisionManager = currentUser?.custom_role === 'division_manager';
       const userDivision = currentUser?.division;
 
       // If a non-admin/non-manager user has no division, they see nothing.

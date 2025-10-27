@@ -78,7 +78,8 @@ export default function SerializedGearPage() {
       setCurrentUser(currentUser);
       const isAdmin = currentUser?.role === 'admin';
       const isManager = currentUser?.custom_role === 'manager';
-      const userDivision = currentUser?.department;
+      const isDivisionManager = currentUser?.custom_role === 'division_manager';
+      const userDivision = currentUser?.division;
 
       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
 
@@ -98,7 +99,7 @@ export default function SerializedGearPage() {
 
   const isAdminOrManager = useMemo(() => {
     if (!currentUser) return false;
-    return currentUser.role === 'admin' || currentUser.custom_role === 'manager';
+    return currentUser.role === 'admin' || currentUser.custom_role === 'manager' || currentUser.custom_role === 'division_manager';
   }, [currentUser]);
 
   const gearTypes = useMemo(() => {

@@ -70,7 +70,7 @@ export default function Weapons() {
 
   const isAdminOrManager = useMemo(() => {
     if (!currentUser) return false;
-    return currentUser.role === 'admin' || currentUser.custom_role === 'manager';
+    return currentUser.role === 'admin' || currentUser.custom_role === 'manager' || currentUser.custom_role === 'division_manager';
   }, [currentUser]);
 
   const weaponTypes = useMemo(() => {
@@ -85,6 +85,7 @@ export default function Weapons() {
        setCurrentUser(user);
        const isAdmin = user?.role === 'admin';
        const isManager = user?.custom_role === 'manager';
+       const isDivisionManager = user?.custom_role === 'division_manager';
        const userDivision = user?.division;
 
        // DEBUG: Log user details

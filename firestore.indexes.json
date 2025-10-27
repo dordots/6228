@@ -15,6 +15,20 @@
       ]
     },
     {
+      "collectionGroup": "soldiers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "equipment",
       "queryScope": "COLLECTION",
       "fields": [
@@ -25,6 +39,20 @@
         {
           "fieldPath": "status",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "equipment",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -43,6 +71,48 @@
       ]
     },
     {
+      "collectionGroup": "weapons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "serialized_gear",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "drone_sets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "activity_logs",
       "queryScope": "COLLECTION",
       "fields": [
@@ -52,6 +122,20 @@
         },
         {
           "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "activity_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
           "order": "DESCENDING"
         }
       ]
@@ -67,6 +151,20 @@
         {
           "fieldPath": "division_name",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "daily_verifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "division_name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_date",
+          "order": "DESCENDING"
         }
       ]
     }

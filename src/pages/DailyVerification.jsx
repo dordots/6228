@@ -39,13 +39,31 @@ export default function DailyVerificationPage() {
       const user = await User.me();
       setCurrentUser(user);
 
-      const hasPower = user?.role === 'admin' || user?.custom_role === 'manager' || user?.custom_role === 'division_manager';
+      const isAdmin = user?.role === 'admin';
+      const isManager = user?.custom_role === 'manager';
+      const isDivisionManager = user?.custom_role === 'division_manager';
+      const isTeamLeader = user?.custom_role === 'team_leader';
+      const userDivision = user?.division;
+      const userTeam = user?.team;
+
+      const hasPower = isAdmin || isManager || isDivisionManager || isTeamLeader;
       setIsManagerOrAdmin(hasPower);
 
-      const divisionFilter = hasPower ? {} : { division_name: user.division };
-      const verificationFilter = { 
-        verification_date: today, 
-        ...(hasPower ? {} : { division_name: user.division })
+      // Build filter based on role hierarchy
+      let divisionFilter = {};
+      if (isAdmin || isManager) {
+        divisionFilter = {}; // See everything
+      } else if (isDivisionManager && userDivision) {
+        divisionFilter = { division_name: userDivision }; // See division only
+      } else if (isTeamLeader && userDivision && userTeam) {
+        divisionFilter = { division_name: userDivision, team_name: userTeam }; // See team only
+      } else if (userDivision) {
+        divisionFilter = { division_name: userDivision }; // Fallback
+      }
+
+      const verificationFilter = {
+        verification_date: today,
+        ...divisionFilter
       };
 
       const [soldiersData, weaponsData, gearData, verificationsData] = await Promise.all([

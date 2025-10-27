@@ -37,9 +37,21 @@ export default function VerificationHistoryPage() {
       const isAdmin = user?.role === 'admin';
       const isManager = user?.custom_role === 'manager';
       const isDivisionManager = user?.custom_role === 'division_manager';
+      const isTeamLeader = user?.custom_role === 'team_leader';
       const userDivision = user?.division;
+      const userTeam = user?.team;
 
-      const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
+      // Build filter based on role hierarchy
+      let filter = {};
+      if (isAdmin || isManager) {
+        filter = {}; // See everything
+      } else if (isDivisionManager && userDivision) {
+        filter = { division_name: userDivision }; // See division only
+      } else if (isTeamLeader && userDivision && userTeam) {
+        filter = { division_name: userDivision, team_name: userTeam }; // See team only
+      } else if (userDivision) {
+        filter = { division_name: userDivision }; // Fallback
+      }
 
       const [verificationsData, soldiersData] = await Promise.all([
         DailyVerification.filter(filter, "-created_date"),

@@ -46,7 +46,9 @@ export default function Dashboard() {
       const isAdmin = user?.role === 'admin';
       const isManager = user?.custom_role === 'manager';
       const isDivisionManager = user?.custom_role === 'division_manager';
+      const isTeamLeader = user?.custom_role === 'team_leader';
       const userDivisionName = user?.division;
+      const userTeamName = user?.team;
 
       setUserDivision(userDivisionName);
 
@@ -58,15 +60,21 @@ export default function Dashboard() {
           filter = { division_name: selectedDivisionFilter };
         }
         // Otherwise show all divisions (empty filter)
-      } else {
-        // Regular users still see only their division
-        filter = userDivisionName ? { division_name: userDivisionName } : {};
+      } else if (isDivisionManager && userDivisionName) {
+        // Division managers see only their division
+        filter = { division_name: userDivisionName };
+      } else if (isTeamLeader && userDivisionName && userTeamName) {
+        // Team leaders see only their team within their division
+        filter = { division_name: userDivisionName, team_name: userTeamName };
+      } else if (userDivisionName) {
+        // Fallback: filter by division
+        filter = { division_name: userDivisionName };
       }
 
       const today = new Date().toISOString().split('T')[0];
       const verificationFilter = { verification_date: today, ...filter };
 
-      console.log('Dashboard filter applied:', filter, 'User:', user?.full_name, 'Division:', userDivisionName, 'Is Admin:', isAdmin, 'Is Manager:', isManager, 'Selected Division Filter:', selectedDivisionFilter);
+      console.log('Dashboard filter applied:', filter, 'User:', user?.full_name, 'Division:', userDivisionName, 'Team:', userTeamName, 'Role:', user?.custom_role, 'Selected Division Filter:', selectedDivisionFilter);
 
       const [
         soldiersResult,
@@ -218,12 +226,14 @@ export default function Dashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl md:text-3xl font-bold text-slate-900 mb-1 md:mb-2">
-              {selectedDivisionFilter !== "all" ? `${selectedDivisionFilter} Division Dashboard` : 
+              {selectedDivisionFilter !== "all" ? `${selectedDivisionFilter} Division Dashboard` :
+               currentUser?.custom_role === 'team_leader' ? 'Team Dashboard' :
                userDivision && !isManagerOrAdmin ? `${userDivision} Division Dashboard` : 'Command Dashboard'}
             </h1>
             <p className="text-sm md:text-base text-slate-600">
               {selectedDivisionFilter !== "all" ? `Overview of ${selectedDivisionFilter} division equipment and personnel status` :
-               userDivision && !isManagerOrAdmin ? `Overview of ${userDivision} division equipment and personnel status` : 
+               currentUser?.custom_role === 'team_leader' ? 'Overview of your team equipment and personnel status' :
+               userDivision && !isManagerOrAdmin ? `Overview of ${userDivision} division equipment and personnel status` :
                'Overview of company equipment and personnel status'}
             </p>
           </div>

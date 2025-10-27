@@ -36,7 +36,9 @@ export default function DivisionsPage() {
       const isAdmin = currentUser?.role === 'admin';
       const isManager = currentUser?.custom_role === 'manager';
       const isDivisionManager = currentUser?.custom_role === 'division_manager';
+      const isTeamLeader = currentUser?.custom_role === 'team_leader';
       const userDivision = currentUser?.division;
+      const userTeam = currentUser?.team;
 
       // If a non-admin/non-manager user has no division, they see nothing.
       if (!isAdmin && !isManager && !userDivision) {
@@ -44,7 +46,17 @@ export default function DivisionsPage() {
         return;
       }
 
-      const filter = (isAdmin || isManager) ? {} : { division_name: userDivision };
+      // Build filter based on role hierarchy
+      let filter = {};
+      if (isAdmin || isManager) {
+        filter = {}; // See everything
+      } else if (isDivisionManager && userDivision) {
+        filter = { division_name: userDivision }; // See division only
+      } else if (isTeamLeader && userDivision && userTeam) {
+        filter = { division_name: userDivision, team_name: userTeam }; // See team only
+      } else if (userDivision) {
+        filter = { division_name: userDivision }; // Fallback
+      }
 
       const results = await Promise.allSettled([
         Soldier.filter(filter),

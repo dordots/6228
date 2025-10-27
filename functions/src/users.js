@@ -837,8 +837,8 @@ exports.syncUserOnSignIn = functions
           custom_role: userData.custom_role || 'soldier',
           permissions: userData.permissions || getDefaultPermissions('soldier'),
           scope: userData.scope || 'self',
-          division: userData.division || null,
-          team: userData.team || null,
+          division: soldierData?.division_name || userData.division || null,
+          team: soldierData?.team_name || userData.team || null,
           linked_soldier_id: userData.linked_soldier_id || null,
           user_doc_id: userDocId, // Store the actual user document ID
           displayName: displayName, // Store display name in claims

@@ -50,9 +50,23 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
     try {
       const currentUserData = await User.me(); // Fetch current user again to ensure permissions for data loading
       const isAdmin = currentUserData?.role === 'admin';
+      const isManager = currentUserData?.custom_role === 'manager';
+      const isDivisionManager = currentUserData?.custom_role === 'division_manager';
+      const isTeamLeader = currentUserData?.custom_role === 'team_leader';
       const userDivision = currentUserData?.division;
-      
-      const filter = isAdmin || !userDivision ? {} : { division_name: userDivision };
+      const userTeam = currentUserData?.team;
+
+      // Build filter based on role hierarchy
+      let filter = {};
+      if (isAdmin || isManager) {
+        filter = {}; // See everything
+      } else if (isDivisionManager && userDivision) {
+        filter = { division_name: userDivision }; // See division only
+      } else if (isTeamLeader && userDivision && userTeam) {
+        filter = { division_name: userDivision, team_name: userTeam }; // See team only
+      } else if (userDivision) {
+        filter = { division_name: userDivision }; // Fallback
+      }
       const unassignedToDepositFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };
       const unassignedInDepositFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
 

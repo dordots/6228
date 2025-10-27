@@ -406,12 +406,23 @@ export default function HistoryPage() {
                 const isAdmin = currentUser?.role === 'admin';
                 const isManager = currentUser?.custom_role === 'manager';
                 const isDivisionManager = currentUser?.custom_role === 'division_manager';
+                const isTeamLeader = currentUser?.custom_role === 'team_leader';
                 const userDivision = currentUser?.division;
+                const userTeam = currentUser?.team;
 
-                // Only apply division filter if user is not admin AND not manager AND has a division
-                const filter = !isAdmin && !isManager && userDivision ? { division_name: userDivision } : {};
+                // Build filter based on role hierarchy
+                let filter = {};
+                if (isAdmin || isManager) {
+                    filter = {}; // See everything
+                } else if (isDivisionManager && userDivision) {
+                    filter = { division_name: userDivision }; // See division only
+                } else if (isTeamLeader && userDivision && userTeam) {
+                    filter = { division_name: userDivision, team_name: userTeam }; // See team only
+                } else if (userDivision) {
+                    filter = { division_name: userDivision }; // Fallback
+                }
 
-                console.log('History filter applied:', filter, 'User:', currentUser?.full_name, 'Division:', userDivision, 'Is Admin:', isAdmin, 'Is Manager:', isManager);
+                console.log('History filter applied:', filter, 'User:', currentUser?.full_name, 'Division:', userDivision, 'Team:', userTeam, 'Role:', currentUser?.custom_role);
 
                 const activityData = await ActivityLog.filter(filter, '-created_at', 500);
                 setActivities(Array.isArray(activityData) ? activityData : []);

@@ -40,16 +40,22 @@ export default function DataExport() {
         const isAdmin = user?.role === 'admin';
         const isManager = user?.custom_role === 'manager';
         const isDivisionManager = user?.custom_role === 'division_manager';
+        const isTeamLeader = user?.custom_role === 'team_leader';
         const userDivision = user?.division;
+        const userTeam = user?.team;
 
-        // Division managers only see their own division
-        if (isDivisionManager && userDivision) {
-          setDivisions([userDivision]);
-        } else if (isAdmin || isManager) {
+        // Build divisions list based on role
+        if (isAdmin || isManager) {
           // Admins and managers see all divisions
           const allSoldiers = await Soldier.list();
           const uniqueDivisions = [...new Set(allSoldiers.map(s => s.division_name).filter(Boolean))].sort();
           setDivisions(uniqueDivisions);
+        } else if (isDivisionManager && userDivision) {
+          // Division managers only see their own division
+          setDivisions([userDivision]);
+        } else if (isTeamLeader && userDivision) {
+          // Team leaders only see their own division (but filtered by team later)
+          setDivisions([userDivision]);
         } else {
           // Regular users see only their division
           if (userDivision) {
@@ -103,14 +109,29 @@ export default function DataExport() {
     setIsExporting(true);
     setExportStatus(`Exporting ${config.name}...`);
     try {
-      // Apply division filter for division managers
+      // Apply filter based on role hierarchy
+      const isAdmin = currentUser?.role === 'admin';
+      const isManager = currentUser?.custom_role === 'manager';
       const isDivisionManager = currentUser?.custom_role === 'division_manager';
+      const isTeamLeader = currentUser?.custom_role === 'team_leader';
       const userDivision = currentUser?.division;
+      const userTeam = currentUser?.team;
+
+      // Build filter based on role hierarchy
+      let filter = {};
+      if (isAdmin || isManager) {
+        filter = {}; // Export everything
+      } else if (isDivisionManager && userDivision) {
+        filter = { division_name: userDivision }; // Export division only
+      } else if (isTeamLeader && userDivision && userTeam) {
+        filter = { division_name: userDivision, team_name: userTeam }; // Export team only
+      } else if (userDivision) {
+        filter = { division_name: userDivision }; // Fallback
+      }
 
       let data;
-      if (isDivisionManager && userDivision) {
-        // Division managers only export their division's data
-        data = await config.entity.filter({ division_name: userDivision });
+      if (Object.keys(filter).length > 0) {
+        data = await config.entity.filter(filter);
       } else {
         // Admins and managers export all data
         data = await config.entity.list();

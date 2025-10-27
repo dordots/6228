@@ -78,7 +78,12 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       icon: History,
       permission: 'system.history',
     },
-    { title: "Divisions", url: createPageUrl("Divisions"), icon: Shield },
+    {
+      title: "Divisions",
+      url: createPageUrl("Divisions"),
+      icon: Shield,
+      hideForRoles: ['team_leader']
+    },
     { 
       title: "Personnel", 
       url: createPageUrl("Soldiers"), 
@@ -192,8 +197,12 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       return allItems;
   }
 
-  // For other roles, filter based on specific permissions
+  // For other roles, filter based on specific permissions and role restrictions
   return allItems.filter(item => {
+    // Check if item should be hidden for this role
+    if (item.hideForRoles && item.hideForRoles.includes(userRole)) {
+      return false;
+    }
     // If no specific permission is required for the item, it's always visible
     if (!item.permission) return true;
     // Otherwise, check if the user has the required permission
@@ -535,16 +544,6 @@ export default function Layout({ children, currentPageName }) {
                 </div>
               </div>
               <div className="space-y-2">
-                {!linkedSoldier && currentUser && currentUser.custom_role !== 'soldier' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowSoldierLinking(true)}
-                    className="w-full text-xs"
-                  >
-                    Link Soldier Account
-                  </Button>
-                )}
                 {showLogoutConfirm ? (
                   <div className="flex gap-2">
                     <Button

@@ -86,21 +86,31 @@ export default function Weapons() {
        const isAdmin = user?.role === 'admin';
        const isManager = user?.custom_role === 'manager';
        const isDivisionManager = user?.custom_role === 'division_manager';
+       const isTeamLeader = user?.custom_role === 'team_leader';
        const userDivision = user?.division;
+       const userTeam = user?.team;
 
        // DEBUG: Log user details
        console.log('=== WEAPON LOAD DEBUG ===');
        console.log('Current User:', {
          role: user?.role,
          custom_role: user?.custom_role,
-         department: user?.division,
+         division: user?.division,
+         team: user?.team,
          full_name: user?.full_name
        });
-       console.log('Is Admin:', isAdmin);
-       console.log('Is Manager:', isManager);
-       console.log('User Division:', userDivision);
 
-       const filter = (isAdmin || isManager) ? {} : (userDivision ? { division_name: userDivision } : {});
+       // Build filter based on role hierarchy
+       let filter = {};
+       if (isAdmin || isManager) {
+         filter = {}; // See everything
+       } else if (isDivisionManager && userDivision) {
+         filter = { division_name: userDivision }; // See division only
+       } else if (isTeamLeader && userDivision && userTeam) {
+         filter = { division_name: userDivision, team_name: userTeam }; // See team only
+       } else if (userDivision) {
+         filter = { division_name: userDivision }; // Fallback
+       }
 
        // DEBUG: Log the filter being applied
        console.log('Database Filter Applied:', filter);

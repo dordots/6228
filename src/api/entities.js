@@ -6,7 +6,7 @@ import { base44 } from './base44Client';
 // Use Firebase adapter if enabled, otherwise fall back to Base44
 const USE_FIREBASE = import.meta.env.VITE_USE_FIREBASE !== 'false';
 
-let Soldier, Equipment, Weapon, SerializedGear, DroneSet, DroneSetType, DroneComponent, ActivityLog, DailyVerification, User;
+let Soldier, Equipment, Weapon, SerializedGear, DroneSet, DroneSetType, DroneComponent, ActivityLog, DailyVerification, User, UserProfile;
 
 if (USE_FIREBASE) {
   // Use Firebase adapter
@@ -19,8 +19,9 @@ if (USE_FIREBASE) {
   DroneComponent = createBoundEntityAdapter('drone_components', { idField: 'component_id' });
   ActivityLog = createBoundEntityAdapter('activity_logs');
   DailyVerification = createBoundEntityAdapter('daily_verifications');
+  UserProfile = createBoundEntityAdapter('users'); // For querying users collection by linked_soldier_id
   User = FirebaseUser;
-  
+
   console.log('Using Firebase backend');
 } else {
   // Use Base44 SDK
@@ -34,6 +35,7 @@ if (USE_FIREBASE) {
     DroneComponent = base44.entities.DroneComponent;
     ActivityLog = base44.entities.ActivityLog;
     DailyVerification = base44.entities.DailyVerification;
+    UserProfile = null; // Not needed for Base44
     User = base44.auth;
   }
 
@@ -41,4 +43,4 @@ if (USE_FIREBASE) {
 }
 
 // Export entity models
-export { Soldier, Equipment, Weapon, SerializedGear, DroneSet, DroneSetType, DroneComponent, ActivityLog, DailyVerification, User };
+export { Soldier, Equipment, Weapon, SerializedGear, DroneSet, DroneSetType, DroneComponent, ActivityLog, DailyVerification, User, UserProfile };

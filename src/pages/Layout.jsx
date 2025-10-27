@@ -215,25 +215,48 @@ export default function Layout({ children, currentPageName }) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
+        console.log('[Layout] STEP 1: Getting current user...');
         // Get user (no forced refresh on initial load - rely on cached token)
         const user = await UserEntity.me();
         setCurrentUser(user);
 
-        // Check if user has linked soldier by matching user UID to soldier's id field
-        try {
-          const soldiers = await Soldier.filter({ id: user.uid });
-          const soldier = soldiers[0];
+        console.log('[Layout] STEP 2: Current user loaded:', {
+          uid: user?.uid,
+          role: user?.custom_role,
+          linked_soldier_id: user?.linked_soldier_id,
+          division: user?.division,
+          team: user?.team
+        });
 
-          // Validate soldier object before setting
-          if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
-            setLinkedSoldier(soldier);
-          } else {
-            // No soldier linked to this user UID
+        // Check if user has linked soldier by using linked_soldier_id
+        if (user && user.linked_soldier_id) {
+          try {
+            console.log('[Layout] STEP 3: Searching for soldier...');
+            console.log(`  Query: soldiers WHERE soldier_id == "${user.linked_soldier_id}"`);
+
+            const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
+            const soldier = soldiers[0];
+
+            if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
+              console.log('[Layout] STEP 4: Found soldier:', {
+                soldier_id: soldier.soldier_id,
+                name: `${soldier.first_name} ${soldier.last_name}`,
+                division: soldier.division_name,
+                team: soldier.team_name
+              });
+              console.log('[Layout] STEP 5: Setting soldier for display in bottom left');
+              setLinkedSoldier(soldier);
+            } else {
+              console.warn('[Layout] Soldier not found or invalid:', soldier);
+              setLinkedSoldier(null);
+            }
+          } catch (error) {
+            console.error("[Layout] Error loading linked soldier:", error);
             setLinkedSoldier(null);
           }
-        } catch (error) {
-          console.error("Error loading linked soldier:", error);
-          setLinkedSoldier(null); // Ensure it's null on error
+        } else {
+          console.log('[Layout] No linked_soldier_id found for user');
+          setLinkedSoldier(null);
         }
 
         if (user.totp_enabled) {
@@ -491,13 +514,20 @@ export default function Layout({ children, currentPageName }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900 text-sm truncate">
-                    {linkedSoldier && linkedSoldier.first_name ? `${linkedSoldier.first_name} ${linkedSoldier.last_name || ''}` : 
+                    {linkedSoldier && linkedSoldier.first_name ? `${linkedSoldier.first_name} ${linkedSoldier.last_name || ''}` :
                      currentUser?.custom_role === 'soldier' ? 'Soldier Account' : 'Command User'}
                   </p>
                   <p className="text-xs text-slate-500 truncate">
-                    {linkedSoldier && linkedSoldier.soldier_id ? `ID: ${linkedSoldier.soldier_id}` : 
+                    {linkedSoldier && linkedSoldier.soldier_id ? `ID: ${linkedSoldier.soldier_id}` :
                      currentUser?.email || currentUser?.phone || 'Equipment Manager'}
                   </p>
+                  {currentUser?.custom_role && (
+                    <p className="text-xs font-medium text-green-700 mt-1">
+                      Role: {currentUser.custom_role === 'division_manager' ? 'Division Manager' :
+                             currentUser.custom_role === 'team_leader' ? 'Team Leader' :
+                             currentUser.custom_role === 'admin' ? 'Admin' : 'Soldier'}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">

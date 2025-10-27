@@ -173,41 +173,39 @@ exports.listUsers = functions
     }
 
     try {
-      const { pageToken, maxResults = 1000 } = data;
+      const db = admin.firestore();
 
-      // List users (Firebase Auth max is 1000 per request)
-      const listResult = await admin.auth().listUsers(maxResults, pageToken);
-      
-      // Get custom claims for each user
-      const users = await Promise.all(
-        listResult.users.map(async (user) => {
-          const customClaims = user.customClaims || {};
-          return {
-            uid: user.uid,
-            id: user.uid, // Add id for frontend compatibility
-            email: user.email,
-            phoneNumber: user.phoneNumber,
-            full_name: user.displayName || user.email || user.phoneNumber, // Add full_name
-            displayName: user.displayName,
-            disabled: user.disabled,
-            created_date: user.metadata.creationTime, // Rename for frontend
-            createdAt: user.metadata.creationTime,
-            lastSignInAt: user.metadata.lastSignInTime,
-            role: customClaims.role || 'user',
-            custom_role: customClaims.custom_role || 'soldier',
-            permissions: customClaims.permissions || {},
-            scope: customClaims.scope,
-            division: customClaims.division,
-            team: customClaims.team,
-            linkedSoldierId: customClaims.linked_soldier_id,
-            totpEnabled: customClaims.totp_enabled || false
-          };
-        })
-      );
+      // Fetch all users from Firestore users collection
+      const usersSnapshot = await db.collection('users').get();
+
+      // Map Firestore user documents to user objects
+      const users = usersSnapshot.docs.map((doc) => {
+        const userData = doc.data();
+        return {
+          uid: doc.id,
+          id: doc.id,
+          email: userData.email || null,
+          phoneNumber: userData.phoneNumber || null,
+          full_name: userData.displayName || userData.email || userData.phoneNumber || 'Unknown',
+          displayName: userData.displayName || null,
+          disabled: userData.disabled || false,
+          created_date: userData.created_at?._seconds ? new Date(userData.created_at._seconds * 1000).toISOString() : null,
+          createdAt: userData.created_at?._seconds ? new Date(userData.created_at._seconds * 1000).toISOString() : null,
+          lastSignInAt: userData.last_sign_in_at?._seconds ? new Date(userData.last_sign_in_at._seconds * 1000).toISOString() : null,
+          role: userData.role || 'user',
+          custom_role: userData.custom_role || 'soldier',
+          permissions: userData.permissions || {},
+          scope: userData.scope,
+          division: userData.division,
+          team: userData.team,
+          linkedSoldierId: userData.linked_soldier_id,
+          totpEnabled: userData.totp_enabled || false
+        };
+      });
 
       return {
         users,
-        pageToken: listResult.pageToken
+        pageToken: null // No pagination needed for Firestore query
       };
     } catch (error) {
       console.error('Error listing users:', error);
@@ -240,30 +238,59 @@ exports.updateUserRole = functions
     }
 
     try {
-      // Get current user
-      const user = await admin.auth().getUser(uid);
-      const currentClaims = user.customClaims || {};
+      const db = admin.firestore();
+
+      // Get current user document from Firestore
+      const userDocRef = db.collection('users').doc(uid);
+      const userDoc = await userDocRef.get();
 
       // Get default permissions for the role
       const permissions = getDefaultPermissions(role);
 
-      // Update custom claims with new RBAC structure
-      // IMPORTANT: Preserve TOTP settings when updating role
-      const updatedClaims = {
-        ...currentClaims,
-        role: role === 'admin' ? 'admin' : 'user', // Admin is special, others are 'user' base role
+      // Prepare updated user data
+      const updatedUserData = {
+        role: role === 'admin' ? 'admin' : 'user',
         custom_role: role,
         permissions: permissions,
         scope: permissions.scope,
         division: division || null,
         team: team || null,
-        // Preserve existing TOTP settings
-        totp_enabled: currentClaims.totp_enabled || false,
-        totp_secret: currentClaims.totp_secret || null,
-        totp_temp_secret: currentClaims.totp_temp_secret || null,
+        updated_at: admin.firestore.FieldValue.serverTimestamp()
       };
 
-      await admin.auth().setCustomUserClaims(uid, updatedClaims);
+      // If user document exists, preserve TOTP settings
+      if (userDoc.exists) {
+        const currentData = userDoc.data();
+        updatedUserData.totp_enabled = currentData.totp_enabled || false;
+        updatedUserData.totp_enabled_at = currentData.totp_enabled_at || null;
+      }
+
+      // Update Firestore users collection
+      await userDocRef.set(updatedUserData, { merge: true });
+
+      // Also update custom claims for backward compatibility
+      try {
+        const user = await admin.auth().getUser(uid);
+        const currentClaims = user.customClaims || {};
+
+        const updatedClaims = {
+          ...currentClaims,
+          role: role === 'admin' ? 'admin' : 'user',
+          custom_role: role,
+          permissions: permissions,
+          scope: permissions.scope,
+          division: division || null,
+          team: team || null,
+          totp_enabled: currentClaims.totp_enabled || false,
+          totp_secret: currentClaims.totp_secret || null,
+          totp_temp_secret: currentClaims.totp_temp_secret || null,
+        };
+
+        await admin.auth().setCustomUserClaims(uid, updatedClaims);
+      } catch (authError) {
+        console.warn('Could not update auth custom claims (user may not exist in auth):', authError.message);
+        // Continue anyway since Firestore is the source of truth
+      }
 
       return {
         uid,
@@ -320,12 +347,10 @@ exports.updateUserPermissions = functions
     }
 
     try {
-      // Get current user
-      const user = await admin.auth().getUser(uid);
-      const currentClaims = user.customClaims || {};
+      const db = admin.firestore();
 
       // Division managers can only assign within their division
-      if (context.auth.token.custom_role === 'division_manager' && 
+      if (context.auth.token.custom_role === 'division_manager' &&
           division !== context.auth.token.division) {
         throw new functions.https.HttpsError(
           'permission-denied',
@@ -333,14 +358,30 @@ exports.updateUserPermissions = functions
         );
       }
 
-      // Update custom claims with division/team
-      const updatedClaims = {
-        ...currentClaims,
+      // Update Firestore users collection
+      const userDocRef = db.collection('users').doc(uid);
+      await userDocRef.set({
         division: division || null,
         team: team || null,
-      };
+        updated_at: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
 
-      await admin.auth().setCustomUserClaims(uid, updatedClaims);
+      // Also update custom claims for backward compatibility
+      try {
+        const user = await admin.auth().getUser(uid);
+        const currentClaims = user.customClaims || {};
+
+        const updatedClaims = {
+          ...currentClaims,
+          division: division || null,
+          team: team || null,
+        };
+
+        await admin.auth().setCustomUserClaims(uid, updatedClaims);
+      } catch (authError) {
+        console.warn('Could not update auth custom claims:', authError.message);
+        // Continue anyway since Firestore is the source of truth
+      }
 
       return {
         uid,
@@ -648,3 +689,323 @@ function getDefaultPermissions(role) {
       };
   }
 }
+
+/**
+ * Find user account by soldier record on sign-in
+ * Called by client after successful authentication
+ *
+ * Flow:
+ * 1. User signs in with email/phone
+ * 2. Find soldier by email/phone
+ * 3. Find user WHERE linked_soldier_id = soldier.soldier_id
+ * 4. Return that user's data (role, permissions, division, team)
+ */
+exports.syncUserOnSignIn = functions
+  .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
+  .https.onCall(async (data, context) => {
+    // Must be authenticated
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        'unauthenticated',
+        'Must be authenticated to sync user data'
+      );
+    }
+
+    const authUid = context.auth.uid;
+    console.log(`\n========================================`);
+    console.log(`[syncUserOnSignIn] STEP 1: User signed in`);
+    console.log(`  Auth UID: ${authUid}`);
+
+    const db = admin.firestore();
+
+    try {
+      // STEP 1: Get auth user data
+      const authUser = await admin.auth().getUser(authUid);
+      console.log(`[syncUserOnSignIn] STEP 2: Got auth user data`);
+      console.log(`  Email: ${authUser.email || 'N/A'}`);
+      console.log(`  Phone: ${authUser.phoneNumber || 'N/A'}`);
+
+      // STEP 2: Find matching soldier by email or phone
+      let soldierDoc = null;
+      let soldierData = null;
+
+      // Try to match by email first
+      if (authUser.email) {
+        console.log(`[syncUserOnSignIn] STEP 3: Searching soldiers table by email...`);
+        console.log(`  Query: soldiers WHERE email == "${authUser.email}"`);
+
+        const soldiersByEmail = await db.collection('soldiers')
+          .where('email', '==', authUser.email)
+          .limit(1)
+          .get();
+
+        if (!soldiersByEmail.empty) {
+          soldierDoc = soldiersByEmail.docs[0];
+          soldierData = soldierDoc.data();
+          console.log(`  ✅ FOUND: Soldier ${soldierData.soldier_id} (${soldierData.first_name} ${soldierData.last_name})`);
+        } else {
+          console.log(`  ❌ NOT FOUND by email`);
+        }
+      }
+
+      // Try to match by phone number if email didn't match
+      if (!soldierDoc && authUser.phoneNumber) {
+        console.log(`[syncUserOnSignIn] STEP 3: Searching soldiers table by phone...`);
+        console.log(`  Query: soldiers WHERE phone_number == "${authUser.phoneNumber}"`);
+
+        const soldiersByPhone = await db.collection('soldiers')
+          .where('phone_number', '==', authUser.phoneNumber)
+          .limit(1)
+          .get();
+
+        if (!soldiersByPhone.empty) {
+          soldierDoc = soldiersByPhone.docs[0];
+          soldierData = soldierDoc.data();
+          console.log(`  ✅ FOUND: Soldier ${soldierData.soldier_id} (${soldierData.first_name} ${soldierData.last_name})`);
+        } else {
+          console.log(`  ❌ NOT FOUND by phone`);
+        }
+      }
+
+      // STEP 3: If no soldier found, throw error
+      if (!soldierData) {
+        console.log(`[syncUserOnSignIn] ❌ ERROR: No soldier found for this user`);
+        console.log(`========================================\n`);
+        throw new functions.https.HttpsError(
+          'not-found',
+          'No soldier record found for this email/phone. Please contact your administrator.'
+        );
+      }
+
+      const soldierId = soldierData.soldier_id;
+      console.log(`[syncUserOnSignIn] STEP 4: Searching users table...`);
+      console.log(`  Query: users WHERE linked_soldier_id == "${soldierId}"`);
+
+      // STEP 4: Find user document by linked_soldier_id
+      const usersQuery = await db.collection('users')
+        .where('linked_soldier_id', '==', soldierId)
+        .limit(1)
+        .get();
+
+      if (usersQuery.empty) {
+        console.log(`  ❌ NOT FOUND: No user account configured for soldier ${soldierId}`);
+        console.log(`[syncUserOnSignIn] ❌ ERROR: No user account found`);
+        console.log(`========================================\n`);
+        throw new functions.https.HttpsError(
+          'not-found',
+          `No user account configured for soldier ${soldierId}. Please contact your administrator to set up your account.`
+        );
+      }
+
+      const userDoc = usersQuery.docs[0];
+      const userData = userDoc.data();
+      const userDocId = userDoc.id;
+
+      console.log(`  ✅ FOUND: User document ${userDocId}`);
+      console.log(`[syncUserOnSignIn] STEP 5: Retrieved user data`);
+      console.log(`  User Doc ID: ${userDocId}`);
+      console.log(`  Role: ${userData.role}`);
+      console.log(`  Custom Role: ${userData.custom_role}`);
+      console.log(`  Division: ${userData.division}`);
+      console.log(`  Team: ${userData.team}`);
+      console.log(`  Linked Soldier ID: ${userData.linked_soldier_id}`);
+      console.log(`  Permissions:`, JSON.stringify(userData.permissions, null, 2));
+
+      // STEP 5: Update custom claims with the linked user's data
+      console.log(`[syncUserOnSignIn] STEP 6: Updating custom claims for auth UID ${authUid}...`);
+      try {
+        const customClaims = {
+          role: userData.role || 'soldier',
+          custom_role: userData.custom_role || 'soldier',
+          permissions: userData.permissions || getDefaultPermissions('soldier'),
+          scope: userData.scope || 'self',
+          division: userData.division || soldierData.division_name || null,
+          team: userData.team || soldierData.team_name || null,
+          linked_soldier_id: soldierId,
+          user_doc_id: userDocId, // Store the actual user document ID
+          totp_enabled: userData.totp_enabled || false,
+          totp_secret: authUser.customClaims?.totp_secret || null,
+          totp_temp_secret: authUser.customClaims?.totp_temp_secret || null
+        };
+
+        await admin.auth().setCustomUserClaims(authUid, customClaims);
+        console.log(`  ✅ Custom claims updated successfully`);
+      } catch (claimsError) {
+        console.warn(`  ⚠️  Could not update custom claims:`, claimsError.message);
+      }
+
+      console.log(`[syncUserOnSignIn] ✅ SUCCESS: User signed in successfully`);
+      console.log(`  Signed in as: ${soldierData.first_name} ${soldierData.last_name}`);
+      console.log(`  Role: ${userData.custom_role}`);
+      console.log(`  Division: ${userData.division}`);
+      console.log(`  Team: ${userData.team}`);
+      console.log(`========================================\n`);
+
+      // Return the linked user's complete data
+      return {
+        success: true,
+        soldier: {
+          soldier_id: soldierId,
+          first_name: soldierData.first_name,
+          last_name: soldierData.last_name,
+          division_name: soldierData.division_name,
+          team_name: soldierData.team_name
+        },
+        user: {
+          user_doc_id: userDocId,
+          auth_uid: authUid,
+          role: userData.role,
+          custom_role: userData.custom_role,
+          permissions: userData.permissions,
+          scope: userData.scope,
+          division: userData.division || soldierData.division_name,
+          team: userData.team || soldierData.team_name,
+          linked_soldier_id: soldierId,
+          totp_enabled: userData.totp_enabled || false
+        }
+      };
+
+    } catch (error) {
+      // If it's already an HttpsError, re-throw it
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+
+      console.error(`[syncUserOnSignIn] ❌ UNEXPECTED ERROR:`, error);
+      console.log(`========================================\n`);
+      throw new functions.https.HttpsError(
+        'internal',
+        `Failed to sync user data: ${error.message}`
+      );
+    }
+  });
+
+/**
+ * Automatically create user document when a new user signs in
+ * Triggered by Firebase Authentication onCreate event
+ */
+exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
+  console.log(`[onUserCreate] New user created: ${user.uid}`);
+  console.log(`  Email: ${user.email || 'N/A'}`);
+  console.log(`  Phone: ${user.phoneNumber || 'N/A'}`);
+
+  const db = admin.firestore();
+
+  try {
+    // Check if user document already exists (shouldn't happen, but just in case)
+    const userDocRef = db.collection('users').doc(user.uid);
+    const existingUserDoc = await userDocRef.get();
+
+    if (existingUserDoc.exists) {
+      console.log(`  User document already exists, skipping creation`);
+      return null;
+    }
+
+    // Find matching soldier by email or phone
+    let soldierDoc = null;
+    let soldierData = null;
+
+    // Try to match by email first
+    if (user.email) {
+      console.log(`  Searching for soldier by email: ${user.email}`);
+      const soldiersByEmail = await db.collection('soldiers')
+        .where('email', '==', user.email)
+        .limit(1)
+        .get();
+
+      if (!soldiersByEmail.empty) {
+        soldierDoc = soldiersByEmail.docs[0];
+        soldierData = soldierDoc.data();
+        console.log(`  ✅ Found soldier by email: ${soldierData.soldier_id}`);
+      }
+    }
+
+    // Try to match by phone number if email didn't match
+    if (!soldierDoc && user.phoneNumber) {
+      console.log(`  Searching for soldier by phone: ${user.phoneNumber}`);
+      const soldiersByPhone = await db.collection('soldiers')
+        .where('phone_number', '==', user.phoneNumber)
+        .limit(1)
+        .get();
+
+      if (!soldiersByPhone.empty) {
+        soldierDoc = soldiersByPhone.docs[0];
+        soldierData = soldierDoc.data();
+        console.log(`  ✅ Found soldier by phone: ${soldierData.soldier_id}`);
+      }
+    }
+
+    // Prepare user document data
+    const defaultRole = 'soldier'; // All new users default to soldier role
+    const permissions = getDefaultPermissions(defaultRole);
+
+    const userDocData = {
+      custom_role: defaultRole,
+      role: defaultRole,
+      permissions: permissions,
+      scope: permissions.scope,
+      totp_enabled: false,
+      totp_enabled_at: null,
+      email: user.email || null,
+      phoneNumber: user.phoneNumber || null,
+      displayName: user.displayName || null,
+      division: null,
+      team: null,
+      linked_soldier_id: null,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      updated_at: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    // If soldier found, populate additional fields
+    if (soldierData) {
+      console.log(`  Linking user to soldier: ${soldierData.soldier_id}`);
+      userDocData.displayName = userDocData.displayName || `${soldierData.first_name || ''} ${soldierData.last_name || ''}`.trim();
+      userDocData.division = soldierData.division_name || null;
+      userDocData.team = soldierData.team_name || null;
+      userDocData.linked_soldier_id = soldierData.soldier_id;
+
+      // Update soldier document with user UID
+      await soldierDoc.ref.update({
+        id: user.uid,
+        updated_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`  ✅ Updated soldier ${soldierData.soldier_id} with user UID`);
+    } else {
+      console.log(`  ⚠️  No matching soldier found - creating user with default soldier role`);
+    }
+
+    // Create user document in Firestore
+    await userDocRef.set(userDocData);
+    console.log(`  ✅ Created user document for ${user.uid} with role: ${defaultRole}`);
+
+    // Also set custom claims for backward compatibility
+    try {
+      const customClaims = {
+        role: defaultRole,
+        custom_role: defaultRole,
+        permissions: permissions,
+        scope: permissions.scope,
+        division: userDocData.division,
+        team: userDocData.team,
+        linked_soldier_id: userDocData.linked_soldier_id,
+        totp_enabled: false,
+        totp_secret: null,
+        totp_temp_secret: null
+      };
+
+      await admin.auth().setCustomUserClaims(user.uid, customClaims);
+      console.log(`  ✅ Set custom claims for ${user.uid}`);
+    } catch (claimsError) {
+      console.warn(`  ⚠️  Could not set custom claims:`, claimsError.message);
+      // Don't fail - Firestore is the source of truth
+    }
+
+    console.log(`[onUserCreate] Successfully processed user ${user.uid}`);
+    return null;
+
+  } catch (error) {
+    console.error(`[onUserCreate] Error processing user ${user.uid}:`, error);
+    // Don't throw - we don't want to block user creation
+    return null;
+  }
+});

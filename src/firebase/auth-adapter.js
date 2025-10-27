@@ -57,7 +57,7 @@ export const User = {
     try {
       // Check if input is phone number
       const isPhone = /^\+?[1-9]\d{1,14}$/.test(emailOrPhone);
-      
+
       if (isPhone) {
         // Phone authentication flow
         if (!verificationCode) {
@@ -71,11 +71,33 @@ export const User = {
             throw new Error('No pending verification');
           }
           const result = await confirmationResult.confirm(verificationCode);
+
+          // Sync user data with soldier record after successful sign-in
+          try {
+            const syncFunction = httpsCallable(functions, 'syncUserOnSignIn');
+            await syncFunction();
+            console.log('User data synced successfully');
+          } catch (syncError) {
+            console.warn('Failed to sync user data:', syncError);
+            // Don't block login if sync fails
+          }
+
           return { user: result.user, requiresVerification: false };
         }
       } else {
         // Email authentication
         const userCredential = await signInWithEmailAndPassword(auth, emailOrPhone, password);
+
+        // Sync user data with soldier record after successful sign-in
+        try {
+          const syncFunction = httpsCallable(functions, 'syncUserOnSignIn');
+          await syncFunction();
+          console.log('User data synced successfully');
+        } catch (syncError) {
+          console.warn('Failed to sync user data:', syncError);
+          // Don't block login if sync fails
+        }
+
         return { user: userCredential.user, requiresVerification: false };
       }
     } catch (error) {
@@ -113,34 +135,59 @@ export const User = {
   me: async (forceRefresh = false) => {
     return new Promise(async (resolve) => {
       const getFullUser = async (user) => {
-        if (!user) return null;
+        if (!user) {
+          console.log('[User.me] No authenticated user');
+          return null;
+        }
+
+        console.log('[User.me] Getting user data for auth UID:', user.uid);
 
         // Get custom claims (force refresh to get latest claims from server)
+        // Custom claims now contain the linked user's data (set by syncUserOnSignIn)
         const idTokenResult = await user.getIdTokenResult(forceRefresh);
         const claims = idTokenResult.claims;
 
-        // Fetch user data from Firestore users collection
-        let firestoreUserData = null;
-        try {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDocSnap = await getDoc(userDocRef);
+        console.log('[User.me] Custom claims:', {
+          role: claims.role,
+          custom_role: claims.custom_role,
+          linked_soldier_id: claims.linked_soldier_id,
+          user_doc_id: claims.user_doc_id,
+          division: claims.division,
+          team: claims.team
+        });
 
-          if (userDocSnap.exists()) {
-            firestoreUserData = userDocSnap.data();
+        // If we have user_doc_id in claims, fetch the actual user document
+        // This is the document that was found by linked_soldier_id
+        let firestoreUserData = null;
+        if (claims.user_doc_id) {
+          try {
+            console.log('[User.me] Fetching linked user document:', claims.user_doc_id);
+            const userDocRef = doc(db, 'users', claims.user_doc_id);
+            const userDocSnap = await getDoc(userDocRef);
+
+            if (userDocSnap.exists()) {
+              firestoreUserData = userDocSnap.data();
+              console.log('[User.me] Found user document with role:', firestoreUserData.custom_role);
+            } else {
+              console.warn('[User.me] User document not found:', claims.user_doc_id);
+            }
+          } catch (error) {
+            console.warn('[User.me] Error fetching user data from Firestore:', error);
           }
-        } catch (error) {
-          console.warn('Error fetching user data from Firestore:', error);
+        } else {
+          console.log('[User.me] No user_doc_id in claims, using claims data directly');
         }
 
-        // Prioritize Firestore data over custom claims for permissions
-        // But keep custom claims as fallback
-        return {
+        // Build user object from custom claims (which contain linked user data)
+        // Use Firestore data if available, otherwise fall back to custom claims
+        const userData = {
           id: user.uid,
           uid: user.uid,
           email: user.email,
           phone: user.phoneNumber,
           displayName: user.displayName,
-          // Use Firestore data if available, otherwise fall back to custom claims
+          full_name: user.displayName || user.email || user.phoneNumber,
+          // Use claims data (which came from linked user) or Firestore
           totp_enabled: firestoreUserData?.totp_enabled ?? claims.totp_enabled ?? false,
           role: firestoreUserData?.role ?? claims.role,
           custom_role: firestoreUserData?.custom_role ?? claims.custom_role,
@@ -149,10 +196,22 @@ export const User = {
           division: firestoreUserData?.division ?? claims.division,
           team: firestoreUserData?.team ?? claims.team,
           linked_soldier_id: firestoreUserData?.linked_soldier_id ?? claims.linked_soldier_id,
+          user_doc_id: claims.user_doc_id, // The actual user document ID
           // Add other user properties
           emailVerified: user.emailVerified,
           metadata: user.metadata
         };
+
+        console.log('[User.me] Returning user data:', {
+          uid: userData.uid,
+          role: userData.role,
+          custom_role: userData.custom_role,
+          linked_soldier_id: userData.linked_soldier_id,
+          division: userData.division,
+          team: userData.team
+        });
+
+        return userData;
       };
 
       if (currentUser) {

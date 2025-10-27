@@ -47,4 +47,6 @@ module.exports = {
   deleteUser: userFunctions.deleteUser,
   getUserByPhone: userFunctions.getUserByPhone,
   setAdminByPhone: userFunctions.setAdminByPhone,
+  onUserCreate: userFunctions.onUserCreate,
+  syncUserOnSignIn: userFunctions.syncUserOnSignIn,
 };

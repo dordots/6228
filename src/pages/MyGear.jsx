@@ -17,41 +17,60 @@ export default function MyGearPage() {
 
   const loadMyGear = async () => {
     setIsLoading(true);
+    console.log('[MyGear] STEP 1: Loading gear...');
     try {
       const user = await User.me();
       setCurrentUser(user);
+      console.log('[MyGear] STEP 2: Current user loaded:', {
+        custom_role: user.custom_role,
+        linked_soldier_id: user.linked_soldier_id,
+        email: user.email,
+        phoneNumber: user.phoneNumber
+      });
 
       if (user.custom_role !== 'soldier') {
+        console.log('[MyGear] User is not a soldier, exiting');
         setGear([]);
         setIsLoading(false);
         return;
       }
 
-      // Find soldier by matching email or phone
-      let soldierId = null;
+      // Use linked_soldier_id from custom claims (already available)
+      let soldierId = user.linked_soldier_id;
 
-      if (user.email) {
+      // Fallback to email/phone lookup only if no linked_soldier_id
+      if (!soldierId && user.email) {
+        console.log('[MyGear] No linked_soldier_id, trying email lookup...');
         const soldiersByEmail = await Soldier.filter({ email: user.email });
         if (soldiersByEmail && soldiersByEmail.length > 0) {
           soldierId = soldiersByEmail[0].soldier_id;
+          console.log('[MyGear] Found soldier by email:', soldierId);
         }
       }
 
       if (!soldierId && user.phoneNumber) {
+        console.log('[MyGear] No soldier found by email, trying phone lookup...');
         const soldiersByPhone = await Soldier.filter({ phone_number: user.phoneNumber });
         if (soldiersByPhone && soldiersByPhone.length > 0) {
           soldierId = soldiersByPhone[0].soldier_id;
+          console.log('[MyGear] Found soldier by phone:', soldierId);
         }
       }
 
+      console.log('[MyGear] STEP 3: Resolved soldier ID:', soldierId);
+
       if (!soldierId) {
+        console.log('[MyGear] ❌ No soldier ID found - cannot load gear');
         setGear([]);
         setIsLoading(false);
         return;
       }
 
       // Load gear assigned to this soldier
+      console.log('[MyGear] STEP 4: Querying gear...');
+      console.log('  Query: SerializedGear.filter({ assigned_to:', soldierId, '})');
       const myGear = await SerializedGear.filter({ assigned_to: soldierId });
+      console.log('[MyGear] STEP 5: Found gear:', myGear?.length || 0, 'items');
       setGear(Array.isArray(myGear) ? myGear : []);
 
     } catch (error) {

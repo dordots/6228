@@ -17,41 +17,60 @@ export default function MyDronesPage() {
 
   const loadMyDrones = async () => {
     setIsLoading(true);
+    console.log('[MyDrones] STEP 1: Loading drone sets...');
     try {
       const user = await User.me();
       setCurrentUser(user);
+      console.log('[MyDrones] STEP 2: Current user loaded:', {
+        custom_role: user.custom_role,
+        linked_soldier_id: user.linked_soldier_id,
+        email: user.email,
+        phoneNumber: user.phoneNumber
+      });
 
       if (user.custom_role !== 'soldier') {
+        console.log('[MyDrones] User is not a soldier, exiting');
         setDroneSets([]);
         setIsLoading(false);
         return;
       }
 
-      // Find soldier by matching email or phone
-      let soldierId = null;
+      // Use linked_soldier_id from custom claims (already available)
+      let soldierId = user.linked_soldier_id;
 
-      if (user.email) {
+      // Fallback to email/phone lookup only if no linked_soldier_id
+      if (!soldierId && user.email) {
+        console.log('[MyDrones] No linked_soldier_id, trying email lookup...');
         const soldiersByEmail = await Soldier.filter({ email: user.email });
         if (soldiersByEmail && soldiersByEmail.length > 0) {
           soldierId = soldiersByEmail[0].soldier_id;
+          console.log('[MyDrones] Found soldier by email:', soldierId);
         }
       }
 
       if (!soldierId && user.phoneNumber) {
+        console.log('[MyDrones] No soldier found by email, trying phone lookup...');
         const soldiersByPhone = await Soldier.filter({ phone_number: user.phoneNumber });
         if (soldiersByPhone && soldiersByPhone.length > 0) {
           soldierId = soldiersByPhone[0].soldier_id;
+          console.log('[MyDrones] Found soldier by phone:', soldierId);
         }
       }
 
+      console.log('[MyDrones] STEP 3: Resolved soldier ID:', soldierId);
+
       if (!soldierId) {
+        console.log('[MyDrones] ❌ No soldier ID found - cannot load drone sets');
         setDroneSets([]);
         setIsLoading(false);
         return;
       }
 
       // Load drone sets assigned to this soldier
+      console.log('[MyDrones] STEP 4: Querying drone sets...');
+      console.log('  Query: DroneSet.filter({ assigned_to:', soldierId, '})');
       const myDrones = await DroneSet.filter({ assigned_to: soldierId });
+      console.log('[MyDrones] STEP 5: Found drone sets:', myDrones?.length || 0, 'items');
       setDroneSets(Array.isArray(myDrones) ? myDrones : []);
 
     } catch (error) {

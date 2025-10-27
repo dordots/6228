@@ -646,7 +646,7 @@ function getDefaultPermissions(role) {
         'operations.maintain': true,
         'system.reports': true,
         'system.history': true,
-        'system.import': true,
+        'system.import': false,  // Import is admin-only
         'system.export': true,
         'system.users': false,
         scope: 'division'

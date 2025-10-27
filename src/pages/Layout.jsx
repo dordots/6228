@@ -232,9 +232,12 @@ export default function Layout({ children, currentPageName }) {
         if (user && user.linked_soldier_id) {
           try {
             console.log('[Layout] STEP 3: Searching for soldier...');
-            console.log(`  Query: soldiers WHERE soldier_id == "${user.linked_soldier_id}"`);
+            console.log(`  Query: soldiers WHERE soldier_id == "${user.linked_soldier_id}" AND division_name == "${user.division}"`);
 
-            const soldiers = await Soldier.filter({ soldier_id: user.linked_soldier_id });
+            const soldiers = await Soldier.filter({
+              soldier_id: user.linked_soldier_id,
+              division_name: user.division
+            });
             const soldier = soldiers[0];
 
             if (soldier && typeof soldier === 'object' && soldier.soldier_id) {

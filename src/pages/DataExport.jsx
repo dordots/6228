@@ -6,6 +6,7 @@ import { SerializedGear } from "@/api/entities";
 import { DroneSet } from "@/api/entities";
 import { DroneComponent } from "@/api/entities";
 import { Equipment } from "@/api/entities";
+import { User } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Download, Users, Target, Binoculars, Joystick, Puzzle, Wrench, Shield, FileSpreadsheet, Package, Archive } from "lucide-react";
@@ -27,20 +28,40 @@ export default function DataExport() {
   const [exportStatus, setExportStatus] = useState("");
   const [divisions, setDivisions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    const fetchDivisions = async () => {
+    const fetchUserAndDivisions = async () => {
       setIsLoading(true);
       try {
-        const allSoldiers = await Soldier.list();
-        const uniqueDivisions = [...new Set(allSoldiers.map(s => s.division_name).filter(Boolean))].sort();
-        setDivisions(uniqueDivisions);
+        const user = await User.me();
+        setCurrentUser(user);
+
+        const isAdmin = user?.role === 'admin';
+        const isManager = user?.custom_role === 'manager';
+        const isDivisionManager = user?.custom_role === 'division_manager';
+        const userDivision = user?.division;
+
+        // Division managers only see their own division
+        if (isDivisionManager && userDivision) {
+          setDivisions([userDivision]);
+        } else if (isAdmin || isManager) {
+          // Admins and managers see all divisions
+          const allSoldiers = await Soldier.list();
+          const uniqueDivisions = [...new Set(allSoldiers.map(s => s.division_name).filter(Boolean))].sort();
+          setDivisions(uniqueDivisions);
+        } else {
+          // Regular users see only their division
+          if (userDivision) {
+            setDivisions([userDivision]);
+          }
+        }
       } catch (error) {
-        console.error("Error fetching divisions:", error);
+        console.error("Error fetching user and divisions:", error);
       }
       setIsLoading(false);
     };
-    fetchDivisions();
+    fetchUserAndDivisions();
   }, []);
 
   const convertToCSV = (data, headers) => {
@@ -82,7 +103,19 @@ export default function DataExport() {
     setIsExporting(true);
     setExportStatus(`Exporting ${config.name}...`);
     try {
-      const data = await config.entity.list();
+      // Apply division filter for division managers
+      const isDivisionManager = currentUser?.custom_role === 'division_manager';
+      const userDivision = currentUser?.division;
+
+      let data;
+      if (isDivisionManager && userDivision) {
+        // Division managers only export their division's data
+        data = await config.entity.filter({ division_name: userDivision });
+      } else {
+        // Admins and managers export all data
+        data = await config.entity.list();
+      }
+
       const csvContent = convertToCSV(data);
       downloadCSV(csvContent, config.name.replace(/\s+/g, '_'));
       setExportStatus(`${config.name} exported successfully!`);

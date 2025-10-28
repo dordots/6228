@@ -295,7 +295,20 @@ export default function DroneSetForm({
   const handleSubmit = (e) => {
     e.preventDefault();
     try {
-      onSubmit(formData);
+      const finalData = { ...formData };
+
+      // Force division assignment for division managers
+      if (isDivisionManager && !finalData.division_name) {
+        finalData.division_name = userDivision;
+      }
+
+      // Validate that division managers have a division
+      if (isDivisionManager && !finalData.division_name) {
+        alert('Error: Division managers must have a division assigned. Please contact an administrator.');
+        return;
+      }
+
+      onSubmit(finalData);
     } catch (error) {
       console.error("Error submitting form:", error);
     }
@@ -351,7 +364,7 @@ export default function DroneSetForm({
            <div className="space-y-2">
             <Label htmlFor="division_name">Division</Label>
             <Select
-              value={formData.division_name || ""}
+              value={formData.division_name || (isDivisionManager ? userDivision : "")}
               onValueChange={(value) => handleChange('division_name', value)}
               disabled={isDivisionManager}
             >

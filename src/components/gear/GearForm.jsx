@@ -108,6 +108,17 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
       gear_type: showCustomType ? customType : formData.gear_type,
     };
 
+    // Force division assignment for division managers
+    if (isDivisionManager && !finalFormData.division_name) {
+      finalFormData.division_name = userDivision;
+    }
+
+    // Validate that division managers have a division
+    if (isDivisionManager && !finalFormData.division_name) {
+      alert('Error: Division managers must have a division assigned. Please contact an administrator.');
+      return;
+    }
+
     // Only perform duplicate ID check when adding a new item (gear prop is null/undefined)
     if (!gear) {
       const existingIds = Array.isArray(existingGear) ? existingGear.map(g => g?.gear_id).filter(Boolean) : [];
@@ -116,7 +127,7 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
         return; // Prevent form submission
       }
     }
-    
+
     // If no duplicate or if in edit mode, proceed with submission
     onSubmit(finalFormData);
   };
@@ -230,7 +241,7 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
             <div className="space-y-2">
               <Label htmlFor="division_name">Division</Label>
               <Select
-                value={formData.division_name || "unassigned"}
+                value={formData.division_name || (isDivisionManager ? userDivision : "unassigned")}
                 onValueChange={(value) => handleChange('division_name', value)}
                 disabled={isDivisionManager}
               >

@@ -82,14 +82,9 @@ export default function EquipmentForm({ equipment, soldiers, allEquipment, onSub
   const handleSubmit = (e) => {
     e.preventDefault();
     const finalType = showCustomType ? customType : formData.equipment_type;
-    
+
     if (!finalType) {
       alert('Please select an equipment type.');
-      return;
-    }
-    
-    if (!formData.division_name) {
-      alert('Please select a division.');
       return;
     }
 
@@ -97,6 +92,22 @@ export default function EquipmentForm({ equipment, soldiers, allEquipment, onSub
       ...formData,
       equipment_type: finalType
     };
+
+    // Force division assignment for division managers
+    if (isDivisionManager && !finalData.division_name) {
+      finalData.division_name = userDivision;
+    }
+
+    // Validate that division managers have a division
+    if (isDivisionManager && !finalData.division_name) {
+      alert('Error: Division managers must have a division assigned. Please contact an administrator.');
+      return;
+    }
+
+    if (!finalData.division_name) {
+      alert('Please select a division.');
+      return;
+    }
 
     // Validate serial number requirement for serialized items
     if (SERIALIZED_ITEMS.includes(finalType) && !finalData.serial_number?.trim()) {

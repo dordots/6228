@@ -110,49 +110,53 @@ service cloud.firestore {
     
     // Equipment collection
     match /equipment/{equipmentID} {
-      allow read: if hasPermission('equipment.view') && canAccessByScope(resource.data);
+      allow read: if hasPermission('equipment.view');
       allow create: if hasPermission('equipment.create') &&
         (isAdmin() || getUserScope() == 'global' ||
-         (getUserScope() == 'division' &&
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update') && canAccessByScope(resource.data);
-      allow delete: if hasPermission('equipment.delete') && canAccessByScope(resource.data);
+      allow update: if hasPermission('equipment.update');
+      allow delete: if hasPermission('equipment.delete');
     }
     
     // Weapons collection
     match /weapons/{weaponID} {
-      allow read: if hasPermission('equipment.view') && canAccessByScope(resource.data);
+      allow read: if hasPermission('equipment.view');
       allow create: if hasPermission('equipment.create') &&
         (isAdmin() || getUserScope() == 'global' ||
-         (getUserScope() == 'division' &&
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update') && canAccessByScope(resource.data);
+      allow update: if hasPermission('equipment.update');
       allow delete: if hasPermission('equipment.delete') &&
         (isAdmin() || getUserScope() == 'global' ||
-         (getUserScope() == 'division' &&
+         (getUserScope() == 'division' && getUserDivision() != null &&
           (getUserDivision() == resource.data.division_name || getUserDivision() == resource.data.division)));
     }
     
     // Serialized gear collection
     match /serialized_gear/{gearID} {
-      allow read: if hasPermission('equipment.view') && canAccessByScope(resource.data);
+      allow read: if hasPermission('equipment.view');
       allow create: if hasPermission('equipment.create') &&
         (isAdmin() || getUserScope() == 'global' ||
-         (getUserScope() == 'division' &&
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update') && canAccessByScope(resource.data);
-      allow delete: if hasPermission('equipment.delete') && canAccessByScope(resource.data);
+      allow update: if hasPermission('equipment.update');
+      allow delete: if hasPermission('equipment.delete');
     }
     
     // Drone sets collection
     match /drone_sets/{droneSetID} {
-      allow read: if hasPermission('equipment.view') && canAccessByScope(resource.data);
+      allow read: if hasPermission('equipment.view');
       allow create: if hasPermission('equipment.create') &&
         (isAdmin() || getUserScope() == 'global' ||
-         (getUserScope() == 'division' &&
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update') && canAccessByScope(resource.data);
-      allow delete: if hasPermission('equipment.delete') && canAccessByScope(resource.data);
+      allow update: if hasPermission('equipment.update');
+      allow delete: if hasPermission('equipment.delete');
     }
     
     // Drone components collection

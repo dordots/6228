@@ -109,6 +109,17 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
       weapon_type: showCustomType ? customType : formData.weapon_type,
     };
 
+    // Force division assignment for division managers
+    if (isDivisionManager && !finalFormData.division_name) {
+      finalFormData.division_name = userDivision;
+    }
+
+    // Validate that division managers have a division
+    if (isDivisionManager && !finalFormData.division_name) {
+      alert('Error: Division managers must have a division assigned. Please contact an administrator.');
+      return;
+    }
+
     // Only perform duplicate ID check when adding a new weapon (weapon prop is null/undefined)
     if (!weapon) {
       const existingIds = Array.isArray(existingWeapons) ? existingWeapons.map(w => w?.weapon_id).filter(Boolean) : [];
@@ -117,7 +128,7 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
         return; // Prevent form submission
       }
     }
-    
+
     // If no duplicate or if in edit mode, proceed with submission
     onSubmit(finalFormData);
   };
@@ -232,7 +243,7 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
             <div className="space-y-2">
               <Label htmlFor="division_name">Division</Label>
               <Select
-                value={formData.division_name || 'unassigned'}
+                value={formData.division_name || (isDivisionManager ? userDivision : 'unassigned')}
                 onValueChange={(value) => handleChange('division_name', value)}
                 disabled={isDivisionManager}
               >

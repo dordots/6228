@@ -2,6 +2,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const OTPAuth = require("otpauth");
 const QRCode = require("qrcode");
+const { totpLimiter, smsLimiter, consumeRateLimit, rewardSuccess } = require("./middleware/rateLimiter");
 
 const db = admin.firestore();
 
@@ -20,6 +21,16 @@ exports.generateTotp = functions
   }
 
   const uid = context.auth.uid;
+
+  // Rate limiting: Prevent SMS/TOTP generation flooding
+  // 3 requests per 15 minutes, 60 minute block on exceed
+  const rateLimitResult = await consumeRateLimit(smsLimiter, uid);
+  if (!rateLimitResult.success) {
+    throw new functions.https.HttpsError(
+      "resource-exhausted",
+      rateLimitResult.message
+    );
+  }
 
   try {
     // Get user data
@@ -85,6 +96,16 @@ exports.verifyTotp = functions
   }
 
   const uid = context.auth.uid;
+
+  // Rate limiting: Prevent brute force attacks on TOTP codes
+  // 3 attempts per 5 minutes, 15 minute block on exceed
+  const rateLimitResult = await consumeRateLimit(totpLimiter, uid);
+  if (!rateLimitResult.success) {
+    throw new functions.https.HttpsError(
+      "resource-exhausted",
+      rateLimitResult.message
+    );
+  }
 
   try {
     // Get user data
@@ -158,7 +179,11 @@ exports.verifyTotp = functions
     } else {
       console.log(`[TOTP Debug] Using permanent secret for user ${uid}`);
     }
-    
+
+    // Successful verification - reward with 1 point back
+    // This prevents penalizing legitimate users who occasionally make mistakes
+    await rewardSuccess(totpLimiter, uid);
+
     return {
       success: true,
       message: "TOTP verification successful",
@@ -167,7 +192,7 @@ exports.verifyTotp = functions
     if (error instanceof functions.https.HttpsError) {
       throw error;
     }
-    
+
     console.error("Error verifying TOTP:", error);
     throw new functions.https.HttpsError(
       "internal",

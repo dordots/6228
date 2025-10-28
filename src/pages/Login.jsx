@@ -46,6 +46,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [verificationStep, setVerificationStep] = useState(false);
   const [cooldownTimer, setCooldownTimer] = useState(0);
+  const [rateLimitTimer, setRateLimitTimer] = useState(0); // For rate limiting countdown
 
   // Format phone number as user types
   useEffect(() => {
@@ -65,6 +66,14 @@ export default function Login() {
     }
   }, [cooldownTimer]);
 
+  // Rate limit countdown timer
+  useEffect(() => {
+    if (rateLimitTimer > 0) {
+      const timer = setTimeout(() => setRateLimitTimer(rateLimitTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [rateLimitTimer]);
+
   const getFullPhoneNumber = () => {
     const country = COUNTRY_CODES.find(c => c.code === countryCode);
     const cleanPhone = phoneNumber.replace(/\D/g, '');
@@ -74,6 +83,20 @@ export default function Login() {
   const validatePhoneNumber = () => {
     const fullNumber = getFullPhoneNumber();
     return isValidPhoneNumber(fullNumber, countryCode);
+  };
+
+  // Helper to parse rate limit errors and extract retry time
+  const parseRateLimitError = (errorMessage) => {
+    // Example: "Too many attempts. Try again in 15 minutes." or "Too many attempts. Try again in 30 seconds."
+    const minutesMatch = errorMessage.match(/(\d+)\s+minute/i);
+    const secondsMatch = errorMessage.match(/(\d+)\s+second/i);
+
+    if (minutesMatch) {
+      return parseInt(minutesMatch[1]) * 60; // Convert to seconds
+    } else if (secondsMatch) {
+      return parseInt(secondsMatch[1]);
+    }
+    return 60; // Default to 60 seconds if parsing fails
   };
 
   const handlePhoneLogin = async (e) => {
@@ -125,7 +148,15 @@ export default function Login() {
         }
       } catch (err) {
         console.error('Verification error:', err);
-        setError(err.message || 'Invalid verification code');
+
+        // Check for rate limiting error
+        if (err.code === 'functions/resource-exhausted') {
+          const retrySeconds = parseRateLimitError(err.message);
+          setRateLimitTimer(retrySeconds);
+          setError(err.message);
+        } else {
+          setError(err.message || 'Invalid verification code');
+        }
       }
     }
 
@@ -150,7 +181,15 @@ export default function Login() {
       window.location.href = await getRedirectUrl();
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid email or password');
+
+      // Check for rate limiting error
+      if (err.code === 'functions/resource-exhausted') {
+        const retrySeconds = parseRateLimitError(err.message);
+        setRateLimitTimer(retrySeconds);
+        setError(err.message);
+      } else {
+        setError(err.message || 'Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
@@ -299,9 +338,13 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading}
+                disabled={loading || rateLimitTimer > 0}
               >
-                {loading ? (
+                {rateLimitTimer > 0 ? (
+                  <>
+                    Blocked - Try again in {rateLimitTimer > 60 ? `${Math.ceil(rateLimitTimer / 60)}m` : `${rateLimitTimer}s`}
+                  </>
+                ) : loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {verificationStep ? 'Verifying...' : 'Sending code...'}
@@ -350,9 +393,13 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading}
+                disabled={loading || rateLimitTimer > 0}
               >
-                {loading ? (
+                {rateLimitTimer > 0 ? (
+                  <>
+                    Blocked - Try again in {rateLimitTimer > 60 ? `${Math.ceil(rateLimitTimer / 60)}m` : `${rateLimitTimer}s`}
+                  </>
+                ) : loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Signing in...

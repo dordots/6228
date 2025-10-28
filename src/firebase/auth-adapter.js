@@ -323,9 +323,14 @@ export const User = {
   },
   
   verifyTotp: async (token) => {
-    const verifyTotpFn = httpsCallable(functions, 'verifyTotp');
-    const result = await verifyTotpFn({ token });
-    return result.data;
+    try {
+      const verifyTotpFn = httpsCallable(functions, 'verifyTotp');
+      const result = await verifyTotpFn({ token });
+      return result.data;
+    } catch (error) {
+      // Re-throw with original Firebase error code for rate limiting detection
+      throw error;
+    }
   },
   
   // Helper to check if user is authenticated

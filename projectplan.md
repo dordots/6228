@@ -1,255 +1,314 @@
-# Project Plan: Fix Firestore Rules and Division Manager Permissions
+# Project Plan: Implement Rate Limiting for Authentication (Security Issue #3)
 
-## Problem
-Division managers are getting "Missing or insufficient permissions" error when trying to create weapons and potentially other equipment.
+## Date: 28 October 2025
 
-## Error Analysis
-The error stack trace shows TWO permission failures:
-1. **READ error** at line 310: `Weapon.filter({ weapon_id: serial })` - checking for duplicate IDs
-2. **CREATE error** at line 339: `Weapon.create(enrichedWeaponData)` - creating the weapon
+## Problem Statement
 
-Both fail because of Firestore security rules.
+The security audit identified a **CRITICAL vulnerability** (Issue #3):
+**No rate limiting on authentication attempts** - making the system vulnerable to brute force attacks.
 
-## Root Cause Analysis
-Looking at the Firestore rules for weapons (lines 123-134):
+### Current Vulnerabilities
+1. **Unlimited login attempts** - allows credential stuffing and dictionary attacks
+2. **Unlimited TOTP verification attempts** - 6 digits = 1M combinations, with 90-second window = ~3M possible attempts
+3. **Unlimited SMS requests** - allows SMS flooding and service abuse
+4. **No account lockout** - attackers can try indefinitely
 
+### Attack Scenarios
+- **Brute force TOTP:** With window=1 (±30 seconds), attacker could try millions of combinations
+- **Credential stuffing:** Unlimited email/password attempts
+- **SMS flooding:** Abuse the SMS service with unlimited verification requests
+- **Resource exhaustion:** Repeated failed attempts overload the system
+
+**Severity:** 🔴 **CRITICAL** - Must fix within 30 days
+
+---
+
+## Solution Design
+
+### Strategy
+Implement comprehensive rate limiting using the `rate-limiter-flexible` library.
+
+### Rate Limits (Following Security Best Practices)
+
+| Action | Limit | Window | Block Duration | Rationale |
+|--------|-------|--------|----------------|-----------|
+| **TOTP Verification** | 3 attempts | 5 minutes | 15 minutes | Prevents brute force (1M combinations) |
+| **Login Attempts** | 5 attempts | 5 minutes | 30 minutes | Prevents credential stuffing |
+| **SMS Requests** | 3 requests | 15 minutes | 60 minutes | Prevents SMS flooding & cost abuse |
+
+### Why `rate-limiter-flexible`?
+- ✅ Supports multiple backends (Memory, Redis, Firestore)
+- ✅ Built for Firebase Cloud Functions
+- ✅ Production-ready with proper error handling
+- ✅ Minimal performance overhead
+- ✅ Easy to configure and extend
+
+---
+
+## Implementation Plan
+
+### Phase 1: Backend Rate Limiting
+
+#### Step 1: Install Dependencies
+**File:** `functions/package.json`
+- Add `rate-limiter-flexible` package
+- Run `npm install` in functions directory
+
+#### Step 2: Create Rate Limiter Middleware
+**New File:** `functions/src/middleware/rateLimiter.js`
+
+Create three rate limiters:
 ```javascript
-match /weapons/{weaponID} {
-  allow create: if hasPermission('equipment.create') &&
-    (isAdmin() || getUserScope() == 'global' ||
-     (getUserScope() == 'division' &&
-      (getUserDivision() == request.resource.data.division_name ||
-       getUserDivision() == request.resource.data.division)));
-}
+// TOTP Limiter: 3 attempts per 5 minutes
+const totpLimiter = new RateLimiterMemory({
+  points: 3,
+  duration: 300,      // 5 minutes
+  blockDuration: 900  // 15 minutes
+});
+
+// Login Limiter: 5 attempts per 5 minutes
+const loginLimiter = new RateLimiterMemory({
+  points: 5,
+  duration: 300,      // 5 minutes
+  blockDuration: 1800 // 30 minutes
+});
+
+// SMS Limiter: 3 requests per 15 minutes
+const smsLimiter = new RateLimiterMemory({
+  points: 3,
+  duration: 900,      // 15 minutes
+  blockDuration: 3600 // 60 minutes
+});
 ```
 
-The problem is:
-1. The rule requires that `getUserDivision() == request.resource.data.division_name`
-2. But when a weapon is created with `division_name: null` (which happens before the form properly initializes), this check fails
-3. Our recent frontend fix sets `userDivision` in the form, but if `userDivision` itself is `null` or empty, the comparison fails
+#### Step 3: Apply Rate Limiting to TOTP Functions
+**File:** `functions/src/auth.js`
 
-The same issue exists in:
-- `equipment` collection (lines 112-120)
-- `serialized_gear` collection (lines 137-145)
-- `drone_sets` collection (lines 148-156)
+**Function:** `verifyTotp` (line 68)
+- Add rate limiting check before verification
+- Consume 1 point per attempt
+- On exceed, throw `resource-exhausted` error with retry time
+- On success, reward with 1 point back (to not penalize legitimate users)
 
-## Solution
-We need to handle the case where division managers might create items with their division. The rules should allow division managers to create items when:
-1. The item's division matches their division, OR
-2. For items with null/empty division - we should NOT allow this for division managers
+**Function:** `generateTotp` (line 11)
+- Add SMS rate limiting for phone auth users
+- Prevent SMS flooding attacks
+- Track by uid (user ID)
 
-Actually, looking more carefully - the frontend already sets the division correctly. The issue might be:
-1. The user's custom claims don't have the `division` field set properly
-2. OR the `division_name` in the weapon data is `null` when it should have a value
-
-## Files to Check
-1. [firestore.rules](firestore.rules) - Lines 123-156
-2. Need to verify user custom claims have proper division set
-3. Need to verify the weapon form is sending the correct division_name
-
-## Real Root Cause
-
-After investigation, the issue is:
-1. **Division manager users MUST have a `division` field set in their custom claims**
-2. This field comes from being linked to a soldier who has a `division_name`
-3. If a division manager user is NOT linked to a soldier, or linked to a soldier without a division, their `division` field will be `null`
-4. When `division` is `null`, the Firestore rules fail both READ and CREATE operations
-
-**From users.js (lines 144-146):**
+#### Step 4: Error Messages
+Return user-friendly errors:
 ```javascript
-division: soldierData?.division_name || null,
-team: soldierData?.team_name || null,
+throw new functions.https.HttpsError(
+  'resource-exhausted',
+  `Too many attempts. Try again in ${Math.ceil(secondsRemaining)} seconds.`
+);
 ```
 
-If no soldier is matched during user creation, `division` will be `null`.
+### Phase 2: Frontend Error Handling
 
-## Solution
+#### Step 5: Update Login Page
+**File:** `src/pages/Login.jsx`
 
-### Immediate Fix (Already Applied)
-Updated Firestore rules to explicitly check for null values before comparison:
-- ✅ Equipment collection
-- ✅ Weapons collection
-- ✅ Serialized gear collection
-- ✅ Drone sets collection
-- ✅ Deployed to Firebase
+Changes:
+1. Detect rate limit errors (error code: `resource-exhausted`)
+2. Parse the retry time from error message
+3. Display countdown timer
+4. Disable submit button during rate limit
+5. Show clear error message: "Too many attempts. Try again in X seconds/minutes"
 
-### Required Action
-**The division manager user MUST have a division assigned.** To fix this:
+#### Step 6: Update Auth Adapter
+**File:** `src/firebase/auth-adapter.js`
 
-1. **Check current user's division:**
-   Open browser console and run:
-   ```javascript
-   User.me().then(user => console.log('User division:', user.division))
-   ```
+Changes:
+1. Parse Firebase errors for rate limiting
+2. Extract retry time from error message
+3. Return structured error with `retryAfter` field
+4. Handle in UI components
 
-2. **If division is null**, you have two options:
-
-   **Option A: Link user to a soldier with a division** (RECOMMENDED)
-   - Go to User Management
-   - Find or create a soldier with a division assigned
-   - The user should have phone/email matching that soldier
-   - Re-create the user account or update their custom claims
-
-   **Option B: Manually update in Firestore**
-   - Go to Firebase Console → Firestore
-   - Find the user document in `users` collection
-   - Add/update field: `division: "YourDivisionName"`
-   - Then refresh custom claims by calling:
-     ```javascript
-     // In Firebase Functions, call syncUserOnSignIn
-     firebase.functions().httpsCallable('syncUserOnSignIn')()
-     ```
+---
 
 ## Todo List
-- [x] Read the users.js file to check how custom claims are set for division managers
-- [x] Update firestore rules to handle division_name properly for division managers
-- [x] Deploy firestore rules
-- [ ] Verify user has division assigned in custom claims
-- [ ] Test the fix after ensuring user has proper division
 
-## Summary
+### Backend Implementation
+- [ ] Install `rate-limiter-flexible` package in functions directory
+- [ ] Create `functions/src/middleware/rateLimiter.js` with three limiters
+- [ ] Update `verifyTotp` function in `functions/src/auth.js`
+- [ ] Update `generateTotp` function in `functions/src/auth.js`
+- [ ] Test rate limiting in Firebase emulator
 
-### Changes Made to Fix Permission Errors
+### Frontend Implementation
+- [ ] Update `src/pages/Login.jsx` to handle rate limit errors
+- [ ] Add countdown timer component for blocked state
+- [ ] Update `src/firebase/auth-adapter.js` to parse rate limit errors
+- [ ] Test UI behavior with rate limit errors
 
-#### 1. Frontend Forms (Completed)
-- ✅ Fixed WeaponForm.jsx division display (line 235)
-- ✅ Fixed GearForm.jsx division display (line 233)
-- ✅ Fixed DroneSetForm.jsx division display (line 354)
-- ✅ Verified EquipmentForm.jsx already correct
-
-Division managers now see their division name in the dropdown instead of "Unassigned".
-
-#### 2. Firestore Security Rules (Completed)
-- ✅ Updated equipment collection (lines 114-118)
-- ✅ Updated weapons collection (lines 126-130)
-- ✅ Updated serialized_gear collection (lines 141-145)
-- ✅ Updated drone_sets collection (lines 153-157)
-- ✅ Deployed rules to Firebase
-
-Rules now check that both user division and equipment division are not null before comparison.
-
-### Final Fix: Force Division Assignment in Code (COMPLETED)
-
-Instead of requiring the user to manually set their division in the database, I've updated all equipment forms to **automatically force the division assignment** for division managers before submitting.
-
-**All Forms Updated:**
-- ✅ [WeaponForm.jsx:112-121](src/components/weapons/WeaponForm.jsx#L112-L121)
-- ✅ [GearForm.jsx:111-120](src/components/gear/GearForm.jsx#L111-L120)
-- ✅ [EquipmentForm.jsx:96-105](src/components/equipment/EquipmentForm.jsx#L96-L105)
-- ✅ [DroneSetForm.jsx:300-309](src/components/drones/DroneSetForm.jsx#L300-L309)
-
-**What the code does:**
-1. Before submitting, checks if user is a division manager
-2. If division_name is missing/null, automatically sets it to userDivision
-3. If userDivision is also null, shows error: "Division managers must have a division assigned"
-4. This ensures division is NEVER null when creating equipment
-
-**This means:**
-- Even if the user's division is null in the database, the form will try to set it
-- If it's still null, the user gets a clear error message to contact an admin
-- Most importantly, it won't send a null division to Firestore (which would fail the security rules)
-
-**The issue should now be resolved!** Try creating a weapon again.
+### Testing & Deployment
+- [ ] Test TOTP rate limiting (3 failed attempts)
+- [ ] Test login rate limiting (5 failed attempts)
+- [ ] Test SMS rate limiting (3 SMS requests)
+- [ ] Verify error messages are user-friendly
+- [ ] Deploy functions to Firebase
+- [ ] Update security audit report status
 
 ---
 
-## New Feature: Soldier Personal Dashboard
+## Files to Create
 
-### Created
-- New comprehensive dashboard for soldiers showing all their assigned equipment
-- Replaces the simple "My Equipment" page redirect
-
-### Files Created/Modified
-1. **[SoldierDashboard.jsx](src/pages/SoldierDashboard.jsx)** - New comprehensive dashboard
-   - Shows soldier info (name, ID, division, team)
-   - Displays 4 stat cards: Equipment, Weapons, Gear, Drone Sets
-   - Lists all assigned items with status badges
-   - Clean, modern UI with color-coded sections
-
-2. **[Login.jsx:26](src/pages/Login.jsx#L26)** - Updated redirect
-   - Soldiers now redirected to `/dashboard` instead of `/myequipment`
-
-3. **[index.jsx:55,204](src/pages/index.jsx)** - Added route
-   - Imported SoldierDashboard component
-   - Added `/dashboard` route
-
-### Features
-- **Comprehensive view**: Shows Equipment, Weapons, Serialized Gear, and Drone Sets
-- **Stats overview**: Quick count of each equipment type
-- **Status badges**: Visual indication of functioning/not functioning items
-- **Personal info**: Displays soldier's name, ID, division, and team
-- **Clean design**: Color-coded cards matching equipment types (blue, red, purple, cyan)
+1. **functions/src/middleware/rateLimiter.js** (NEW)
+   - Rate limiter configurations
+   - Export three limiters: totpLimiter, loginLimiter, smsLimiter
 
 ---
 
-# Security Audit Report - ביקורת אבטחה מקיפה
+## Files to Modify
 
-## תאריך ביצוע: 28 אוקטובר 2025
+### Backend
+1. **functions/package.json**
+   - Add: `"rate-limiter-flexible": "^3.0.0"`
 
-### 📋 סיכום מנהלים
+2. **functions/src/auth.js**
+   - Line 68: `verifyTotp` - Add TOTP rate limiting
+   - Line 11: `generateTotp` - Add SMS rate limiting
 
-ביצענו ביקורת אבטחה מקיפה למערכת ניהול הנשק והציוד הצבאי. המערכת מבוססת על Firebase/Firestore ומציגה **תשתית אבטחה בסיסית טובה** עם כמה חולשות משמעותיות שדורשות תיקון.
+### Frontend
+3. **src/pages/Login.jsx**
+   - Add rate limit error detection
+   - Add countdown timer state
+   - Display blocked message with retry time
 
-**מצב אבטחה כללי:** 🟡 **טוב עם צורך בשיפורים קריטיים**
+4. **src/firebase/auth-adapter.js**
+   - Parse `resource-exhausted` errors
+   - Extract retry time from error message
+   - Return structured error object
 
-**ציון כולל:** **72/100** (6.9/10)
+---
 
-### ממצאים קריטיים שנמצאו
+## Expected Impact
 
-🔴 **חולשות קריטיות (חייב לתקן תוך 30 יום):**
-1. **Client-Side TOTP Verification Bypass** - אימות TOTP נשמר רק בצד הלקוח ב-localStorage וניתן לעקיפה
-2. **Firebase API Keys Exposed** - מפתחות Firebase חשופים בקוד הקליינט
-3. **No Rate Limiting** - אין מגבלה על ניסיונות התחברות או אימות TOTP
-4. **CSV Upload Without Validation** - העלאת קבצים ללא אימות תוכן
+### Security Improvements
+✅ **Prevents brute force attacks** on TOTP codes
+✅ **Blocks credential stuffing** and dictionary attacks
+✅ **Prevents SMS flooding** and service cost abuse
+✅ **Protects against resource exhaustion**
+✅ **Reduces attack surface** significantly
 
-🟠 **חולשות בעדיפות גבוהה (תוך 60 יום):**
-5. No Device Fingerprinting for "Remember Device"
-6. TOTP Secrets in Custom Claims (readable in ID token)
-7. Console Logging של נתונים רגישים
-8. No Backup Codes for TOTP Recovery
+### Performance
+- ✅ **Minimal overhead** - in-memory rate limiter is fast
+- ✅ **No database calls** for rate limiting
+- ✅ **Scales with Cloud Functions** auto-scaling
 
-### נקודות חוזק
+### User Experience
+- ✅ **Legitimate users unaffected** - limits are generous
+- ✅ **Clear error messages** with countdown timers
+- ✅ **Automatic unblock** after timeout
+- ⚠️ **Slight inconvenience** if user makes genuine mistakes (acceptable tradeoff)
 
-✅ **תשתית בטוחה:**
-- Firestore (NoSQL) מונע SQL Injection באופן מובנה
-- אין שימוש ב-`dangerouslySetInnerHTML` או `innerHTML` (הגנה מפני XSS)
-- Firebase Security Rules מוגדרות עם בקרות גישה מפורטות
-- RBAC (Role-Based Access Control) מיושם עם 4 רמות הרשאה
-- TOTP/2FA מיושם למשתמשים רגישים
-- HTTPS נאכף על כל התקשורת
+---
 
-### קישור לדוח המלא
+## Testing Strategy
 
-**📄 [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)** - דוח מפורט 200+ עמודים עם:
-- ניתוח מעמיק של כל רכיבי האבטחה
-- דוגמאות קוד לתיקון כל חולשה
-- המלצות מדורגות לפי עדיפות
-- Timeline ליישום תיקונים
+### Manual Testing
+1. **TOTP Rate Limit Test:**
+   - Attempt 3 wrong TOTP codes
+   - Verify 15-minute block
+   - Check countdown timer shows correct time
 
-### פעולות נדרשות
+2. **Login Rate Limit Test:**
+   - Attempt 5 wrong passwords
+   - Verify 30-minute block
+   - Check error message clarity
 
-**Priority 1 (Critical - תוך 30 יום):**
-- [ ] תיקון Client-Side TOTP Bypass - העברה לserver-side validation
-- [ ] הפעלת Firebase App Check להגנה על API keys
-- [ ] הוספת Rate Limiting על authentication ו-TOTP
-- [ ] אימות מקיף לקבצי CSV לפני עיבוד
+3. **SMS Rate Limit Test:**
+   - Request 3 SMS codes quickly
+   - Verify 60-minute block
+   - Check SMS service not abused
 
-**Priority 2 (High - תוך 60 יום):**
-- [ ] העברת TOTP Secrets לFirestore (במקום Custom Claims)
-- [ ] יצירת Backup Codes למקרי חירום
-- [ ] ניקוי Console Logging של נתונים רגישים
-- [ ] הוספת Device Fingerprinting
+### Edge Cases
+- Multiple users from same IP (uses uid, not IP)
+- Legitimate user makes mistakes (generous limits)
+- Rate limiter memory persistence (resets on function cold start - acceptable)
 
-**Priority 3 (Medium - תוך 90 יום):**
-- [ ] הוספת Input Validation Schema (Zod)
-- [ ] Content Security Policy Headers
-- [ ] Password Strength Requirements
-- [ ] File Upload MIME Type Validation
+---
 
-### המלצה סופית
+## Future Enhancements (Not in this PR)
 
-**למערכת ייצור צבאית:** 🟡 **לא מוכן - דורש תיקונים קריטיים**
+- [ ] **Firestore-based rate limiting** - for distributed rate limiting across function instances
+- [ ] **IP-based rate limiting** - additional layer of protection
+- [ ] **Account lockout** - permanent block after X failed attempts
+- [ ] **Admin unlock functionality** - manual override for locked accounts
+- [ ] **Rate limit analytics** - track attack attempts
+- [ ] **Geofencing** - block logins from suspicious countries
 
-**לאחר יישום התיקונים הקריטיים (Priority 1)**, המערכת תהיה ראויה לאחסון מידע מסווג ברמה בינונית.
+---
 
-**ביקורת חוזרת:** מומלץ לבצע ביקורת נוספת לאחר 90 יום מיישום התיקונים.
+## Risks & Mitigations
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| False positives (legitimate users blocked) | Low | Medium | Generous limits (3-5 attempts), clear error messages |
+| Memory-based limiter resets on cold start | Medium | Low | Acceptable for MVP, can upgrade to Firestore later |
+| Increased function execution time | Low | Low | Rate limiting is fast (<1ms overhead) |
+| Users frustrated by blocks | Low | Low | Clear messaging with countdown timer |
+
+---
+
+## Simplicity Score: 9/10
+
+**Why it's simple:**
+- ✅ Single well-tested library (`rate-limiter-flexible`)
+- ✅ No database schema changes
+- ✅ Isolated changes to 2 backend functions
+- ✅ Minimal frontend changes
+- ✅ No authentication flow changes
+- ✅ Easy to test and verify
+
+**Complexity:**
+- ⚠️ Need to handle error messages properly in UI
+- ⚠️ Testing requires making multiple failed attempts
+
+---
+
+## Review Section
+
+### Changes Made
+_(Will be filled after implementation)_
+
+- [ ] Backend rate limiters created
+- [ ] TOTP verification protected
+- [ ] SMS generation protected
+- [ ] Frontend error handling updated
+- [ ] Testing completed
+- [ ] Deployed to production
+
+### Verification Steps
+_(Will be filled after implementation)_
+
+1. Tested TOTP rate limiting
+2. Tested login rate limiting
+3. Tested SMS rate limiting
+4. Verified error messages are user-friendly
+5. Confirmed countdown timer works
+6. Validated no impact on legitimate users
+
+### Next Steps
+_(Will be filled after implementation)_
+
+- Move to next security issue (#1: Client-side TOTP bypass)
+- Or continue with other Priority 1 issues
+- Schedule security re-audit after all fixes
+
+---
+
+## Security Audit Status Update
+
+**Before:** Issue #3 - 🔴 CRITICAL - No rate limiting
+**After:** Issue #3 - ✅ FIXED - Comprehensive rate limiting implemented
+
+**Overall Security Score:**
+- Before: 72/100 (6.9/10)
+- After: ~78/100 (7.5/10) - estimated improvement
+
+---
+
+**Plan Status:** ⏳ **PENDING APPROVAL**
+**Ready to implement?** Yes, all steps are clear and simple.

@@ -253,6 +253,9 @@ export const User = {
           full_name: displayName || user.email || user.phoneNumber,
           // Use claims data (which came from linked user) or Firestore
           totp_enabled: firestoreUserData?.totp_enabled ?? claims.totp_enabled ?? false,
+          // TOTP device verification (from Firestore users collection)
+          totp_verified_until: firestoreUserData?.totp_verified_until?.toMillis() ?? null,
+          totp_device_fingerprint: firestoreUserData?.totp_device_fingerprint ?? null,
           role: firestoreUserData?.role ?? claims.role,
           custom_role: firestoreUserData?.custom_role ?? claims.custom_role,
           permissions: firestoreUserData?.permissions ?? claims.permissions,

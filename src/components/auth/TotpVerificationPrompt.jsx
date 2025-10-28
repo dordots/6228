@@ -28,19 +28,15 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
     setErrorMessage("");
 
     try {
-      const response = await verifyTotp({ token, isSetup });
+      // Pass rememberDevice to server for server-side verification storage
+      const response = await verifyTotp({ token, isSetup, rememberDevice });
       console.log('TOTP verification response:', response); // Debug log
-      
+
       // Check if the response indicates success
       // The Firebase wrapper returns {success: true, data: {success: true, message: "..."}}
       if (response.success && response.data?.success) {
-        // Store verification time based on remember preference
-        const verificationTime = new Date().toISOString();
-        if (rememberDevice) {
-          localStorage.setItem('lastTotpVerificationTime', verificationTime);
-        } else {
-          sessionStorage.setItem('lastTotpVerificationTime', verificationTime);
-        }
+        // SUCCESS: Server has stored verification status in custom claims
+        // No need to store in localStorage anymore - server is source of truth
         onSuccess();
       } else if (response.success === false) {
         // Handle error from Firebase wrapper
@@ -94,9 +90,7 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
   const handleLogout = async () => {
     try {
       await User.logout();
-      // Clear both session and local storage
-      sessionStorage.removeItem('lastTotpVerificationTime');
-      localStorage.removeItem('lastTotpVerificationTime');
+      // Server-side verification will be cleared on logout automatically
       navigate('/login');
     } catch (error) {
       console.error('Error logging out:', error);

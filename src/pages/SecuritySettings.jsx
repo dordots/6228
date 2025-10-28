@@ -149,8 +149,7 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
     const handleLogout = async () => {
         try {
             await User.logout();
-            // Clear session storage
-            sessionStorage.removeItem('lastTotpVerificationTime');
+            // Server-side verification will be cleared on logout automatically
             navigate('/login');
         } catch (error) {
             console.error('Error logging out:', error);

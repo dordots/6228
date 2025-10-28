@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
+import { getDeviceFingerprint } from '@/utils/deviceFingerprint';
 
 // Create a wrapper for Firebase Functions
 const createFunction = (name) => {
@@ -28,11 +29,42 @@ const createFunction = (name) => {
   };
 };
 
+// Custom wrapper for verifyTotp to include device fingerprint
+const verifyTotpWithFingerprint = async (data = {}) => {
+  const fn = httpsCallable(functions, 'verifyTotp');
+
+  try {
+    // Automatically add device fingerprint if rememberDevice is true
+    const deviceFingerprint = data.rememberDevice ? getDeviceFingerprint() : null;
+
+    const result = await fn({
+      ...data,
+      deviceFingerprint
+    });
+
+    return {
+      success: true,
+      data: result.data,
+      status: 200
+    };
+  } catch (error) {
+    console.error('Error calling verifyTotp:', error);
+
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+      details: error.details,
+      status: 500
+    };
+  }
+};
+
 // Export all functions
 export const firebaseFunctions = {
   // Auth functions
   generateTotp: createFunction('generateTotp'),
-  verifyTotp: createFunction('verifyTotp'),
+  verifyTotp: verifyTotpWithFingerprint, // Use custom wrapper
   updateUserData: createFunction('updateUserData'),
   deleteUser: createFunction('deleteUser'),
   

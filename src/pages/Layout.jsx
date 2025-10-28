@@ -283,24 +283,16 @@ export default function Layout({ children, currentPageName }) {
         }
 
         if (user.totp_enabled) {
-          // Check both localStorage (persistent) and sessionStorage (session-only)
-          const lastVerificationTimeLocal = localStorage.getItem('lastTotpVerificationTime');
-          const lastVerificationTimeSession = sessionStorage.getItem('lastTotpVerificationTime');
-          
-          // Use the most recent verification time from either storage
-          let lastVerificationTime = null;
-          if (lastVerificationTimeLocal || lastVerificationTimeSession) {
-            const localTime = lastVerificationTimeLocal ? new Date(lastVerificationTimeLocal).getTime() : 0;
-            const sessionTime = lastVerificationTimeSession ? parseInt(lastVerificationTimeSession) : 0;
-            lastVerificationTime = Math.max(localTime, sessionTime);
-          }
-          
-          const twentyFourHours = 24 * 60 * 60 * 1000;
-
-          if (lastVerificationTime && (Date.now() - lastVerificationTime) < twentyFourHours) {
-            setIsTotpVerified(true); // Verified and within the 24-hour window
+          // Check server-side verification status from Firestore users collection
+          // This prevents client-side manipulation (localStorage bypass vulnerability)
+          if (user.totp_verified_until && Date.now() < user.totp_verified_until) {
+            // Device is verified and within 24-hour window
+            console.log('[Layout] Device verified until:', new Date(user.totp_verified_until).toISOString());
+            setIsTotpVerified(true);
           } else {
-            setIsTotpVerified(false); // Needs verification
+            // Needs TOTP verification
+            console.log('[Layout] TOTP verification required');
+            setIsTotpVerified(false);
           }
         } else {
           // If 2FA is not enabled, user must set it up first.
@@ -320,24 +312,18 @@ export default function Layout({ children, currentPageName }) {
 
   // This effect runs periodically to check if the 24-hour session has expired
   useEffect(() => {
-    const twentyFourHours = 24 * 60 * 60 * 1000;
     const checkInterval = 5 * 60 * 1000; // Check every 5 minutes
 
-    const intervalId = setInterval(() => {
+    const intervalId = setInterval(async () => {
       if (currentUser && currentUser.totp_enabled && isTotpVerified) {
-        // Check both localStorage and sessionStorage
-        const lastVerificationTimeLocal = localStorage.getItem('lastTotpVerificationTime');
-        const lastVerificationTimeSession = sessionStorage.getItem('lastTotpVerificationTime');
-        
-        let lastVerificationTime = null;
-        if (lastVerificationTimeLocal || lastVerificationTimeSession) {
-          const localTime = lastVerificationTimeLocal ? new Date(lastVerificationTimeLocal).getTime() : 0;
-          const sessionTime = lastVerificationTimeSession ? parseInt(lastVerificationTimeSession) : 0;
-          lastVerificationTime = Math.max(localTime, sessionTime);
-        }
-        
-        if (!lastVerificationTime || (Date.now() - lastVerificationTime) > twentyFourHours) {
-          setIsTotpVerified(false); // Expire the verification
+        // Refresh user data from server to check if verification expired
+        try {
+          const freshUser = await User.me(true); // Force refresh from server
+          if (!freshUser.totp_verified_until || Date.now() >= freshUser.totp_verified_until) {
+            setIsTotpVerified(false); // Expire the verification
+          }
+        } catch (error) {
+          console.error('[Layout] Error checking TOTP expiry:', error);
         }
       }
     }, checkInterval);
@@ -383,9 +369,9 @@ export default function Layout({ children, currentPageName }) {
           setLinkedSoldier(null);
       }
 
-      // If TOTP was just set up, mark as verified and store the verification time
+      // If TOTP was just set up, mark as verified
+      // Server will handle verification status in custom claims
       setIsTotpVerified(true);
-      sessionStorage.setItem('lastTotpVerificationTime', Date.now().toString());
 
       // No need to reload - the state update will trigger re-render
     } catch (error) {
@@ -411,8 +397,7 @@ export default function Layout({ children, currentPageName }) {
   const handleLogout = async () => {
     try {
       await UserEntity.logout();
-      // Clear session storage
-      sessionStorage.removeItem('lastTotpVerificationTime');
+      // Server-side verification will be cleared on logout automatically
       window.location.href = '/login';
     } catch (error) {
       console.error('Error logging out:', error);

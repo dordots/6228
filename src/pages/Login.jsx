@@ -17,6 +17,23 @@ const COUNTRY_CODES = [
   { code: 'DE', name: 'Germany', dial: '+49', flag: '🇩🇪' },
 ];
 
+// Helper function to get redirect URL based on user role
+const getRedirectUrl = async () => {
+  try {
+    const user = await User.me();
+    // Redirect soldiers to their equipment page
+    if (user?.custom_role === 'soldier') {
+      return '/myequipment';
+    }
+    // All other roles go to dashboard
+    return '/';
+  } catch (error) {
+    console.error('Error getting user for redirect:', error);
+    // Default to dashboard on error
+    return '/';
+  }
+};
+
 export default function Login() {
   const [loginMethod, setLoginMethod] = useState('phone'); // 'phone' or 'email'
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -81,7 +98,7 @@ export default function Login() {
           setCooldownTimer(60); // 60 second cooldown
         } else {
           // Shouldn't happen for phone login
-          window.location.href = '/';
+          window.location.href = await getRedirectUrl();
         }
       } catch (err) {
         console.error('Phone login error:', err);
@@ -97,14 +114,14 @@ export default function Login() {
 
       try {
         const fullNumber = getFullPhoneNumber();
-        const result = await User.login({ 
-          emailOrPhone: fullNumber, 
-          verificationCode 
+        const result = await User.login({
+          emailOrPhone: fullNumber,
+          verificationCode
         });
-        
+
         if (!result.requiresVerification) {
           // Successful login
-          window.location.href = '/';
+          window.location.href = await getRedirectUrl();
         }
       } catch (err) {
         console.error('Verification error:', err);
@@ -130,7 +147,7 @@ export default function Login() {
       }
 
       // Successful login
-      window.location.href = '/';
+      window.location.href = await getRedirectUrl();
     } catch (err) {
       console.error('Login error:', err);
       setError(err.message || 'Invalid email or password');

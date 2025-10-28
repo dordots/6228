@@ -129,7 +129,7 @@ export default function WeaponTable({
                           <DropdownMenuItem
                             className="text-red-600"
                             onClick={() => onDelete(weapon)}
-                            disabled={!isAdminOrManager && !permissions.can_delete_weapons}
+                            disabled={!isAdminOrManager && !permissions['equipment.delete']}
                           >
                             Delete
                           </DropdownMenuItem>

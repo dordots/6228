@@ -121,7 +121,10 @@ service cloud.firestore {
       allow read: if hasPermission('equipment.view') && canAccessByScope(resource.data);
       allow create: if hasPermission('equipment.create');
       allow update: if hasPermission('equipment.update') && canAccessByScope(resource.data);
-      allow delete: if hasPermission('equipment.delete') && canAccessByScope(resource.data);
+      allow delete: if hasPermission('equipment.delete') &&
+        (isAdmin() || getUserScope() == 'global' ||
+         (getUserScope() == 'division' &&
+          (getUserDivision() == resource.data.division_name || getUserDivision() == resource.data.division)));
     }
     
     // Serialized gear collection
@@ -161,7 +164,8 @@ service cloud.firestore {
     match /activity_logs/{logID} {
       allow read: if hasPermission('system.history') && canAccessByScope(resource.data);
       allow create: if isAuthenticated();
-      allow update: if false; // Never update logs
+      allow update: if isAuthenticated() &&
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activity_log_id', 'updated_at']));
       allow delete: if isAdmin();
     }
     

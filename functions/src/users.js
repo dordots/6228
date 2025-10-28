@@ -419,14 +419,106 @@ exports.deleteUser = functions
     }
 
     try {
+      const db = admin.firestore();
+
+      // Get user from Authentication to find their email/phone
+      const authUser = await admin.auth().getUser(uid);
+
       if (hardDelete) {
-        // Permanently delete user
+        // Permanently delete user from Authentication
         await admin.auth().deleteUser(uid);
+
+        // Find and delete user document from Firestore users collection
+        // Search by email or phoneNumber since doc ID might not match UID
+        let userDocDeleted = false;
+
+        if (authUser.email) {
+          const usersByEmail = await db.collection('users')
+            .where('email', '==', authUser.email)
+            .limit(1)
+            .get();
+
+          if (!usersByEmail.empty) {
+            await usersByEmail.docs[0].ref.delete();
+            userDocDeleted = true;
+          }
+        }
+
+        if (!userDocDeleted && authUser.phoneNumber) {
+          const usersByPhone = await db.collection('users')
+            .where('phoneNumber', '==', authUser.phoneNumber)
+            .limit(1)
+            .get();
+
+          if (!usersByPhone.empty) {
+            await usersByPhone.docs[0].ref.delete();
+            userDocDeleted = true;
+          }
+        }
+
+        // Fallback: try direct UID match
+        if (!userDocDeleted) {
+          const directDoc = await db.collection('users').doc(uid).get();
+          if (directDoc.exists) {
+            await directDoc.ref.delete();
+            userDocDeleted = true;
+          }
+        }
+
+        console.log(`User ${uid} deleted from Auth. Firestore doc deleted: ${userDocDeleted}`);
       } else {
         // Soft delete by disabling account
         await admin.auth().updateUser(uid, {
           disabled: true
         });
+
+        // Update Firestore user document to mark as disabled
+        // Try to find by email or phone first
+        let userDocUpdated = false;
+
+        if (authUser.email) {
+          const usersByEmail = await db.collection('users')
+            .where('email', '==', authUser.email)
+            .limit(1)
+            .get();
+
+          if (!usersByEmail.empty) {
+            await usersByEmail.docs[0].ref.update({
+              disabled: true,
+              updated_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            userDocUpdated = true;
+          }
+        }
+
+        if (!userDocUpdated && authUser.phoneNumber) {
+          const usersByPhone = await db.collection('users')
+            .where('phoneNumber', '==', authUser.phoneNumber)
+            .limit(1)
+            .get();
+
+          if (!usersByPhone.empty) {
+            await usersByPhone.docs[0].ref.update({
+              disabled: true,
+              updated_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            userDocUpdated = true;
+          }
+        }
+
+        // Fallback: try direct UID match
+        if (!userDocUpdated) {
+          const directDoc = await db.collection('users').doc(uid).get();
+          if (directDoc.exists) {
+            await directDoc.ref.update({
+              disabled: true,
+              updated_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            userDocUpdated = true;
+          }
+        }
+
+        console.log(`User ${uid} disabled in Auth. Firestore doc updated: ${userDocUpdated}`);
       }
 
       return {

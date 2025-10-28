@@ -107,7 +107,7 @@ export default function Soldiers() {
       }
 
       const results = await Promise.allSettled([
-        Soldier.filter(filter, "-created_date"),
+        Soldier.filter(filter), // Remove sort - orderBy excludes docs without the field
         Weapon.filter(filter),
         SerializedGear.filter(filter),
         DroneSet.filter(filter),

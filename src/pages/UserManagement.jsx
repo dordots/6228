@@ -10,8 +10,12 @@ import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Users, Shield, Mail, Calendar, Search, UserPlus, Settings, Building, UsersIcon } from "lucide-react";
+import { Users, Shield, Mail, Calendar, Search, UserPlus, Settings, Building, UsersIcon, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { firebaseFunctions } from "@/firebase/functions";
+
+const { deleteUser } = firebaseFunctions;
 
 // Define roles with their display properties
 const ROLES = {
@@ -53,6 +57,8 @@ export default function UserManagement() {
     linkedSoldierId: "",
     displayName: ""
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -119,6 +125,36 @@ export default function UserManagement() {
     } catch (error) {
       console.error("Error updating user role:", error);
       setError("Failed to update user role. " + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  const handleDeleteClick = (user) => {
+    setUserToDelete(user);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete) return;
+
+    try {
+      setError("");
+      const result = await deleteUser({
+        uid: userToDelete.id,
+        hardDelete: true  // Permanently delete from both Auth and Firestore
+      });
+
+      if (result.success) {
+        setSuccess(`User ${userToDelete.full_name || userToDelete.phoneNumber} deleted successfully from Authentication and Firestore`);
+        await loadData();
+      } else {
+        setError(`Failed to delete user: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      setError(`Failed to delete user: ${error.message}`);
+    } finally {
+      setShowDeleteConfirm(false);
+      setUserToDelete(null);
     }
   };
 
@@ -510,30 +546,42 @@ export default function UserManagement() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 items-center">
                             {canEditUser && user.id !== currentUser?.id ? (
-                              <Select
-                                value={role}
-                                onValueChange={(newRole) => handleRoleUpdate(
-                                  user.id,
-                                  newRole,
-                                  getUserDivision(user),
-                                  getUserTeam(user)
-                                )}
-                                disabled={!isCurrentUserAdmin}
-                              >
-                                <SelectTrigger className="w-32">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="soldier">Soldier</SelectItem>
-                                  <SelectItem value="team_leader">Team Leader</SelectItem>
-                                  <SelectItem value="division_manager">Division Manager</SelectItem>
-                                  {isCurrentUserAdmin && (
-                                    <SelectItem value="admin">Admin</SelectItem>
+                              <>
+                                <Select
+                                  value={role}
+                                  onValueChange={(newRole) => handleRoleUpdate(
+                                    user.id,
+                                    newRole,
+                                    getUserDivision(user),
+                                    getUserTeam(user)
                                   )}
-                                </SelectContent>
-                              </Select>
+                                  disabled={!isCurrentUserAdmin}
+                                >
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="soldier">Soldier</SelectItem>
+                                    <SelectItem value="team_leader">Team Leader</SelectItem>
+                                    <SelectItem value="division_manager">Division Manager</SelectItem>
+                                    {isCurrentUserAdmin && (
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                {isCurrentUserAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteClick(user)}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </>
                             ) : (
                               <span className="text-sm text-slate-500">
                                 {user.id === currentUser?.id ? 'Current user' : 'No permission'}
@@ -550,6 +598,36 @@ export default function UserManagement() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete user <strong>{userToDelete?.full_name || userToDelete?.phoneNumber}</strong>?
+              <br />
+              <br />
+              This will permanently delete:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Their account from Firebase Authentication</li>
+                <li>Their user profile from the Firestore users collection</li>
+              </ul>
+              <br />
+              <strong className="text-red-600">This action cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -375,7 +375,7 @@ export default function Weapons() {
   };
 
   const handleDelete = async (weapon) => {
-    if (!currentUser?.permissions?.can_delete_weapons && currentUser?.role !== 'admin') {
+    if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete weapons.");
       return;
     }

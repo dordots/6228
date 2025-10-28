@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ActivityLog } from "@/api/entities";
+import { ActivityLog, User } from "@/api/entities";
 import { generateSigningForm } from "@/api/functions";
 import { generateReleaseForm } from "@/api/functions";
 import { Badge } from '@/components/ui/badge';
@@ -37,10 +37,30 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
                 setIsLoading(true);
                 try {
                     console.log(`Searching for history for soldier ${soldier.soldier_id}`);
-                    
-                    // ENHANCED: Get all activity logs first to debug what's in the database
-                    const allLogs = await ActivityLog.list("-created_date", 200);
-                    console.log(`Found ${allLogs.length} total activity logs`);
+
+                    // Get current user to check their division and scope
+                    const currentUser = await User.me();
+                    console.log(`Current user division: ${currentUser.division}, scope: ${currentUser.scope}`);
+
+                    // Filter activity logs by division if user is not admin
+                    // We need to fetch from server with division filter to satisfy Firestore rules
+                    let allLogs;
+                    if (currentUser.role === 'admin' || currentUser.scope === 'global') {
+                        // Admins can see all logs
+                        allLogs = await ActivityLog.list("-created_date", 200);
+                    } else if (currentUser.division) {
+                        // For division managers and team leaders, filter by division
+                        // Use the same method as History.jsx
+                        allLogs = await ActivityLog.filter(
+                            { division_name: currentUser.division },
+                            '-created_at',
+                            200
+                        );
+                    } else {
+                        console.warn('User has no division assigned, cannot fetch activity logs');
+                        allLogs = [];
+                    }
+                    console.log(`Found ${allLogs.length} total activity logs from division`);
                     
                     // Filter locally to find any mention of this soldier
                     const relevantLogs = allLogs.filter(log => {

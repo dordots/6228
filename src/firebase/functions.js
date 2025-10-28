@@ -34,6 +34,7 @@ export const firebaseFunctions = {
   generateTotp: createFunction('generateTotp'),
   verifyTotp: createFunction('verifyTotp'),
   updateUserData: createFunction('updateUserData'),
+  deleteUser: createFunction('deleteUser'),
   
   // Email functions
   sendEmailViaSendGrid: createFunction('sendEmailViaSendGrid'),

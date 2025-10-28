@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from "react";
-import { DroneComponent } from "@/api/entities";
+import { DroneComponent, Soldier } from "@/api/entities";
 import { User } from "@/api/entities";
 import { ActivityLog } from "@/api/entities";
 import { DroneSet } from "@/api/entities";
@@ -60,14 +60,126 @@ export default function DroneComponents() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [data, sets] = await Promise.all([
-        DroneComponent.list("-created_date"),
-        DroneSet.list()
-      ]);
-      setComponents(data);
-      setDroneSets(sets);
+      const user = await User.me();
+      const isAdmin = user?.role === 'admin';
+      const isManager = user?.custom_role === 'manager';
+      const isDivisionManager = user?.custom_role === 'division_manager';
+      const isTeamLeader = user?.custom_role === 'team_leader';
+      const userDivision = user?.division;
+      const userTeam = user?.team;
+
+      // Team leaders need special two-step filtering
+      if (isTeamLeader && userDivision && userTeam) {
+        console.log('Team leader: Using two-step filtering for drone components');
+
+        // Step 1: Get team soldiers
+        const teamSoldiers = await Soldier.filter({
+          division_name: userDivision,
+          team_name: userTeam
+        }).catch(() => []);
+
+        const soldierIds = teamSoldiers.map(s => s.soldier_id);
+        console.log(`Team leader (DroneComponents): Found ${soldierIds.length} team soldiers`);
+        console.log('Team leader (DroneComponents): Soldier IDs:', soldierIds);
+
+        // Step 2: Get all division drone sets, then filter by team
+        const allDroneSets = await DroneSet.filter({ division_name: userDivision }).catch(() => []);
+
+        console.log(`Team leader (DroneComponents): Fetched ${allDroneSets.length} division drone sets, filtering...`);
+
+        const soldierIdSet = new Set(soldierIds);
+        const droneSetsData = allDroneSets.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
+
+        console.log(`Team leader (DroneComponents): After filtering, ${droneSetsData.length} drone sets assigned to team members`);
+        console.log('Team leader (DroneComponents): Filtered drone sets:', droneSetsData.map(d => ({
+          set_serial_number: d.set_serial_number,
+          assigned_to: d.assigned_to,
+          components: d.components
+        })));
+
+        // Step 3: Extract component IDs from team drone sets
+        const teamComponentIds = new Set();
+        droneSetsData.forEach(droneSet => {
+          if (droneSet.components && typeof droneSet.components === 'object') {
+            // components is a map/object with component IDs as values
+            Object.values(droneSet.components).forEach(componentId => {
+              if (componentId) {
+                teamComponentIds.add(componentId);
+              }
+            });
+          }
+        });
+
+        console.log(`Team leader (DroneComponents): Found ${teamComponentIds.size} unique component IDs in team drone sets`);
+        console.log('Team leader (DroneComponents): Component IDs:', Array.from(teamComponentIds));
+
+        // Step 4: Fetch only the specific components that are in team drone sets
+        // Fetch all components from the system and filter to only team components
+        // Note: We can't filter by division since components are shared resources
+        const componentsData = [];
+
+        if (teamComponentIds.size > 0) {
+          try {
+            // Try to fetch all components and filter
+            // This might fail due to permissions, so we'll catch and handle
+            const allSystemComponents = await DroneComponent.list("-created_date").catch(() => []);
+
+            console.log(`Team leader (DroneComponents): Fetched ${allSystemComponents.length} total system components`);
+
+            // Filter to only components that are in team drone sets
+            allSystemComponents.forEach(component => {
+              // Check if component.id or component.component_id matches any team component ID
+              if (component && (teamComponentIds.has(component.id) || teamComponentIds.has(component.component_id))) {
+                componentsData.push(component);
+              }
+            });
+          } catch (error) {
+            console.error('Failed to fetch components list:', error);
+
+            // Fallback: try to fetch components one by one using filter
+            for (const componentId of teamComponentIds) {
+              try {
+                const foundComponents = await DroneComponent.filter({ component_id: componentId }).catch(() => []);
+                if (foundComponents.length > 0) {
+                  componentsData.push(...foundComponents);
+                }
+              } catch (err) {
+                console.error(`Failed to fetch component ${componentId}:`, err);
+              }
+            }
+          }
+        }
+
+        console.log(`Team leader (DroneComponents): Successfully loaded ${componentsData.length} components for team drone sets`);
+
+        setComponents(Array.isArray(componentsData) ? componentsData : []);
+        setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
+      } else {
+        // Non-team-leader roles: standard filtering
+        let filter = {};
+        if (isAdmin || isManager) {
+          filter = {}; // See everything
+        } else if (isDivisionManager && userDivision) {
+          filter = { division_name: userDivision }; // See division only
+        } else if (userDivision) {
+          filter = { division_name: userDivision }; // Fallback
+        }
+
+        const [data, sets] = await Promise.all([
+          Object.keys(filter).length > 0
+            ? DroneComponent.filter(filter, "-created_date")
+            : DroneComponent.list("-created_date"),
+          Object.keys(filter).length > 0
+            ? DroneSet.filter(filter)
+            : DroneSet.list()
+        ]);
+        setComponents(data);
+        setDroneSets(sets);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
+      setComponents([]);
+      setDroneSets([]);
     }
     setIsLoading(false);
   };

@@ -83,24 +83,48 @@ export default function SerializedGearPage() {
       const userDivision = currentUser?.division;
       const userTeam = currentUser?.team;
 
-      // Build filter based on role hierarchy
-      let filter = {};
-      if (isAdmin || isManager) {
-        filter = {}; // See everything
-      } else if (isDivisionManager && userDivision) {
-        filter = { division_name: userDivision }; // See division only
-      } else if (isTeamLeader && userDivision && userTeam) {
-        filter = { division_name: userDivision, team_name: userTeam }; // See team only
-      } else if (userDivision) {
-        filter = { division_name: userDivision }; // Fallback
-      }
+      // Team leaders need special two-step filtering
+      if (isTeamLeader && userDivision && userTeam) {
+        console.log('Team leader: Using two-step filtering approach for gear');
 
-      const [gearData, soldiersData] = await Promise.all([
-        SerializedGear.filter(filter, "-created_date").catch(() => []),
-        Soldier.filter(filter).catch(() => [])
-      ]);
-      setGear(Array.isArray(gearData) ? gearData : []);
-      setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
+        // Step 1: Get team soldiers
+        const teamSoldiers = await Soldier.filter({
+          division_name: userDivision,
+          team_name: userTeam
+        }).catch(() => []);
+
+        const soldierIds = teamSoldiers.map(s => s.soldier_id);
+        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
+
+        // Step 2: Get all division gear, then filter client-side
+        const allGear = await SerializedGear.filter({ division_name: userDivision }, "-created_date").catch(() => []);
+        console.log(`Team leader: Fetched ${allGear.length} division gear, filtering client-side...`);
+
+        const soldierIdSet = new Set(soldierIds);
+        const gearData = allGear.filter(g => g.assigned_to && soldierIdSet.has(g.assigned_to));
+
+        console.log(`Team leader: After filtering, ${gearData.length} gear assigned to team members`);
+
+        setGear(Array.isArray(gearData) ? gearData : []);
+        setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
+      } else {
+        // Non-team-leader roles: standard filtering
+        let filter = {};
+        if (isAdmin || isManager) {
+          filter = {}; // See everything
+        } else if (isDivisionManager && userDivision) {
+          filter = { division_name: userDivision }; // See division only
+        } else if (userDivision) {
+          filter = { division_name: userDivision }; // Fallback
+        }
+
+        const [gearData, soldiersData] = await Promise.all([
+          SerializedGear.filter(filter, "-created_date").catch(() => []),
+          Soldier.filter(filter).catch(() => [])
+        ]);
+        setGear(Array.isArray(gearData) ? gearData : []);
+        setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
       setGear([]);

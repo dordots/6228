@@ -56,51 +56,106 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       const userDivision = currentUserData?.division;
       const userTeam = currentUserData?.team;
 
-      // Build filter based on role hierarchy
-      let filter = {};
-      if (isAdmin || isManager) {
-        filter = {}; // See everything
-      } else if (isDivisionManager && userDivision) {
-        filter = { division_name: userDivision }; // See division only
-      } else if (isTeamLeader && userDivision && userTeam) {
-        filter = { division_name: userDivision, team_name: userTeam }; // See team only
-      } else if (userDivision) {
-        filter = { division_name: userDivision }; // Fallback
+      // Team leaders need special two-step filtering
+      if (isTeamLeader && userDivision && userTeam) {
+        console.log('Team leader: Using two-step filtering approach for armory deposit');
+
+        // Step 1: Get team soldiers
+        const teamSoldiers = await Soldier.filter({
+          division_name: userDivision,
+          team_name: userTeam
+        });
+
+        const soldierIds = teamSoldiers.map(s => s.soldier_id);
+        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
+
+        // Step 2: Get all division items, then filter client-side
+        const divisionFilter = { division_name: userDivision };
+        const unassignedToDepositFilter = { ...divisionFilter, armory_status: 'with_soldier', assigned_to: null };
+        const unassignedInDepositFilter = { ...divisionFilter, armory_status: 'in_deposit', assigned_to: null };
+
+        const [
+          allWeapons, allGear, allDrones,
+          unassignedToDepositWeapons, unassignedToDepositGear, unassignedToDepositDrones,
+          unassignedInDepositWeapons, unassignedInDepositGear, unassignedInDepositDrones
+        ] = await Promise.all([
+          Weapon.filter(divisionFilter),
+          SerializedGear.filter(divisionFilter),
+          DroneSet.filter(divisionFilter),
+          Weapon.filter(unassignedToDepositFilter),
+          SerializedGear.filter(unassignedToDepositFilter),
+          DroneSet.filter(unassignedToDepositFilter),
+          Weapon.filter(unassignedInDepositFilter),
+          SerializedGear.filter(unassignedInDepositFilter),
+          DroneSet.filter(unassignedInDepositFilter),
+        ]);
+
+        const soldierIdSet = new Set(soldierIds);
+        const weaponsData = allWeapons.filter(w => w.assigned_to && soldierIdSet.has(w.assigned_to));
+        const gearData = allGear.filter(g => g.assigned_to && soldierIdSet.has(g.assigned_to));
+        const droneSetsData = allDrones.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
+
+        console.log(`Team leader: After filtering, ${weaponsData.length} weapons, ${gearData.length} gear, ${droneSetsData.length} drones assigned to team`);
+
+        setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
+        setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
+        setGear(Array.isArray(gearData) ? gearData : []);
+        setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
+        setUnassignedToDeposit({
+            weapons: Array.isArray(unassignedToDepositWeapons) ? unassignedToDepositWeapons : [],
+            gear: Array.isArray(unassignedToDepositGear) ? unassignedToDepositGear : [],
+            droneSets: Array.isArray(unassignedToDepositDrones) ? unassignedToDepositDrones : [],
+        });
+        setUnassignedInDeposit({
+            weapons: Array.isArray(unassignedInDepositWeapons) ? unassignedInDepositWeapons : [],
+            gear: Array.isArray(unassignedInDepositGear) ? unassignedInDepositGear : [],
+            droneSets: Array.isArray(unassignedInDepositDrones) ? unassignedInDepositDrones : [],
+        });
+      } else {
+        // Non-team-leader roles: standard filtering
+        let filter = {};
+        if (isAdmin || isManager) {
+          filter = {}; // See everything
+        } else if (isDivisionManager && userDivision) {
+          filter = { division_name: userDivision }; // See division only
+        } else if (userDivision) {
+          filter = { division_name: userDivision }; // Fallback
+        }
+        const unassignedToDepositFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };
+        const unassignedInDepositFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
+
+        const [
+          soldiersData, weaponsData, gearData, droneSetsData,
+          unassignedToDepositWeapons, unassignedToDepositGear, unassignedToDepositDrones,
+          unassignedInDepositWeapons, unassignedInDepositGear, unassignedInDepositDrones
+        ] = await Promise.all([
+          Soldier.filter(filter),
+          Weapon.filter(filter),
+          SerializedGear.filter(filter),
+          DroneSet.filter(filter),
+          Weapon.filter(unassignedToDepositFilter),
+          SerializedGear.filter(unassignedToDepositFilter),
+          DroneSet.filter(unassignedToDepositFilter),
+          Weapon.filter(unassignedInDepositFilter),
+          SerializedGear.filter(unassignedInDepositFilter),
+          DroneSet.filter(unassignedInDepositFilter),
+        ]);
+
+        setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
+        setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
+        setGear(Array.isArray(gearData) ? gearData : []);
+        setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
+        setUnassignedToDeposit({
+            weapons: Array.isArray(unassignedToDepositWeapons) ? unassignedToDepositWeapons : [],
+            gear: Array.isArray(unassignedToDepositGear) ? unassignedToDepositGear : [],
+            droneSets: Array.isArray(unassignedToDepositDrones) ? unassignedToDepositDrones : [],
+        });
+        setUnassignedInDeposit({
+            weapons: Array.isArray(unassignedInDepositWeapons) ? unassignedInDepositWeapons : [],
+            gear: Array.isArray(unassignedInDepositGear) ? unassignedInDepositGear : [],
+            droneSets: Array.isArray(unassignedInDepositDrones) ? unassignedInDepositDrones : [],
+        });
       }
-      const unassignedToDepositFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };
-      const unassignedInDepositFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
-
-      const [
-        soldiersData, weaponsData, gearData, droneSetsData,
-        unassignedToDepositWeapons, unassignedToDepositGear, unassignedToDepositDrones,
-        unassignedInDepositWeapons, unassignedInDepositGear, unassignedInDepositDrones
-      ] = await Promise.all([
-        Soldier.filter(filter),
-        Weapon.filter(filter),
-        SerializedGear.filter(filter),
-        DroneSet.filter(filter),
-        Weapon.filter(unassignedToDepositFilter),
-        SerializedGear.filter(unassignedToDepositFilter),
-        DroneSet.filter(unassignedToDepositFilter),
-        Weapon.filter(unassignedInDepositFilter),
-        SerializedGear.filter(unassignedInDepositFilter),
-        DroneSet.filter(unassignedInDepositFilter),
-      ]);
-
-      setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
-      setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
-      setGear(Array.isArray(gearData) ? gearData : []);
-      setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
-      setUnassignedToDeposit({
-          weapons: Array.isArray(unassignedToDepositWeapons) ? unassignedToDepositWeapons : [],
-          gear: Array.isArray(unassignedToDepositGear) ? unassignedToDepositGear : [],
-          droneSets: Array.isArray(unassignedToDepositDrones) ? unassignedToDepositDrones : [],
-      });
-      setUnassignedInDeposit({
-          weapons: Array.isArray(unassignedInDepositWeapons) ? unassignedInDepositWeapons : [],
-          gear: Array.isArray(unassignedInDepositGear) ? unassignedInDepositGear : [],
-          droneSets: Array.isArray(unassignedInDepositDrones) ? unassignedInDepositDrones : [],
-      });
     } catch (error) {
       console.error("Error loading data:", error);
       setSoldiers([]);

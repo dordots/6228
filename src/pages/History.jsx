@@ -417,7 +417,9 @@ export default function HistoryPage() {
                 } else if (isDivisionManager && userDivision) {
                     filter = { division_name: userDivision }; // See division only
                 } else if (isTeamLeader && userDivision && userTeam) {
-                    filter = { division_name: userDivision, team_name: userTeam }; // See team only
+                    // Team leaders: ActivityLog doesn't have team_name, only division_name
+                    // Show all division activity logs (they'll see activities for their division)
+                    filter = { division_name: userDivision };
                 } else if (userDivision) {
                     filter = { division_name: userDivision }; // Fallback
                 }

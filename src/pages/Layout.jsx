@@ -143,12 +143,14 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       url: createPageUrl("DailyVerification"),
       icon: ClipboardCheck,
       permission: 'operations.verify',
+      hideForRoles: ['team_leader']
     },
     {
       title: "Verification History",
       url: createPageUrl("VerificationHistory"),
       icon: Calendar,
       permission: 'operations.verify',
+      hideForRoles: ['team_leader']
     },
     {
       title: "Maintenance",

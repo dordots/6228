@@ -81,26 +81,52 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       const userDivision = user?.division;
       const userTeam = user?.team;
 
-      // Build filter based on role hierarchy
-      let filter = {};
-      if (isAdmin || isManager) {
-        filter = {}; // See everything
-      } else if (isDivisionManager && userDivision) {
-        filter = { division_name: userDivision }; // See division only
-      } else if (isTeamLeader && userDivision && userTeam) {
-        filter = { division_name: userDivision, team_name: userTeam }; // See team only
-      } else if (userDivision) {
-        filter = { division_name: userDivision }; // Fallback
-      }
+      // Team leaders need special two-step filtering
+      if (isTeamLeader && userDivision && userTeam) {
+        console.log('Team leader: Using two-step filtering approach for drones');
 
-      const [droneSetsData, componentsData, soldiersData] = await Promise.all([
-        DroneSet.filter(filter, "-created_date").catch(() => []),
-        DroneComponent.filter(filter).catch(() => []),
-        Soldier.filter(filter).catch(() => [])
-      ]);
-      setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
-      setComponents(Array.isArray(componentsData) ? componentsData : []);
-      setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
+        // Step 1: Get team soldiers
+        const teamSoldiers = await Soldier.filter({
+          division_name: userDivision,
+          team_name: userTeam
+        }).catch(() => []);
+
+        const soldierIds = teamSoldiers.map(s => s.soldier_id);
+        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
+
+        // Step 2: Get all division drones, then filter client-side
+        const allDrones = await DroneSet.filter({ division_name: userDivision }, "-created_date").catch(() => []);
+        const allComponents = await DroneComponent.filter({ division_name: userDivision }).catch(() => []);
+        console.log(`Team leader: Fetched ${allDrones.length} division drones, filtering client-side...`);
+
+        const soldierIdSet = new Set(soldierIds);
+        const droneSetsData = allDrones.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
+
+        console.log(`Team leader: After filtering, ${droneSetsData.length} drones assigned to team members`);
+
+        setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
+        setComponents(Array.isArray(allComponents) ? allComponents : []); // Components don't have assigned_to, keep all division components
+        setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
+      } else {
+        // Non-team-leader roles: standard filtering
+        let filter = {};
+        if (isAdmin || isManager) {
+          filter = {}; // See everything
+        } else if (isDivisionManager && userDivision) {
+          filter = { division_name: userDivision }; // See division only
+        } else if (userDivision) {
+          filter = { division_name: userDivision }; // Fallback
+        }
+
+        const [droneSetsData, componentsData, soldiersData] = await Promise.all([
+          DroneSet.filter(filter, "-created_date").catch(() => []),
+          DroneComponent.filter(filter).catch(() => []),
+          Soldier.filter(filter).catch(() => [])
+        ]);
+        setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
+        setComponents(Array.isArray(componentsData) ? componentsData : []);
+        setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
       setDroneSets([]);

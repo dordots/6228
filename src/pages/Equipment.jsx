@@ -72,25 +72,49 @@ export default function EquipmentPage() {
       const userDivision = user?.division;
       const userTeam = user?.team;
 
-      // Build filter based on role hierarchy
-      let filter = {};
-      if (isAdmin || isManager) {
-        filter = {}; // See everything
-      } else if (isDivisionManager && userDivision) {
-        filter = { division_name: userDivision }; // See division only
-      } else if (isTeamLeader && userDivision && userTeam) {
-        filter = { division_name: userDivision, team_name: userTeam }; // See team only
-      } else if (userDivision) {
-        filter = { division_name: userDivision }; // Fallback
+      // Team leaders need special two-step filtering
+      if (isTeamLeader && userDivision && userTeam) {
+        console.log('Team leader: Using two-step filtering approach for equipment');
+
+        // Step 1: Get team soldiers
+        const teamSoldiers = await Soldier.filter({
+          division_name: userDivision,
+          team_name: userTeam
+        }).catch(() => []);
+
+        const soldierIds = teamSoldiers.map(s => s.soldier_id);
+        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
+
+        // Step 2: Get all division equipment, then filter client-side
+        const allEquipment = await Equipment.filter({ division_name: userDivision }, "-created_date").catch(() => []);
+        console.log(`Team leader: Fetched ${allEquipment.length} division equipment, filtering client-side...`);
+
+        const soldierIdSet = new Set(soldierIds);
+        const equipmentData = allEquipment.filter(e => e.assigned_to && soldierIdSet.has(e.assigned_to));
+
+        console.log(`Team leader: After filtering, ${equipmentData.length} equipment assigned to team members`);
+
+        setEquipment(Array.isArray(equipmentData) ? equipmentData : []);
+        setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
+      } else {
+        // Non-team-leader roles: standard filtering
+        let filter = {};
+        if (isAdmin || isManager) {
+          filter = {}; // See everything
+        } else if (isDivisionManager && userDivision) {
+          filter = { division_name: userDivision }; // See division only
+        } else if (userDivision) {
+          filter = { division_name: userDivision }; // Fallback
+        }
+
+        const [equipmentData, soldiersData] = await Promise.allSettled([
+          Equipment.filter(filter, "-created_date"), // Apply division filter and sort
+          Soldier.filter(filter) // Apply division filter
+        ]);
+
+        setEquipment(equipmentData.status === 'fulfilled' && Array.isArray(equipmentData.value) ? equipmentData.value : []);
+        setSoldiers(soldiersData.status === 'fulfilled' && Array.isArray(soldiersData.value) ? soldiersData.value : []);
       }
-
-      const [equipmentData, soldiersData] = await Promise.allSettled([
-        Equipment.filter(filter, "-created_date"), // Apply division filter and sort
-        Soldier.filter(filter) // Apply division filter
-      ]);
-
-      setEquipment(equipmentData.status === 'fulfilled' && Array.isArray(equipmentData.value) ? equipmentData.value : []);
-      setSoldiers(soldiersData.status === 'fulfilled' && Array.isArray(soldiersData.value) ? soldiersData.value : []);
 
     } catch (error) {
       console.error("Error loading data:", error);

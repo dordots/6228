@@ -100,64 +100,88 @@ export default function Weapons() {
          full_name: user?.full_name
        });
 
-       // Build filter based on role hierarchy
-       let filter = {};
-       if (isAdmin || isManager) {
-         filter = {}; // See everything
-       } else if (isDivisionManager && userDivision) {
-         filter = { division_name: userDivision }; // See division only
-       } else if (isTeamLeader && userDivision && userTeam) {
-         filter = { division_name: userDivision, team_name: userTeam }; // See team only
-       } else if (userDivision) {
-         filter = { division_name: userDivision }; // Fallback
-       }
+       // Team leaders need special two-step filtering
+       if (isTeamLeader && userDivision && userTeam) {
+         console.log('Team leader: Using two-step filtering approach');
 
-       // DEBUG: Log the filter being applied
-       console.log('Database Filter Applied:', filter);
-       console.log('Filter explanation:', Object.keys(filter).length === 0
-         ? 'No filter - fetching ALL weapons (admin/manager)'
-         : `Filtering by division_name: "${filter.division_name}"`);
+         // Step 1: Get team soldiers
+         const teamSoldiers = await Soldier.filter({
+           division_name: userDivision,
+           team_name: userTeam
+         }).catch(() => []);
 
-      const [weaponsData, soldiersData] = await Promise.all([
-        Weapon.filter(filter, "-created_date").catch(() => []),
-        Soldier.filter(filter).catch(() => [])
-      ]);
+         const soldierIds = teamSoldiers.map(s => s.soldier_id);
+         console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
 
-      // DEBUG: Log fetched data
-      console.log('Total weapons fetched from DB:', weaponsData?.length || 0);
-      console.log('Total soldiers fetched from DB:', soldiersData?.length || 0);
+         // Step 2: Get all division weapons, then filter client-side
+         const allWeapons = await Weapon.filter({ division_name: userDivision }, "-created_date").catch(() => []);
+         console.log(`Team leader: Fetched ${allWeapons.length} division weapons, filtering client-side...`);
 
-      if (weaponsData && weaponsData.length > 0) {
-        // Sample first 5 weapons
-        console.log('Sample of first 5 weapons:', weaponsData.slice(0, 5).map(w => ({
-          id: w.id,
-          weapon_id: w.weapon_id,
-          weapon_type: w.weapon_type,
-          division_name: w.division_name,
-          assigned_to: w.assigned_to
-        })));
+         const soldierIdSet = new Set(soldierIds);
+         const weaponsData = allWeapons.filter(w => w.assigned_to && soldierIdSet.has(w.assigned_to));
 
-        // Check for weapons with missing division_name
-        const weaponsWithoutDivision = weaponsData.filter(w => !w.division_name);
-        if (weaponsWithoutDivision.length > 0) {
-          console.warn('⚠️ Weapons with missing division_name:', weaponsWithoutDivision.length);
-          console.warn('Sample:', weaponsWithoutDivision.slice(0, 3).map(w => ({
+         console.log(`Team leader: After filtering, ${weaponsData.length} weapons assigned to team members`);
+
+         setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
+         setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
+       } else {
+         // Non-team-leader roles: standard filtering
+         let filter = {};
+         if (isAdmin || isManager) {
+           filter = {}; // See everything
+         } else if (isDivisionManager && userDivision) {
+           filter = { division_name: userDivision }; // See division only
+         } else if (userDivision) {
+           filter = { division_name: userDivision }; // Fallback
+         }
+
+         // DEBUG: Log the filter being applied
+         console.log('Database Filter Applied:', filter);
+         console.log('Filter explanation:', Object.keys(filter).length === 0
+           ? 'No filter - fetching ALL weapons (admin/manager)'
+           : `Filtering by division_name: "${filter.division_name}"`);
+
+        const [weaponsData, soldiersData] = await Promise.all([
+          Weapon.filter(filter, "-created_date").catch(() => []),
+          Soldier.filter(filter).catch(() => [])
+        ]);
+
+        // DEBUG: Log fetched data
+        console.log('Total weapons fetched from DB:', weaponsData?.length || 0);
+        console.log('Total soldiers fetched from DB:', soldiersData?.length || 0);
+
+        if (weaponsData && weaponsData.length > 0) {
+          // Sample first 5 weapons
+          console.log('Sample of first 5 weapons:', weaponsData.slice(0, 5).map(w => ({
             id: w.id,
             weapon_id: w.weapon_id,
             weapon_type: w.weapon_type,
-            division_name: w.division_name
+            division_name: w.division_name,
+            assigned_to: w.assigned_to
           })));
+
+          // Check for weapons with missing division_name
+          const weaponsWithoutDivision = weaponsData.filter(w => !w.division_name);
+          if (weaponsWithoutDivision.length > 0) {
+            console.warn('⚠️ Weapons with missing division_name:', weaponsWithoutDivision.length);
+            console.warn('Sample:', weaponsWithoutDivision.slice(0, 3).map(w => ({
+              id: w.id,
+              weapon_id: w.weapon_id,
+              weapon_type: w.weapon_type,
+              division_name: w.division_name
+            })));
+          }
+
+          // Show unique division names in fetched data
+          const uniqueDivisions = [...new Set(weaponsData.map(w => w.division_name).filter(Boolean))];
+          console.log('Unique divisions in fetched weapons:', uniqueDivisions);
         }
 
-        // Show unique division names in fetched data
-        const uniqueDivisions = [...new Set(weaponsData.map(w => w.division_name).filter(Boolean))];
-        console.log('Unique divisions in fetched weapons:', uniqueDivisions);
-      }
+        console.log('=== END WEAPON LOAD DEBUG ===\n');
 
-      console.log('=== END WEAPON LOAD DEBUG ===\n');
-
-      setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
-      setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
+        setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
+        setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
+       }
     } catch (error) {
       console.error("Error loading data:", error);
       setWeapons([]);

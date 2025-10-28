@@ -76,10 +76,17 @@ service cloud.firestore {
           getUserDivision() == resourceData.division_name ||
           getUserDivision() == resourceData.division)) ||
         (getUserScope() == 'team' && (
-          (getUserDivision() == resourceData.division_name &&
+          // If resource has team_name field, check it matches user's team
+          (('team_name' in resourceData) &&
+           getUserDivision() == resourceData.division_name &&
            getUserTeam() == resourceData.team_name) ||
-          (getUserDivision() == resourceData.division &&
-           getUserTeam() == resourceData.team))) ||
+          (('team' in resourceData) &&
+           getUserDivision() == resourceData.division &&
+           getUserTeam() == resourceData.team) ||
+          // If resource doesn't have team_name, allow division-level access for team leaders
+          // (they'll filter client-side by assigned_to)
+          (!('team_name' in resourceData) && !('team' in resourceData) &&
+           getUserDivision() == resourceData.division_name))) ||
         (getUserScope() == 'self' && (
           isUserLinkedToResource(resourceData) ||
           isOwner(resourceData.created_by)))

@@ -52,73 +52,149 @@ export default function Dashboard() {
 
       setUserDivision(userDivisionName);
 
-      // Build filter based on user permissions and selected division filter
-      let filter = {};
-      if (isAdmin || isManager) {
-        // For admins and managers, apply division filter if selected
-        if (selectedDivisionFilter !== "all") {
-          filter = { division_name: selectedDivisionFilter };
+      // Team leaders need special handling - fetch division data, then filter client-side
+      if (isTeamLeader && userDivisionName && userTeamName) {
+        console.log('Team leader loading: First fetching team soldiers...', 'Division:', userDivisionName, 'Team:', userTeamName);
+
+        // Step 1: Get all soldiers in the team
+        const teamSoldiers = await Soldier.filter({
+          division_name: userDivisionName,
+          team_name: userTeamName
+        });
+
+        const soldierIds = teamSoldiers.map(s => s.soldier_id);
+        console.log('Team leader loading: Found', soldierIds.length, 'team soldiers:', soldierIds);
+
+        // Step 2: Fetch ALL division equipment/weapons/gear/drones (allowed by division scope)
+        // Then filter client-side by assigned_to matching team soldier IDs
+        const divisionFilter = { division_name: userDivisionName };
+
+        const today = new Date().toISOString().split('T')[0];
+        const verificationFilter = {
+          verification_date: today,
+          division_name: userDivisionName,
+          team_name: userTeamName
+        };
+
+        console.log('Team leader loading: Fetching all division equipment/weapons/gear/drones, will filter client-side...');
+
+        // Fetch all division equipment/weapons/gear/drones
+        const [
+          equipmentResult,
+          weaponsResult,
+          gearResult,
+          dronesResult,
+          activityLogResult,
+          verificationsResult,
+        ] = await Promise.allSettled([
+          Equipment.filter(divisionFilter),
+          Weapon.filter(divisionFilter),
+          SerializedGear.filter(divisionFilter),
+          DroneSet.filter(divisionFilter),
+          ActivityLog.filter({ division_name: userDivisionName, team_name: userTeamName }, "-created_date", 50),
+          DailyVerification.filter(verificationFilter),
+        ]);
+
+        // Step 3: Client-side filter - only keep items assigned to team soldiers
+        const soldierIdSet = new Set(soldierIds);
+
+        const allEquipment = equipmentResult.status === 'fulfilled' && Array.isArray(equipmentResult.value) ? equipmentResult.value : [];
+        const allWeapons = weaponsResult.status === 'fulfilled' && Array.isArray(weaponsResult.value) ? weaponsResult.value : [];
+        const allGear = gearResult.status === 'fulfilled' && Array.isArray(gearResult.value) ? gearResult.value : [];
+        const allDrones = dronesResult.status === 'fulfilled' && Array.isArray(dronesResult.value) ? dronesResult.value : [];
+
+        const equipmentData = allEquipment.filter(e => e.assigned_to && soldierIdSet.has(e.assigned_to));
+        const weaponsData = allWeapons.filter(w => w.assigned_to && soldierIdSet.has(w.assigned_to));
+        const gearData = allGear.filter(g => g.assigned_to && soldierIdSet.has(g.assigned_to));
+        const dronesData = allDrones.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
+
+        const activitiesData = activityLogResult.status === 'fulfilled' && Array.isArray(activityLogResult.value) ? activityLogResult.value : [];
+        const verificationsData = verificationsResult.status === 'fulfilled' && Array.isArray(verificationsResult.value) ? verificationsResult.value : [];
+
+        // Set results
+        setSoldiers(teamSoldiers);
+        setEquipment(equipmentData);
+        setWeapons(weaponsData);
+        setGear(gearData);
+        setDrones(dronesData);
+        setActivities(activitiesData);
+        setDailyVerifications(verificationsData);
+
+        console.log('Team leader data loaded (after client-side filtering):', {
+          soldiers: teamSoldiers.length,
+          equipment: `${equipmentData.length} of ${allEquipment.length}`,
+          weapons: `${weaponsData.length} of ${allWeapons.length}`,
+          gear: `${gearData.length} of ${allGear.length}`,
+          drones: `${dronesData.length} of ${allDrones.length}`,
+          activities: activitiesData.length,
+          verifications: verificationsData.length,
+        });
+      } else {
+        // Non-team-leader roles: use standard filtering
+        let filter = {};
+        if (isAdmin || isManager) {
+          // For admins and managers, apply division filter if selected
+          if (selectedDivisionFilter !== "all") {
+            filter = { division_name: selectedDivisionFilter };
+          }
+          // Otherwise show all divisions (empty filter)
+        } else if (isDivisionManager && userDivisionName) {
+          // Division managers see only their division
+          filter = { division_name: userDivisionName };
+        } else if (userDivisionName) {
+          // Fallback: filter by division
+          filter = { division_name: userDivisionName };
         }
-        // Otherwise show all divisions (empty filter)
-      } else if (isDivisionManager && userDivisionName) {
-        // Division managers see only their division
-        filter = { division_name: userDivisionName };
-      } else if (isTeamLeader && userDivisionName && userTeamName) {
-        // Team leaders see only their team within their division
-        filter = { division_name: userDivisionName, team_name: userTeamName };
-      } else if (userDivisionName) {
-        // Fallback: filter by division
-        filter = { division_name: userDivisionName };
+
+        const today = new Date().toISOString().split('T')[0];
+        const verificationFilter = { verification_date: today, ...filter };
+
+        console.log('Dashboard filter applied:', filter, 'User:', user?.full_name, 'Division:', userDivisionName, 'Team:', userTeamName, 'Role:', user?.custom_role, 'Selected Division Filter:', selectedDivisionFilter);
+
+        const [
+          soldiersResult,
+          equipmentResult,
+          weaponsResult,
+          gearResult,
+          dronesResult,
+          activityLogResult,
+          verificationsResult,
+        ] = await Promise.allSettled([
+          Soldier.filter(filter),
+          Equipment.filter(filter),
+          Weapon.filter(filter),
+          SerializedGear.filter(filter),
+          DroneSet.filter(filter),
+          ActivityLog.filter(filter, "-created_date", 50),
+          DailyVerification.filter(verificationFilter),
+        ]);
+
+        const soldiersData = soldiersResult.status === 'fulfilled' && Array.isArray(soldiersResult.value) ? soldiersResult.value : [];
+        const equipmentData = equipmentResult.status === 'fulfilled' && Array.isArray(equipmentResult.value) ? equipmentResult.value : [];
+        const weaponsData = weaponsResult.status === 'fulfilled' && Array.isArray(weaponsResult.value) ? weaponsResult.value : [];
+        const gearData = gearResult.status === 'fulfilled' && Array.isArray(gearResult.value) ? gearResult.value : [];
+        const dronesData = dronesResult.status === 'fulfilled' && Array.isArray(dronesResult.value) ? dronesResult.value : [];
+        const activitiesData = activityLogResult.status === 'fulfilled' && Array.isArray(activityLogResult.value) ? activityLogResult.value : [];
+        const verificationsData = verificationsResult.status === 'fulfilled' && Array.isArray(verificationsResult.value) ? verificationsResult.value : [];
+
+        setSoldiers(soldiersData);
+        setEquipment(equipmentData);
+        setWeapons(weaponsData);
+        setGear(gearData);
+        setDrones(dronesData);
+        setActivities(activitiesData);
+        setDailyVerifications(verificationsData);
+
+        console.log('Dashboard data loaded:', {
+          soldiers: soldiersData.length,
+          equipment: equipmentData.length,
+          weapons: weaponsData.length,
+          gear: gearData.length,
+          drones: dronesData.length,
+          activities: activitiesData.length,
+          verifications: verificationsData.length,
+        });
       }
-
-      const today = new Date().toISOString().split('T')[0];
-      const verificationFilter = { verification_date: today, ...filter };
-
-      console.log('Dashboard filter applied:', filter, 'User:', user?.full_name, 'Division:', userDivisionName, 'Team:', userTeamName, 'Role:', user?.custom_role, 'Selected Division Filter:', selectedDivisionFilter);
-
-      const [
-        soldiersResult,
-        equipmentResult,
-        weaponsResult,
-        gearResult,
-        dronesResult,
-        activityLogResult,
-        verificationsResult,
-      ] = await Promise.allSettled([
-        Soldier.filter(filter),
-        Equipment.filter(filter),
-        Weapon.filter(filter),
-        SerializedGear.filter(filter),
-        DroneSet.filter(filter),
-        ActivityLog.filter(filter, "-created_date", 50),
-        DailyVerification.filter(verificationFilter),
-      ]);
-      
-      const soldiersData = soldiersResult.status === 'fulfilled' && Array.isArray(soldiersResult.value) ? soldiersResult.value : [];
-      const equipmentData = equipmentResult.status === 'fulfilled' && Array.isArray(equipmentResult.value) ? equipmentResult.value : [];
-      const weaponsData = weaponsResult.status === 'fulfilled' && Array.isArray(weaponsResult.value) ? weaponsResult.value : [];
-      const gearData = gearResult.status === 'fulfilled' && Array.isArray(gearResult.value) ? gearResult.value : [];
-      const dronesData = dronesResult.status === 'fulfilled' && Array.isArray(dronesResult.value) ? dronesResult.value : [];
-      const activitiesData = activityLogResult.status === 'fulfilled' && Array.isArray(activityLogResult.value) ? activityLogResult.value : [];
-      const verificationsData = verificationsResult.status === 'fulfilled' && Array.isArray(verificationsResult.value) ? verificationsResult.value : [];
-
-      setSoldiers(soldiersData);
-      setEquipment(equipmentData);
-      setWeapons(weaponsData);
-      setGear(gearData);
-      setDrones(dronesData);
-      setActivities(activitiesData);
-      setDailyVerifications(verificationsData);
-
-      console.log('Dashboard data loaded:', {
-        soldiers: soldiersData.length,
-        equipment: equipmentData.length,
-        weapons: weaponsData.length,
-        gear: gearData.length,
-        drones: dronesData.length,
-        activities: activitiesData.length,
-        verifications: verificationsData.length,
-      });
 
     } catch (error) {
       console.error("Error loading dashboard data:", error);
@@ -308,28 +384,30 @@ export default function Dashboard() {
         <DronesSummary drones={drones} isLoading={isLoading} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        <div className="lg:col-span-2 space-y-4 md:space-y-6">
-          <StatusOverview 
+      <div className={`grid grid-cols-1 ${currentUser?.custom_role === 'team_leader' ? '' : 'lg:grid-cols-3'} gap-4 md:gap-6`}>
+        <div className={`${currentUser?.custom_role === 'team_leader' ? '' : 'lg:col-span-2'} space-y-4 md:space-y-6`}>
+          <StatusOverview
             soldiers={safeSoldiers}
             equipment={safeEquipment}
             weapons={safeWeapons}
             isLoading={isLoading}
           />
-           <RecentActivity 
+           <RecentActivity
             activities={activities}
             isLoading={isLoading}
           />
         </div>
-        <div className="space-y-4 md:space-y-6">
-            <VerificationSummary 
-                soldiers={soldiers}
-                dailyVerifications={dailyVerifications}
-                isLoading={isLoading}
-                userDivision={userDivision}
-                isManagerOrAdmin={isManagerOrAdmin}
-            />
-        </div>
+        {currentUser?.custom_role !== 'team_leader' && (
+          <div className="space-y-4 md:space-y-6">
+              <VerificationSummary
+                  soldiers={soldiers}
+                  dailyVerifications={dailyVerifications}
+                  isLoading={isLoading}
+                  userDivision={userDivision}
+                  isManagerOrAdmin={isManagerOrAdmin}
+              />
+          </div>
+        )}
       </div>
     </div>
   );

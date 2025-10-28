@@ -68,7 +68,7 @@ exports.createPhoneUser = functions
       );
     }
 
-    const { phoneNumber, role = 'soldier', customRole, permissions = {}, linkedSoldierId, displayName, email } = data;
+    const { phoneNumber, role = 'soldier', customRole, displayName, email } = data;
 
     if (!phoneNumber) {
       throw new functions.https.HttpsError(
@@ -78,7 +78,9 @@ exports.createPhoneUser = functions
     }
 
     try {
-      // Create the user
+      const db = admin.firestore();
+
+      // Create the user in Firebase Auth
       let userRecord;
       try {
         userRecord = await admin.auth().createUser({
@@ -95,19 +97,85 @@ exports.createPhoneUser = functions
         }
       }
 
+      // Find matching soldier by phone or email for automatic linking
+      let soldierDoc = null;
+      let soldierData = null;
+
+      // Try to match by phone number first
+      if (phoneNumber) {
+        console.log(`  Searching for soldier by phone: ${phoneNumber}`);
+        const soldiersByPhone = await db.collection('soldiers')
+          .where('phone_number', '==', phoneNumber)
+          .limit(1)
+          .get();
+
+        if (!soldiersByPhone.empty) {
+          soldierDoc = soldiersByPhone.docs[0];
+          soldierData = soldierDoc.data();
+          console.log(`  ✅ Found soldier by phone: ${soldierData.soldier_id}`);
+        }
+      }
+
+      // Try to match by email if phone didn't match
+      if (!soldierDoc && email) {
+        console.log(`  Searching for soldier by email: ${email}`);
+        const soldiersByEmail = await db.collection('soldiers')
+          .where('email', '==', email)
+          .limit(1)
+          .get();
+
+        if (!soldiersByEmail.empty) {
+          soldierDoc = soldiersByEmail.docs[0];
+          soldierData = soldierDoc.data();
+          console.log(`  ✅ Found soldier by email: ${soldierData.soldier_id}`);
+        }
+      }
+
       // Get default permissions for the role
       const roleToUse = customRole || role || 'soldier';
       const defaultPerms = getDefaultPermissions(roleToUse);
-      
-      // Set custom claims with new RBAC structure
-      const customClaims = {
+
+      // Prepare user document data with soldier linking if found
+      const userDocData = {
         role: roleToUse === 'admin' ? 'admin' : 'user',
         custom_role: roleToUse,
         permissions: defaultPerms,
         scope: defaultPerms.scope,
-        division: null,
-        team: null,
-        linked_soldier_id: linkedSoldierId || null,
+        division: soldierData?.division_name || null,
+        team: soldierData?.team_name || null,
+        linked_soldier_id: soldierData?.soldier_id || null,
+        email: email || null,
+        phoneNumber: phoneNumber,
+        displayName: displayName || (soldierData ? `${soldierData.first_name || ''} ${soldierData.last_name || ''}`.trim() : null),
+        totp_enabled: false,
+        totp_enabled_at: null,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      // Save to Firestore users collection
+      const userDocRef = db.collection('users').doc(userRecord.uid);
+      await userDocRef.set(userDocData);
+      console.log(`  ✅ Created user document in Firestore for ${userRecord.uid}`);
+
+      // If soldier found, update soldier document with user UID
+      if (soldierDoc) {
+        await soldierDoc.ref.update({
+          id: userRecord.uid,
+          updated_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`  ✅ Updated soldier ${soldierData.soldier_id} with user UID`);
+      }
+
+      // Set custom claims with new RBAC structure
+      const customClaims = {
+        role: userDocData.role,
+        custom_role: userDocData.custom_role,
+        permissions: userDocData.permissions,
+        scope: userDocData.scope,
+        division: userDocData.division,
+        team: userDocData.team,
+        linked_soldier_id: userDocData.linked_soldier_id,
         totp_enabled: false,
         totp_secret: null,
         totp_temp_secret: null
@@ -118,9 +186,15 @@ exports.createPhoneUser = functions
       return {
         uid: userRecord.uid,
         phoneNumber: userRecord.phoneNumber,
-        displayName: userRecord.displayName,
+        displayName: userDocData.displayName,
         email: userRecord.email,
-        customClaims
+        customClaims,
+        linkedSoldier: soldierData ? {
+          soldier_id: soldierData.soldier_id,
+          full_name: `${soldierData.first_name || ''} ${soldierData.last_name || ''}`.trim(),
+          division: soldierData.division_name,
+          team: soldierData.team_name
+        } : null
       };
     } catch (error) {
       console.error('Error creating user:', error);
@@ -397,7 +471,7 @@ exports.updateUserPermissions = functions
     }
   });
 
-// Delete user (soft delete by disabling)
+// Delete user (hard delete from both Authentication and Firestore)
 exports.deleteUser = functions
   .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
   .https.onCall(async (data, context) => {
@@ -409,7 +483,7 @@ exports.deleteUser = functions
       );
     }
 
-    const { uid, hardDelete = false } = data;
+    const { uid } = data;
 
     if (!uid) {
       throw new functions.https.HttpsError(
@@ -421,113 +495,125 @@ exports.deleteUser = functions
     try {
       const db = admin.firestore();
 
-      // Get user from Authentication to find their email/phone
-      const authUser = await admin.auth().getUser(uid);
+      console.log(`\n========================================`);
+      console.log(`[deleteUser] STEP 1: Starting delete for UID: ${uid}`);
 
-      if (hardDelete) {
-        // Permanently delete user from Authentication
-        await admin.auth().deleteUser(uid);
-
-        // Find and delete user document from Firestore users collection
-        // Search by email or phoneNumber since doc ID might not match UID
-        let userDocDeleted = false;
-
-        if (authUser.email) {
-          const usersByEmail = await db.collection('users')
-            .where('email', '==', authUser.email)
-            .limit(1)
-            .get();
-
-          if (!usersByEmail.empty) {
-            await usersByEmail.docs[0].ref.delete();
-            userDocDeleted = true;
-          }
+      // Get user from Authentication to get their email/phone
+      let authUser;
+      try {
+        authUser = await admin.auth().getUser(uid);
+        console.log(`[deleteUser] STEP 2: Found user in Authentication`);
+        console.log(`  Email: ${authUser.email || 'N/A'}`);
+        console.log(`  Phone: ${authUser.phoneNumber || 'N/A'}`);
+        console.log(`  UID: ${authUser.uid}`);
+      } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+          console.log(`[deleteUser] ⚠️  User ${uid} not found in Authentication`);
+        } else {
+          console.log(`[deleteUser] ❌ Error getting user from Auth:`, error);
+          throw error;
         }
-
-        if (!userDocDeleted && authUser.phoneNumber) {
-          const usersByPhone = await db.collection('users')
-            .where('phoneNumber', '==', authUser.phoneNumber)
-            .limit(1)
-            .get();
-
-          if (!usersByPhone.empty) {
-            await usersByPhone.docs[0].ref.delete();
-            userDocDeleted = true;
-          }
-        }
-
-        // Fallback: try direct UID match
-        if (!userDocDeleted) {
-          const directDoc = await db.collection('users').doc(uid).get();
-          if (directDoc.exists) {
-            await directDoc.ref.delete();
-            userDocDeleted = true;
-          }
-        }
-
-        console.log(`User ${uid} deleted from Auth. Firestore doc deleted: ${userDocDeleted}`);
-      } else {
-        // Soft delete by disabling account
-        await admin.auth().updateUser(uid, {
-          disabled: true
-        });
-
-        // Update Firestore user document to mark as disabled
-        // Try to find by email or phone first
-        let userDocUpdated = false;
-
-        if (authUser.email) {
-          const usersByEmail = await db.collection('users')
-            .where('email', '==', authUser.email)
-            .limit(1)
-            .get();
-
-          if (!usersByEmail.empty) {
-            await usersByEmail.docs[0].ref.update({
-              disabled: true,
-              updated_at: admin.firestore.FieldValue.serverTimestamp()
-            });
-            userDocUpdated = true;
-          }
-        }
-
-        if (!userDocUpdated && authUser.phoneNumber) {
-          const usersByPhone = await db.collection('users')
-            .where('phoneNumber', '==', authUser.phoneNumber)
-            .limit(1)
-            .get();
-
-          if (!usersByPhone.empty) {
-            await usersByPhone.docs[0].ref.update({
-              disabled: true,
-              updated_at: admin.firestore.FieldValue.serverTimestamp()
-            });
-            userDocUpdated = true;
-          }
-        }
-
-        // Fallback: try direct UID match
-        if (!userDocUpdated) {
-          const directDoc = await db.collection('users').doc(uid).get();
-          if (directDoc.exists) {
-            await directDoc.ref.update({
-              disabled: true,
-              updated_at: admin.firestore.FieldValue.serverTimestamp()
-            });
-            userDocUpdated = true;
-          }
-        }
-
-        console.log(`User ${uid} disabled in Auth. Firestore doc updated: ${userDocUpdated}`);
       }
 
+      // Delete user from Authentication
+      let authDeleted = false;
+      if (authUser) {
+        console.log(`[deleteUser] STEP 3: Deleting from Firebase Authentication...`);
+        try {
+          await admin.auth().deleteUser(uid);
+          authDeleted = true;
+          console.log(`[deleteUser] ✅ Deleted user from Firebase Authentication`);
+        } catch (error) {
+          console.log(`[deleteUser] ❌ Error deleting from Auth:`, error);
+          throw error;
+        }
+      }
+
+      // Delete user document from Firestore by searching with phone or email
+      let firestoreDeleted = false;
+
+      console.log(`[deleteUser] STEP 4: Searching for user document in Firestore...`);
+
+      // Try to find and delete by phone number
+      if (authUser?.phoneNumber) {
+        console.log(`[deleteUser] STEP 4a: Searching by phoneNumber field`);
+        console.log(`  Query: users.where('phoneNumber', '==', '${authUser.phoneNumber}')`);
+
+        try {
+          const usersByPhone = await db.collection('users')
+            .where('phoneNumber', '==', authUser.phoneNumber)
+            .get();
+
+          console.log(`  Result: Found ${usersByPhone.size} document(s)`);
+
+          if (!usersByPhone.empty) {
+            for (const doc of usersByPhone.docs) {
+              const docData = doc.data();
+              console.log(`  Document ID: ${doc.id}`);
+              console.log(`  Document data:`, JSON.stringify(docData, null, 2));
+
+              console.log(`  Attempting to delete document ${doc.id}...`);
+              await doc.ref.delete();
+              firestoreDeleted = true;
+              console.log(`  ✅ Successfully deleted document ${doc.id}`);
+            }
+          }
+        } catch (error) {
+          console.log(`  ❌ Error searching/deleting by phone:`, error);
+        }
+      } else {
+        console.log(`[deleteUser] STEP 4a: No phone number available, skipping phone search`);
+      }
+
+      // Try to find and delete by email if not deleted yet
+      if (!firestoreDeleted && authUser?.email) {
+        console.log(`[deleteUser] STEP 4b: Searching by email field`);
+        console.log(`  Query: users.where('email', '==', '${authUser.email}')`);
+
+        try {
+          const usersByEmail = await db.collection('users')
+            .where('email', '==', authUser.email)
+            .get();
+
+          console.log(`  Result: Found ${usersByEmail.size} document(s)`);
+
+          if (!usersByEmail.empty) {
+            for (const doc of usersByEmail.docs) {
+              const docData = doc.data();
+              console.log(`  Document ID: ${doc.id}`);
+              console.log(`  Document data:`, JSON.stringify(docData, null, 2));
+
+              console.log(`  Attempting to delete document ${doc.id}...`);
+              await doc.ref.delete();
+              firestoreDeleted = true;
+              console.log(`  ✅ Successfully deleted document ${doc.id}`);
+            }
+          }
+        } catch (error) {
+          console.log(`  ❌ Error searching/deleting by email:`, error);
+        }
+      } else if (!firestoreDeleted) {
+        console.log(`[deleteUser] STEP 4b: No email available or already deleted, skipping email search`);
+      }
+
+      if (!firestoreDeleted) {
+        console.log(`[deleteUser] ⚠️  WARNING: No user document found/deleted in Firestore`);
+      }
+
+      console.log(`[deleteUser] STEP 5: Delete operation complete`);
+      console.log(`  Deleted from Auth: ${authDeleted}`);
+      console.log(`  Deleted from Firestore: ${firestoreDeleted}`);
+      console.log(`========================================\n`);
+
       return {
+        success: true,
         uid,
-        deleted: hardDelete,
-        disabled: !hardDelete
+        deletedFromAuth: authDeleted,
+        deletedFromFirestore: firestoreDeleted
       };
     } catch (error) {
-      console.error('Error deleting user:', error);
+      console.error('[deleteUser] ❌ FATAL ERROR:', error);
+      console.log(`========================================\n`);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to delete user: ${error.message}`

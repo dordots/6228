@@ -636,6 +636,7 @@ export default function SerializedGearPage() {
                   gear={editingGear}
                   soldiers={soldiers}
                   existingGear={gear}
+                  currentUser={currentUser}
                   onSubmit={handleSubmit}
                   onCancel={() => setShowForm(false)}
                 />

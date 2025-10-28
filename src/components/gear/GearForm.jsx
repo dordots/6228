@@ -14,13 +14,17 @@ import ComboBox from "@/components/common/ComboBox"; // New import
 
 const CONDITIONS = ["functioning", "not_functioning"];
 
-export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingGear = [] }) {
+export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingGear = [], currentUser }) {
+  // Check if user is division manager
+  const isDivisionManager = currentUser?.custom_role === 'division_manager';
+  const userDivision = currentUser?.division;
+
   const [formData, setFormData] = useState(gear || {
     gear_id: "",
     gear_type: "",
     status: "functioning",
     assigned_to: "",
-    division_name: "",
+    division_name: isDivisionManager && !gear ? userDivision : (gear?.division_name || ""),
     last_checked_date: "",
     comments: ""
   });
@@ -59,8 +63,17 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
   useEffect(() => {
     if (assignedSoldier && assignedSoldier.division_name) {
       setFormData(prev => ({ ...prev, division_name: assignedSoldier.division_name }));
+    } else if (formData.assigned_to === "" || formData.assigned_to === "unassigned") {
+      // If unassigned
+      if (isDivisionManager) {
+        // Division managers: set to their division
+        setFormData(prev => ({ ...prev, division_name: userDivision }));
+      } else {
+        // Others: clear division
+        setFormData(prev => ({ ...prev, division_name: "" }));
+      }
     }
-  }, [assignedSoldier]);
+  }, [assignedSoldier, formData.assigned_to, isDivisionManager, userDivision]);
 
   // Set initial state from props
   useEffect(() => {
@@ -216,7 +229,11 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
 
             <div className="space-y-2">
               <Label htmlFor="division_name">Division</Label>
-              <Select value={formData.division_name || "unassigned"} onValueChange={(value) => handleChange('division_name', value)}>
+              <Select
+                value={formData.division_name || "unassigned"}
+                onValueChange={(value) => handleChange('division_name', value)}
+                disabled={isDivisionManager}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select division" />
                 </SelectTrigger>
@@ -227,6 +244,9 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
                   ))}
                 </SelectContent>
               </Select>
+              {isDivisionManager && (
+                <p className="text-xs text-slate-500">Division managers can only add gear to their own division</p>
+              )}
             </div>
 
             <div className="space-y-2">

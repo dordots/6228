@@ -1,111 +1,121 @@
-# Project Plan: Fix Division Manager Permissions Issues
+# Project Plan: User Management Improvements
 
-**Date**: 2025-10-28
+## Overview
+Modify user creation in user management to:
+1. Remove the manual "Link to Soldier" dropdown option
+2. Automatically link users to soldiers based on phone number or email matching
+3. Save user data in both Firebase Authentication AND Firestore users table
 
----
+## Current State Analysis
 
-## Issue 1: Division Manager Cannot View Soldier History ✅ FIXED
+### UserManagement.jsx (Frontend)
+- Lines 375-393: Manual "Link to Soldier" dropdown in create user dialog
+- Lines 178-189: Already has phone/email matching logic to find soldiers
+- Lines 191-199: Calls `User.create()` with linkedSoldierId
 
-### Status
-✅ **FIXED** - Changed field name from `created_date` to `created_at` in SigningHistoryDialog.jsx
+### functions/src/users.js (Backend)
+- Lines 60-132: `createPhoneUser` function
+  - Currently creates user in Firebase Auth
+  - Sets custom claims but does NOT save to Firestore users table
+  - Accepts linkedSoldierId parameter
+- Lines 1021-1145: `onUserCreate` trigger
+  - Automatically creates Firestore user document when auth user is created
+  - Already has automatic soldier matching by email/phone (lines 1042-1070)
+  - Sets default "soldier" role
 
----
+## Tasks
 
-## Issue 2: Division Manager Cannot Delete Weapons ⚠️ IN PROGRESS
+### Task 1: Remove manual linking UI from frontend ✅
+- [x] Remove the "Link to Soldier" dropdown from UserManagement.jsx (lines 375-393)
+- [x] Remove linkedSoldierId from newUserData state (lines 54-59, 172, 195, 203-208)
+- [x] Simplified User.create() call to remove division/team/linkedSoldierId parameters
 
-### Problem
-Division managers get Firestore permission error when trying to delete weapons, even though:
-- ✅ Frontend permission check passes (fixed)
-- ✅ User has `equipment.delete: true` permission
-- ❌ Firestore rules block the delete operation
+### Task 2: Update createPhoneUser to save to Firestore users table ✅
+- [x] Modify `createPhoneUser` function in functions/src/users.js (lines 60-132)
+- [x] After creating Firebase Auth user, find matching soldier by phone/email
+- [x] Create Firestore user document with matched soldier data
+- [x] Set linked_soldier_id automatically if soldier match found
+- [x] Update custom claims with complete user data
+- [x] Update soldier document with user UID when linked
+- [x] Remove unused parameters (permissions, linkedSoldierId)
 
-### Console Log Analysis
+### Task 3: Test the changes
+- [ ] Test user creation with phone number that matches a soldier
+- [ ] Test user creation with phone number that doesn't match any soldier
+- [ ] Verify user appears in Firestore users collection
+- [ ] Verify user appears in Firebase Authentication
+- [ ] Verify automatic soldier linking works correctly
+- [ ] Verify division and team are populated from matched soldier
 
-**User Permissions (from console):**
-```
-"equipment.delete": true
-"scope": "division"
-"division": "פלס"מ"
-```
+## Notes
+- The `onUserCreate` trigger (lines 1021-1145) already handles automatic user document creation on sign-in, so we need to ensure `createPhoneUser` creates the document immediately to avoid conflicts
+- The automatic matching logic already exists and works well - we're just moving it to backend and making it the only way to link
+- This simplifies the UI and ensures consistency
 
-**Error:**
-```
-Error deleting weapon: FirebaseError: Missing or insufficient permissions.
-```
+## Review
 
-### Firestore Rule for Weapons Delete
+### Changes Made
 
-**Current rule ([firestore.rules:124](firestore.rules#L124)):**
-```javascript
-allow delete: if hasPermission('equipment.delete') && canAccessByScope(resource.data);
-```
+#### Frontend Changes ([src/pages/UserManagement.jsx](src/pages/UserManagement.jsx))
+1. **Removed manual soldier linking dropdown** - The UI no longer shows a "Link to Soldier" dropdown
+2. **Simplified state management** - Removed `linkedSoldierId` from `newUserData` state
+3. **Simplified User.create() call** - Now only passes: phoneNumber, role, customRole, displayName
+4. **Cleaner UI** - The create user dialog is simpler with only essential fields: Phone Number, Display Name, and Role
 
-This requires:
-1. ✅ `hasPermission('equipment.delete')` - User HAS this
-2. ❓ `canAccessByScope(resource.data)` - **THIS is failing**
+#### Backend Changes ([functions/src/users.js](functions/src/users.js))
+1. **Automatic soldier matching** - The `createPhoneUser` function now:
+   - Searches for matching soldiers by phone number first
+   - Falls back to email matching if phone doesn't match
+   - Logs the search process for debugging
+2. **Firestore user document creation** - Now saves user immediately to Firestore users collection with:
+   - Basic user info (email, phone, displayName)
+   - Role and permissions
+   - Automatically populated division and team from matched soldier
+   - Automatically set linked_soldier_id
+3. **Soldier document update** - When a soldier is matched, their document is updated with the user's UID
+4. **Complete response** - Returns linkedSoldier info so frontend can show confirmation
 
-### Root Cause Investigation
+### How It Works Now
 
-The `canAccessByScope` function checks:
-```javascript
-getUserDivision() == resourceData.division_name ||
-getUserDivision() == resourceData.division
-```
+1. Admin creates user with phone number (e.g., +972501234567)
+2. Backend creates Firebase Auth user
+3. Backend searches soldiers collection for matching phone/email
+4. If match found:
+   - User document created in Firestore with soldier's division, team, and soldier_id
+   - Soldier document updated with user UID
+   - User automatically linked
+5. If no match found:
+   - User document created with default soldier role and null division/team
+   - User can be manually assigned later or linked when soldier is added
+6. Custom claims set with complete user data
+7. User is ready to sign in immediately
 
-**Possible Issues:**
-1. **Field name mismatch**: Weapon might have `division` instead of `division_name`
-2. **Character encoding**: Division name might have encoding differences
-3. **Null/undefined**: Weapon's division field might be missing
-4. **Scope check logic**: The scope check might not be working correctly for deletes
+### Benefits
+- **Simpler UI** - No confusing manual linking dropdown
+- **Automatic linking** - Works seamlessly based on phone/email
+- **Immediate availability** - User data in Firestore right away (no waiting for first sign-in)
+- **Consistent data** - One source of truth in Firestore
+- **Better UX** - Less steps, less confusion for admins
 
-### Next Steps
+### Additional Change: Simplified User Deletion
 
-Need to verify:
-1. What division field name does the weapon actually have?
-2. Does the weapon's division value exactly match the user's division?
-3. Is `resource.data` available during delete operations?
+**Updated `deleteUser` function** to always perform hard delete:
+- Removed soft delete (disabling) option
+- Always deletes from Firebase Authentication
+- Always deletes from Firestore users collection
+- Handles cases where user might only exist in one location
+- Returns detailed success info (deletedFromAuth, deletedFromFirestore)
+- Frontend updated to remove hardDelete parameter
 
-### Temporary Workaround
+**Before**: Had soft delete (disable) and hard delete options
+**After**: Always hard deletes from both Authentication and Firestore
 
-If debugging is complex, we could modify the Firestore rule to be less strict for division managers:
+This makes deletion simpler and more predictable - when you delete a user, they're gone from both systems.
 
-**Option A: Check division before calling canAccessByScope**
-```javascript
-allow delete: if hasPermission('equipment.delete') &&
-  (isAdmin() || getUserScope() == 'global' ||
-   (getUserScope() == 'division' &&
-    (getUserDivision() == resource.data.division_name ||
-     getUserDivision() == resource.data.division)));
-```
-
-**Option B: Make delete less strict for division scope**
-```javascript
-allow delete: if hasPermission('equipment.delete') &&
-  (getUserScope() == 'global' || getUserScope() == 'division' || canAccessByScope(resource.data));
-```
-
----
-
-## Changes Completed
-
-### 1. SigningHistoryDialog.jsx - Field Name Fix ✅
-**File**: [src/components/soldiers/SigningHistoryDialog.jsx:56](src/components/soldiers/SigningHistoryDialog.jsx#L56)
-- Changed `'-created_date'` to `'-created_at'`
-
-### 2. Weapons.jsx - Permission Check Fix ✅
-**File**: [src/pages/Weapons.jsx:378](src/pages/Weapons.jsx#L378)
-- Changed `can_delete_weapons` to `equipment.delete`
-
-### 3. WeaponTable.jsx - Permission Check Fix ✅
-**File**: [src/components/weapons/WeaponTable.jsx:132](src/components/weapons/WeaponTable.jsx#L132)
-- Changed `can_delete_weapons` to `equipment.delete`
-
----
-
-## Todo Items
-
-- [x] Fix SigningHistoryDialog field name issue
-- [x] Fix Weapons.jsx permission check
-- [x] Fix WeaponTable.jsx permission check
-- [ ] Debug and fix Firestore rules for weapon deletion
-- [ ] Test division manager can delete weapons
+### Testing Recommendations
+1. Create user with phone matching existing soldier - should auto-link
+2. Create user with phone not matching any soldier - should create with null division/team
+3. Verify user shows up in user management table immediately
+4. Verify user can sign in successfully
+5. Check Firebase console to confirm user in both Auth and Firestore
+6. Delete a user and verify it's removed from both Authentication and Firestore

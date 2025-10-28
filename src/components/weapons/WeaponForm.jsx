@@ -14,13 +14,17 @@ import ComboBox from "@/components/common/ComboBox"; // New import
 
 const CONDITIONS = ["functioning", "not_functioning"];
 
-export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, existingWeapons = [] }) {
+export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, existingWeapons = [], currentUser }) {
+  // Check if user is division manager
+  const isDivisionManager = currentUser?.custom_role === 'division_manager';
+  const userDivision = currentUser?.division;
+
   const [formData, setFormData] = useState(weapon || {
     weapon_id: "",
     weapon_type: "",
     status: "functioning",
     assigned_to: null, // Changed from "" to null for consistency with unassigned logic
-    division_name: null, // Changed from "" to null for consistency with unassigned logic
+    division_name: isDivisionManager && !weapon ? userDivision : (weapon?.division_name || null), // Auto-set division for division managers on new weapons
     last_checked_date: "",
     comments: "" // Initialize new comments field
   });
@@ -72,10 +76,16 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
     if (assignedSoldier && assignedSoldier.division_name) {
       setFormData(prev => ({ ...prev, division_name: assignedSoldier.division_name }));
     } else if (formData.assigned_to === null) {
-      // If unassigned, clear division
-      setFormData(prev => ({ ...prev, division_name: null }));
+      // If unassigned
+      if (isDivisionManager) {
+        // Division managers: set to their division
+        setFormData(prev => ({ ...prev, division_name: userDivision }));
+      } else {
+        // Others: clear division
+        setFormData(prev => ({ ...prev, division_name: null }));
+      }
     }
-  }, [assignedSoldier, formData.assigned_to]);
+  }, [assignedSoldier, formData.assigned_to, isDivisionManager, userDivision]);
 
   // Set initial state from props
   useEffect(() => {
@@ -221,7 +231,11 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
 
             <div className="space-y-2">
               <Label htmlFor="division_name">Division</Label>
-              <Select value={formData.division_name || 'unassigned'} onValueChange={(value) => handleChange('division_name', value)}>
+              <Select
+                value={formData.division_name || 'unassigned'}
+                onValueChange={(value) => handleChange('division_name', value)}
+                disabled={isDivisionManager}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select division" />
                 </SelectTrigger>
@@ -232,6 +246,9 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
                   ))}
                 </SelectContent>
               </Select>
+              {isDivisionManager && (
+                <p className="text-xs text-slate-500">Division managers can only add weapons to their own division</p>
+              )}
             </div>
 
             <div className="space-y-2">

@@ -572,6 +572,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
                 allComponents={components}
                 allSoldiers={soldiers}
                 divisions={divisions}
+                currentUser={currentUser}
                 onSubmit={handleSubmit}
                 onCancel={() => setShowForm(false)}
               />

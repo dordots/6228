@@ -804,6 +804,7 @@ export default function Weapons() {
                 weapon={editingWeapon}
                 soldiers={soldiers}
                 existingWeapons={weapons}
+                currentUser={currentUser}
                 onSubmit={handleSubmit}
                 onCancel={() => setShowForm(false)}
               />

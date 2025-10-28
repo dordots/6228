@@ -16,12 +16,16 @@ const SERIALIZED_ITEMS = [
   "מיני כוכב", "אקדח מסמרים", "משקפת 10.50", "מטל", "ממיר מתח למטל", "משקפת 7.50"
 ];
 
-export default function EquipmentForm({ equipment, soldiers, allEquipment, onSubmit, onCancel }) {
+export default function EquipmentForm({ equipment, soldiers, allEquipment, onSubmit, onCancel, currentUser }) {
+  // Check if user is division manager
+  const isDivisionManager = currentUser?.custom_role === 'division_manager';
+  const userDivision = currentUser?.division;
+
   const [formData, setFormData] = useState(equipment || {
     equipment_type: "",
     serial_number: "",
     condition: "functioning",
-    division_name: "",
+    division_name: isDivisionManager && !equipment ? userDivision : (equipment?.division_name || ""),
     assigned_to: "",
     quantity: 1
   });
@@ -224,7 +228,11 @@ export default function EquipmentForm({ equipment, soldiers, allEquipment, onSub
 
             <div className="space-y-2">
               <Label htmlFor="division_name">Division *</Label>
-              <Select value={formData.division_name} onValueChange={(value) => handleChange('division_name', value)}>
+              <Select
+                value={formData.division_name}
+                onValueChange={(value) => handleChange('division_name', value)}
+                disabled={isDivisionManager}
+              >
                 <SelectTrigger><SelectValue placeholder="Select division" /></SelectTrigger>
                 <SelectContent>
                   {divisions.map(division => (
@@ -232,7 +240,11 @@ export default function EquipmentForm({ equipment, soldiers, allEquipment, onSub
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-sm text-slate-600">All equipment must belong to a division</p>
+              {isDivisionManager ? (
+                <p className="text-xs text-slate-500">Division managers can only add equipment to their own division</p>
+              ) : (
+                <p className="text-sm text-slate-600">All equipment must belong to a division</p>
+              )}
             </div>
             
             {requiresSerial && (

@@ -494,6 +494,7 @@ export default function EquipmentPage() {
                 equipment={editingEquipment}
                 soldiers={soldiers}
                 allEquipment={equipment} // Pass the full equipment list
+                currentUser={currentUser}
                 onSubmit={handleSubmit}
                 onCancel={() => setShowForm(false)}
               />

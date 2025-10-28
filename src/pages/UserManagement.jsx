@@ -54,7 +54,6 @@ export default function UserManagement() {
   const [newUserData, setNewUserData] = useState({
     phoneNumber: "",
     role: "soldier",
-    linkedSoldierId: "",
     displayName: ""
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -139,15 +138,15 @@ export default function UserManagement() {
     try {
       setError("");
       const result = await deleteUser({
-        uid: userToDelete.id,
-        hardDelete: true  // Permanently delete from both Auth and Firestore
+        uid: userToDelete.id
       });
 
-      if (result.success) {
+      // The createFunction wrapper returns { success, data } where data contains the actual function result
+      if (result.success && result.data?.success) {
         setSuccess(`User ${userToDelete.full_name || userToDelete.phoneNumber} deleted successfully from Authentication and Firestore`);
         await loadData();
       } else {
-        setError(`Failed to delete user: ${result.error || 'Unknown error'}`);
+        setError(`Failed to delete user: ${result.error || result.data?.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -169,33 +168,11 @@ export default function UserManagement() {
     }
 
     try {
-      const linkedSoldierId = (newUserData.linkedSoldierId && newUserData.linkedSoldierId !== "none") ? newUserData.linkedSoldierId : null;
-
-      // Find matching soldier by phone or email to get division/team
-      let division = null;
-      let team = null;
-
-      // Try to find soldier by phone number
-      let matchingSoldier = soldierMap[newUserData.phoneNumber];
-
-      // If not found by phone, try by email (if provided)
-      if (!matchingSoldier && newUserData.email) {
-        matchingSoldier = soldierMap[newUserData.email.toLowerCase()];
-      }
-
-      if (matchingSoldier) {
-        division = matchingSoldier.division_name || null;
-        team = matchingSoldier.team_name || null;
-      }
-
       await User.create({
         phoneNumber: newUserData.phoneNumber,
         role: newUserData.role,
         customRole: newUserData.role,
-        linkedSoldierId: linkedSoldierId,
-        displayName: newUserData.displayName || null,
-        division: division,
-        team: team
+        displayName: newUserData.displayName || null
       });
 
       setSuccess("User created successfully!");
@@ -203,7 +180,6 @@ export default function UserManagement() {
       setNewUserData({
         phoneNumber: "",
         role: "soldier",
-        linkedSoldierId: "",
         displayName: ""
       });
       await loadData();
@@ -372,26 +348,6 @@ export default function UserManagement() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="linkedSoldier">Link to Soldier (Optional)</Label>
-              <Select
-                value={newUserData.linkedSoldierId}
-                onValueChange={(value) => setNewUserData({...newUserData, linkedSoldierId: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a soldier..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No soldier linked</SelectItem>
-                  {soldiers.map((soldier) => (
-                    <SelectItem key={soldier.soldier_id} value={soldier.soldier_id}>
-                      {soldier.soldier_id} - {soldier.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="flex gap-2 pt-4">
               <Button onClick={handleCreateUser} className="flex-1">
                 Create User
@@ -403,7 +359,6 @@ export default function UserManagement() {
                   setNewUserData({
                     phoneNumber: "",
                     role: "soldier",
-                    linkedSoldierId: "",
                     displayName: ""
                   });
                 }}

@@ -114,9 +114,14 @@ export default function DroneSetForm({
   allComponents = [],
   allSoldiers = [],
   divisions = [],
+  currentUser,
   onSubmit,
   onCancel
 }) {
+  // Check if user is division manager
+  const isDivisionManager = currentUser?.custom_role === 'division_manager';
+  const userDivision = currentUser?.division;
+
   const [droneSetTypes, setDroneSetTypes] = useState([]);
   const [formData, setFormData] = useState(
     droneSet || {
@@ -124,7 +129,7 @@ export default function DroneSetForm({
       set_type: "",
       status: "Operational",
       assigned_to: null,
-      division_name: "",
+      division_name: isDivisionManager && !droneSet ? userDivision : (droneSet?.division_name || ""),
       components: {},
       comments: "",
       armory_status: "in_deposit",
@@ -185,7 +190,13 @@ export default function DroneSetForm({
       let newState = { ...prev, [field]: value };
       if (field === 'assigned_to') {
         const newSoldier = Array.isArray(allSoldiers) ? allSoldiers.find(s => s.soldier_id === value) : null;
-        newState.division_name = newSoldier ? newSoldier.division_name : "";
+        if (newSoldier) {
+          // Soldier selected: use their division
+          newState.division_name = newSoldier.division_name;
+        } else {
+          // Unassigned: division managers keep their division, others clear
+          newState.division_name = isDivisionManager ? userDivision : "";
+        }
         // Set armory_status based on assignment
         newState.armory_status = value ? "with_soldier" : "in_deposit";
       }
@@ -339,15 +350,22 @@ export default function DroneSetForm({
           </div>
            <div className="space-y-2">
             <Label htmlFor="division_name">Division</Label>
-            <Select value={formData.division_name || ""} onValueChange={(value) => handleChange('division_name', value)}>
+            <Select
+              value={formData.division_name || ""}
+              onValueChange={(value) => handleChange('division_name', value)}
+              disabled={isDivisionManager}
+            >
               <SelectTrigger id="division_name"><SelectValue placeholder="Select a division..." /></SelectTrigger>
               <SelectContent className="max-h-72 overflow-y-auto">
-                <SelectItem value={null}>No Division</SelectItem> 
+                <SelectItem value={null}>No Division</SelectItem>
                 {Array.isArray(divisions) && divisions.map(div => (
                   <SelectItem key={div} value={div}>{div}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {isDivisionManager && (
+              <p className="text-xs text-slate-500">Division managers can only add drones to their own division</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="assigned_to">Assigned To</Label>

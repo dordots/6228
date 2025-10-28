@@ -21,11 +21,11 @@ const COUNTRY_CODES = [
 const getRedirectUrl = async () => {
   try {
     const user = await User.me();
-    // Redirect soldiers to their equipment page
+    // Redirect soldiers to their personal dashboard
     if (user?.custom_role === 'soldier') {
-      return '/myequipment';
+      return '/soldier-dashboard';
     }
-    // All other roles go to dashboard
+    // All other roles go to main dashboard
     return '/';
   } catch (error) {
     console.error('Error getting user for redirect:', error);

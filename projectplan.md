@@ -153,6 +153,35 @@ Instead of requiring the user to manually set their division in the database, I'
 
 ---
 
+## New Feature: Soldier Personal Dashboard
+
+### Created
+- New comprehensive dashboard for soldiers showing all their assigned equipment
+- Replaces the simple "My Equipment" page redirect
+
+### Files Created/Modified
+1. **[SoldierDashboard.jsx](src/pages/SoldierDashboard.jsx)** - New comprehensive dashboard
+   - Shows soldier info (name, ID, division, team)
+   - Displays 4 stat cards: Equipment, Weapons, Gear, Drone Sets
+   - Lists all assigned items with status badges
+   - Clean, modern UI with color-coded sections
+
+2. **[Login.jsx:26](src/pages/Login.jsx#L26)** - Updated redirect
+   - Soldiers now redirected to `/dashboard` instead of `/myequipment`
+
+3. **[index.jsx:55,204](src/pages/index.jsx)** - Added route
+   - Imported SoldierDashboard component
+   - Added `/dashboard` route
+
+### Features
+- **Comprehensive view**: Shows Equipment, Weapons, Serialized Gear, and Drone Sets
+- **Stats overview**: Quick count of each equipment type
+- **Status badges**: Visual indication of functioning/not functioning items
+- **Personal info**: Displays soldier's name, ID, division, and team
+- **Clean design**: Color-coded cards matching equipment types (blue, red, purple, cyan)
+
+---
+
 # Security Audit Report - ביקורת אבטחה מקיפה
 
 ## תאריך ביצוע: 28 אוקטובר 2025

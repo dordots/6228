@@ -52,6 +52,8 @@ import MyGear from "./MyGear";
 
 import MyDrones from "./MyDrones";
 
+import SoldierDashboard from "./SoldierDashboard";
+
 import AccessDenied from "./AccessDenied";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
@@ -198,7 +200,9 @@ function PagesContent() {
                 <Route path="/MyGear" element={<MyGear />} />
                 
                 <Route path="/MyDrones" element={<MyDrones />} />
-                
+
+                <Route path="/soldier-dashboard" element={<SoldierDashboard />} />
+
                 </Routes>
             </Layout>
         </ProtectedRoute>

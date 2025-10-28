@@ -31,9 +31,14 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
   if (userRole === 'soldier') {
     return [
       {
+        title: "Dashboard",
+        url: "/soldier-dashboard",
+        icon: Home,
+      },
+      {
         title: "My Equipment",
         url: createPageUrl("MyEquipment"),
-        icon: Wrench,
+        icon: Package,
       },
       {
         title: "My Weapons",

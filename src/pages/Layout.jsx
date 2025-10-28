@@ -131,32 +131,35 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       url: createPageUrl("SoldierRelease"),
       icon: Home,
       permission: 'operations.release',
+      hideForRoles: ['team_leader', 'division_manager']
     },
     {
       title: "Equipment Transfer",
       url: createPageUrl("EquipmentTransfer"),
       icon: ArrowRightLeft,
       permission: 'operations.transfer',
+      hideForRoles: ['team_leader', 'division_manager']
     },
     {
       title: "Daily Verification",
       url: createPageUrl("DailyVerification"),
       icon: ClipboardCheck,
       permission: 'operations.verify',
-      hideForRoles: ['team_leader']
+      hideForRoles: ['team_leader', 'division_manager']
     },
     {
       title: "Verification History",
       url: createPageUrl("VerificationHistory"),
       icon: Calendar,
       permission: 'operations.verify',
-      hideForRoles: ['team_leader']
+      hideForRoles: ['team_leader', 'division_manager']
     },
     {
       title: "Maintenance",
       url: createPageUrl("Maintenance"),
       icon: ClipboardCheck,
       permission: 'operations.maintain',
+      hideForRoles: ['team_leader', 'division_manager']
     },
     { 
       title: "Equipment", 
@@ -175,6 +178,7 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       url: createPageUrl("DataExport"),
       icon: Download,
       permission: 'system.export',
+      hideForRoles: ['team_leader', 'division_manager']
     },
     {
       title: "Security",

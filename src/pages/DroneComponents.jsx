@@ -154,24 +154,93 @@ export default function DroneComponents() {
 
         setComponents(Array.isArray(componentsData) ? componentsData : []);
         setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
-      } else {
-        // Non-team-leader roles: standard filtering
-        let filter = {};
-        if (isAdmin || isManager) {
-          filter = {}; // See everything
-        } else if (isDivisionManager && userDivision) {
-          filter = { division_name: userDivision }; // See division only
-        } else if (userDivision) {
-          filter = { division_name: userDivision }; // Fallback
+      } else if (isDivisionManager && userDivision) {
+        // Division manager: Use three-step filtering like team leaders
+        console.log('Division manager: Using three-step filtering for drone components');
+
+        // Step 1: Get all division soldiers
+        const divisionSoldiers = await Soldier.filter({
+          division_name: userDivision
+        }).catch(() => []);
+
+        const soldierIds = divisionSoldiers.map(s => s.soldier_id);
+        console.log(`Division manager (DroneComponents): Found ${soldierIds.length} division soldiers`);
+        console.log('Division manager (DroneComponents): Soldier IDs:', soldierIds);
+
+        // Step 2: Get all division drone sets, then filter by division soldiers
+        const allDroneSets = await DroneSet.filter({ division_name: userDivision }).catch(() => []);
+
+        console.log(`Division manager (DroneComponents): Fetched ${allDroneSets.length} division drone sets, filtering...`);
+
+        const soldierIdSet = new Set(soldierIds);
+        const droneSetsData = allDroneSets.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
+
+        console.log(`Division manager (DroneComponents): After filtering, ${droneSetsData.length} drone sets assigned to division soldiers`);
+        console.log('Division manager (DroneComponents): Filtered drone sets:', droneSetsData.map(d => ({
+          set_serial_number: d.set_serial_number,
+          assigned_to: d.assigned_to,
+          components: d.components
+        })));
+
+        // Step 3: Extract component IDs from division drone sets
+        const divisionComponentIds = new Set();
+        droneSetsData.forEach(droneSet => {
+          if (droneSet.components && typeof droneSet.components === 'object') {
+            // components is a map/object with component IDs as values
+            Object.values(droneSet.components).forEach(componentId => {
+              if (componentId) {
+                divisionComponentIds.add(componentId);
+              }
+            });
+          }
+        });
+
+        console.log(`Division manager (DroneComponents): Found ${divisionComponentIds.size} unique component IDs in division drone sets`);
+        console.log('Division manager (DroneComponents): Component IDs:', Array.from(divisionComponentIds));
+
+        // Step 4: Fetch only the specific components that are in division drone sets
+        const componentsData = [];
+
+        if (divisionComponentIds.size > 0) {
+          try {
+            // Try to fetch all components and filter
+            const allSystemComponents = await DroneComponent.list("-created_date").catch(() => []);
+
+            console.log(`Division manager (DroneComponents): Fetched ${allSystemComponents.length} total system components`);
+
+            // Filter to only components that are in division drone sets
+            allSystemComponents.forEach(component => {
+              // Check if component.id or component.component_id matches any division component ID
+              if (component && (divisionComponentIds.has(component.id) || divisionComponentIds.has(component.component_id))) {
+                componentsData.push(component);
+              }
+            });
+          } catch (error) {
+            console.error('Failed to fetch components list:', error);
+
+            // Fallback: try to fetch components one by one using filter
+            for (const componentId of divisionComponentIds) {
+              try {
+                const foundComponents = await DroneComponent.filter({ component_id: componentId }).catch(() => []);
+                if (foundComponents.length > 0) {
+                  componentsData.push(...foundComponents);
+                }
+              } catch (err) {
+                console.error(`Failed to fetch component ${componentId}:`, err);
+              }
+            }
+          }
         }
 
+        console.log(`Division manager (DroneComponents): Successfully loaded ${componentsData.length} components for division drone sets`);
+
+        setComponents(Array.isArray(componentsData) ? componentsData : []);
+        setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
+      } else {
+        // Admin/Manager: standard filtering (see everything)
         const [data, sets] = await Promise.all([
-          Object.keys(filter).length > 0
-            ? DroneComponent.filter(filter, "-created_date")
-            : DroneComponent.list("-created_date"),
-          Object.keys(filter).length > 0
-            ? DroneSet.filter(filter)
-            : DroneSet.list()
+          DroneComponent.list("-created_date"),
+          DroneSet.list()
         ]);
         setComponents(data);
         setDroneSets(sets);
@@ -506,7 +575,7 @@ export default function DroneComponents() {
           <Button
             onClick={() => { setEditingComponent(null); setShowForm(true); }}
             className="bg-sky-600 hover:bg-sky-700 text-white"
-            disabled={!currentUser?.permissions?.can_create_drone_components && currentUser?.role !== 'admin'}
+            disabled={!isAdminOrManager}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Component

@@ -772,7 +772,7 @@ export default function Weapons() {
           <Button
             onClick={() => { setEditingWeapon(null); setShowForm(true); }}
             className="bg-red-700 hover:bg-red-800 text-white"
-            disabled={!currentUser?.permissions?.can_create_weapons && currentUser?.role !== 'admin'}
+            disabled={!isAdminOrManager}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Weapon

@@ -1,179 +1,149 @@
-# Project Plan: Redirect Soldiers to Equipment Page After Login
+# Project Plan: Investigation - Division Manager "Add" Buttons Disabled
 
 **Date**: 2025-10-28
-**Task**: Redirect soldiers to their equipment page instead of command dashboard after sign-in
+**Issue**: Division managers cannot click "Add" buttons for gears and drones even though they have `equipment.create` permission
 
-## Problem Statement
-
-When a soldier signs in (with `custom_role === 'soldier'`), they are redirected to the Command Dashboard at `/` (root path). However, soldiers should not access the Command Dashboard - they should be redirected directly to their equipment page at `/my-equipment`.
-
-### Current Behavior
-
-**Login.jsx** - Lines 84, 107, 133:
-```javascript
-// After successful authentication:
-window.location.href = '/';  // ALL users go to dashboard
-```
+## Investigation Summary
 
 ### Expected Behavior
+Division managers have the following permissions (from [functions/src/users.js:638](functions/src/users.js#L638)):
+- ✅ `equipment.create`: true
+- ✅ `equipment.update`: true
+- ✅ `equipment.delete`: true
 
-- **Soldiers** → Should go to `/my-equipment` page
-- **All other roles** (admin, manager, division_manager, team_leader) → Should go to `/` (dashboard)
+They should be able to add, edit, and delete all equipment (weapons, gears, drones, components).
 
-### Root Cause
+### Current Button Logic
 
-The login redirect is hardcoded to `/` for all users, regardless of their role. No role checking is performed after authentication before redirect.
-
-## Solution
-
-After successful login, check the user's `custom_role` and redirect accordingly:
-
-1. Get the authenticated user via `User.me()`
-2. Check if `user.custom_role === 'soldier'`
-3. Redirect to `/my-equipment` for soldiers
-4. Redirect to `/` for all other roles
-
-This is a **simple, localized change** that only affects the post-login redirect logic in Login.jsx.
-
-## Todo List
-
-- [ ] Modify Login.jsx line 84 (phone login without verification)
-- [ ] Modify Login.jsx line 107 (phone login with verification)
-- [ ] Modify Login.jsx line 133 (email login)
-- [ ] Create helper function to get redirect URL based on user role
-- [ ] Test soldier login (phone and email)
-- [ ] Test non-soldier login (admin, manager, team_leader)
-- [ ] Update projectplan.md review section with changes made
-
-## Implementation Details
-
-### File: src/pages/Login.jsx
-
-#### Create Helper Function
-
-Add this helper function near the top of the file (after imports):
-
+**SerializedGear Page** ([src/pages/SerializedGear.jsx:608](src/pages/SerializedGear.jsx#L608)):
 ```javascript
-// Helper function to get redirect URL based on user role
-const getRedirectUrl = async () => {
-  try {
-    const user = await User.me();
-    // Redirect soldiers to their equipment page
-    if (user?.custom_role === 'soldier') {
-      return '/my-equipment';
-    }
-    // All other roles go to dashboard
-    return '/';
-  } catch (error) {
-    console.error('Error getting user for redirect:', error);
-    // Default to dashboard on error
-    return '/';
-  }
-};
+disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
 ```
 
-#### Modify Three Redirect Locations
-
-**Location 1: Line 84** (phone login - no verification needed)
+**Drones Page** ([src/pages/Drones.jsx:542](src/pages/Drones.jsx#L542)):
 ```javascript
-// OLD:
-window.location.href = '/';
-
-// NEW:
-window.location.href = await getRedirectUrl();
+disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
 ```
 
-**Location 2: Line 107** (phone login - verification successful)
-```javascript
-// OLD:
-window.location.href = '/';
+The button logic is CORRECT - it checks for `equipment.create` permission.
 
-// NEW:
-window.location.href = await getRedirectUrl();
+### Permissions Loading
+
+The `User.me()` function ([src/firebase/auth-adapter.js:258](src/firebase/auth-adapter.js#L258)) loads permissions from:
+1. Firestore user document (if exists)
+2. Custom claims (fallback)
+
+```javascript
+permissions: firestoreUserData?.permissions ?? claims.permissions,
 ```
 
-**Location 3: Line 133** (email login - successful)
-```javascript
-// OLD:
-window.location.href = '/';
+## Root Cause Analysis
 
-// NEW:
-window.location.href = await getRedirectUrl();
+There are several possible reasons why the buttons are disabled:
+
+### Possibility 1: Permissions Not in Custom Claims
+The division manager's custom claims might not have the `permissions` object set correctly. This happens during:
+- User creation ([functions/src/users.js:100-106](functions/src/users.js#L100-L106))
+- Role update ([functions/src/users.js:248-289](functions/src/users.js#L248-L289))
+
+### Possibility 2: Firestore User Document Out of Sync
+The Firestore `users` collection document might not have the correct permissions.
+
+### Possibility 3: Token Not Refreshed
+After updating permissions, the user's ID token might not have been refreshed, causing old claims to be cached.
+
+### Possibility 4: User Document Not Found
+The `syncUserOnSignIn` function might not be finding/creating the user document properly.
+
+## Solution Plan
+
+### Step 1: Debug Current State
+Add console logging to check what the division manager actually has:
+
+**File**: Console in browser (division manager account)
+- Open browser console while logged in as division manager
+- Check what `User.me()` returns
+- Verify `currentUser.permissions['equipment.create']` value
+
+### Step 2: Verify Backend Permissions
+Check if the division manager user in Firebase has correct:
+1. Custom claims with permissions object
+2. Firestore users document with permissions object
+
+### Step 3: Fix Options
+
+#### Option A: Force Token Refresh
+If permissions are correct in backend but not loading, force a token refresh:
+- Call `User.me(true)` with `forceRefresh=true`
+- Or sign out and sign back in
+
+#### Option B: Fix User Document
+If Firestore document is missing/incorrect:
+- Run the `updateUserRole` cloud function to reset the role
+- This will recreate custom claims and Firestore document with correct permissions
+
+#### Option C: Verify getDefaultPermissions
+Ensure `getDefaultPermissions('division_manager')` is returning the correct permissions structure with `equipment.create: true`.
+
+## Investigation Steps
+
+### 1. Check Browser Console (Manual Step - User)
+When logged in as division manager, run in browser console:
+```javascript
+// Get current user
+const user = await User.me();
+console.log('Current user:', user);
+console.log('Permissions:', user.permissions);
+console.log('equipment.create:', user.permissions?.['equipment.create']);
+console.log('Role:', user.role);
+console.log('Custom role:', user.custom_role);
 ```
 
-### Key Points
+### 2. Check Firebase Console (Manual Step - User)
+1. Go to Firebase Console → Authentication → Users
+2. Find the division manager user
+3. Check custom claims (should have `permissions` object)
 
-1. **Minimal code change**: Only 3 lines changed + 1 helper function added
-2. **Centralized logic**: All role-based redirect logic in one function
-3. **Fallback behavior**: Defaults to `/` on error
-4. **Async/await**: Already in async functions, no changes needed
-5. **No impact on other features**: Only affects post-login redirect
+### 3. Check Firestore Console (Manual Step - User)
+1. Go to Firebase Console → Firestore → `users` collection
+2. Find the division manager's document
+3. Verify `permissions` field has `equipment.create: true`
 
-## Files to Modify
+## Temporary Workaround
 
-1. **[src/pages/Login.jsx](src/pages/Login.jsx:20-383)** - Add helper function and modify 3 redirect lines
+If permissions are missing, the admin can update the division manager's role:
+1. Go to User Management page (as admin)
+2. Find the division manager user
+3. Update their role (select "Division Manager" again)
+4. This will trigger `updateUserRole` which recreates permissions
+5. Division manager needs to sign out and sign back in
 
-## Impact Assessment
+## Files to Review
 
-- **User Impact**: Positive - soldiers go directly to their equipment instead of seeing empty dashboard
-- **Code Complexity**: Very low - only adds one helper function and modifies 3 lines
-- **Maintainability**: Excellent - centralized redirect logic, easy to extend
-- **Performance**: No impact - same number of API calls
-- **Security**: No change - uses existing permissions and routes
-- **Simplicity**: Very high - minimal, localized change
+1. [functions/src/users.js:629-653](functions/src/users.js#L629-L653) - Division manager permissions definition
+2. [src/firebase/auth-adapter.js:170-300](src/firebase/auth-adapter.js#L170-L300) - User.me() permissions loading
+3. [src/pages/SerializedGear.jsx:608](src/pages/SerializedGear.jsx#L608) - Add button logic
+4. [src/pages/Drones.jsx:542](src/pages/Drones.jsx#L542) - Add button logic
 
-## Review Section
+## Next Steps
 
-### Changes Made
+**REQUIRED**: Please provide the following information:
 
-**Date**: 2025-10-28
-**File Modified**: [src/pages/Login.jsx](src/pages/Login.jsx)
+1. What does the browser console show when you run the debug script above (as division manager)?
+2. What permissions appear in the Firebase Console for the division manager user?
+3. Does the Firestore `users` document exist for this user, and what permissions does it have?
 
-#### Summary
-Successfully implemented role-based redirect after login. Soldiers now navigate to their equipment page while all other roles go to the dashboard.
+Once we have this information, I can provide a specific fix based on the root cause.
 
-#### Detailed Changes
+---
 
-**1. Added Helper Function** (lines 20-35):
-```javascript
-const getRedirectUrl = async () => {
-  try {
-    const user = await User.me();
-    if (user?.custom_role === 'soldier') {
-      return '/my-equipment';
-    }
-    return '/';
-  } catch (error) {
-    console.error('Error getting user for redirect:', error);
-    return '/';
-  }
-};
-```
+## Previous Changes Completed
 
-**2. Modified Three Redirect Locations**:
-- **Line 101**: Phone login (no verification needed) - Changed `window.location.href = '/'` to `window.location.href = await getRedirectUrl()`
-- **Line 124**: Phone verification successful - Changed `window.location.href = '/'` to `window.location.href = await getRedirectUrl()`
-- **Line 150**: Email login successful - Changed `window.location.href = '/'` to `window.location.href = await getRedirectUrl()`
+### Part 1: Navigation Items (Layout.jsx) ✅
+Hidden 6 navigation items for division managers.
 
-#### Impact
-- **Lines added**: 16 (helper function)
-- **Lines modified**: 3 (redirect statements)
-- **Complexity**: Very low - simple conditional logic
-- **Scope**: Only affects post-login redirect behavior
+### Part 2: Drone Components Filtering (DroneComponents.jsx) ✅
+Implemented three-step filtering for division managers.
 
-#### Testing Recommendations
-
-**Soldier Login Test**:
-1. Sign in with soldier credentials (phone or email)
-2. Verify redirect to `/my-equipment` page
-3. Confirm equipment page loads correctly
-
-**Non-Soldier Login Test**:
-1. Sign in with admin/manager/team_leader credentials
-2. Verify redirect to `/` (dashboard)
-3. Confirm dashboard loads correctly
-
-**Error Handling Test**:
-1. Simulate error in `User.me()` call
-2. Verify fallback to dashboard (`/`)
-3. Check console for error log
+### Part 3: Drone Set Details Dialog Fix ✅
+Fixed component lookup in drone set details dialog.

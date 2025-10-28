@@ -97,7 +97,8 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
 
         // Step 2: Get all division drones, then filter client-side
         const allDrones = await DroneSet.filter({ division_name: userDivision }, "-created_date").catch(() => []);
-        const allComponents = await DroneComponent.filter({ division_name: userDivision }).catch(() => []);
+        // Components don't have division_name field, load all components
+        const allComponents = await DroneComponent.list("-created_date").catch(() => []);
         console.log(`Team leader: Fetched ${allDrones.length} division drones, filtering client-side...`);
         console.log('Team leader: All drones data:', allDrones.map(d => ({
           id: d.id,
@@ -132,7 +133,8 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
 
         const [droneSetsData, componentsData, soldiersData] = await Promise.all([
           DroneSet.filter(filter, "-created_date").catch(() => []),
-          DroneComponent.filter(filter).catch(() => []),
+          // Components don't have division_name field, so load all components for everyone
+          DroneComponent.list("-created_date").catch(() => []),
           Soldier.filter(filter).catch(() => [])
         ]);
         setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
@@ -522,7 +524,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin'}
+              disabled={!isAdminOrManager}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -537,7 +539,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
           <Button
             onClick={() => { setEditingSet(null); setShowForm(true); }}
             className="bg-sky-600 hover:bg-sky-700 text-white"
-            disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
+            disabled={!isAdminOrManager}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Drone Set

@@ -23,7 +23,7 @@ export default function DroneSetDetailsDialog({ droneSet, allComponents, soldier
   const assignedSoldier = soldiers.find(s => s.soldier_id === droneSet.assigned_to);
   
   const getComponentDetails = (componentId) => {
-    return allComponents.find(c => c.id === componentId);
+    return allComponents.find(c => c.id === componentId || c.component_id === componentId);
   };
 
   const setComponents = droneSet.components ? Object.entries(droneSet.components) : [];

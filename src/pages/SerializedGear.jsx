@@ -590,7 +590,7 @@ export default function SerializedGearPage() {
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin'}
+              disabled={!isAdminOrManager}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -605,7 +605,7 @@ export default function SerializedGearPage() {
           <Button
             onClick={() => { setEditingGear(null); setShowForm(true); }}
             className="bg-purple-700 hover:bg-purple-800 text-white"
-            disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
+            disabled={!isAdminOrManager}
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Gear

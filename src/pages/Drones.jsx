@@ -328,7 +328,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   };
 
   const handleReassignSubmit = async (droneSet, newSoldierId) => {
-    if (!currentUser?.permissions?.['operations.transfer'] && currentUser?.role !== 'admin') {
+    if (!currentUser?.permissions?.['equipment.update'] && !currentUser?.permissions?.['operations.transfer'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to transfer equipment.");
       return;
     }
@@ -336,7 +336,8 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       const newSoldier = soldiers.find(s => s.soldier_id === newSoldierId);
       const updatePayload = {
         assigned_to: newSoldierId,
-        division_name: newSoldier ? newSoldier.division_name : droneSet.division_name
+        division_name: newSoldier ? newSoldier.division_name : droneSet.division_name,
+        team_name: newSoldier ? newSoldier.team_name : null
       };
 
       const user = await User.me();

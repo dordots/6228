@@ -505,7 +505,7 @@ export default function Weapons() {
 
   const handleReassignSubmit = async (weapon, newSoldierId) => {
     // Permission check should be more aligned with editing/transferring
-    if (!isAdminOrManager && !currentUser?.permissions?.can_edit_weapons && !currentUser?.permissions?.can_transfer_equipment) {
+    if (!isAdminOrManager && !currentUser?.permissions?.['equipment.update'] && !currentUser?.permissions?.['operations.transfer']) {
         alert("You do not have permission to reassign equipment.");
         return;
     }
@@ -533,6 +533,7 @@ export default function Weapons() {
       const updatePayload = {
         assigned_to: newSoldierId,
         division_name: newSoldier ? newSoldier.division_name : null,
+        team_name: newSoldier ? newSoldier.team_name : null,
         last_signed_by: newSoldier ? `${newSoldier.first_name} ${newSoldier.last_name}` : null,
       };
 
@@ -846,7 +847,11 @@ export default function Weapons() {
               onReassign={handleReassign}
               onViewComment={handleViewComment}
               isAdminOrManager={isAdminOrManager}
-              permissions={currentUser?.permissions || {}}
+              permissions={{
+                'equipment.update': currentUser?.permissions?.['equipment.update'] || false,
+                'equipment.delete': currentUser?.permissions?.['equipment.delete'] || false,
+                'operations.transfer': currentUser?.permissions?.['operations.transfer'] || false
+              }}
             />
           </div>
         </CardContent>

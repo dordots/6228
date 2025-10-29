@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,9 @@ export default function ReassignGearDialog({
       <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
           <DialogTitle>Reassign Gear</DialogTitle>
+          <DialogDescription>
+            Transfer this gear item to a different soldier or unassign it.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">

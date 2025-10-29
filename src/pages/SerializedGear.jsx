@@ -407,7 +407,7 @@ export default function SerializedGearPage() {
   };
 
   const handleReassignSubmit = async (gearItem, newSoldierId, newDivisionName) => {
-    if (!currentUser?.permissions?.['operations.sign']) {
+    if (!currentUser?.permissions?.['equipment.update'] && !currentUser?.permissions?.['operations.transfer'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to reassign equipment.");
       return;
     }
@@ -421,8 +421,10 @@ export default function SerializedGearPage() {
       if (newSoldier) {
         updatePayload.last_signed_by = `${newSoldier.first_name} ${newSoldier.last_name}`;
         updatePayload.division_name = newSoldier.division_name;
+        updatePayload.team_name = newSoldier.team_name;
       } else {
         updatePayload.last_signed_by = null;
+        updatePayload.team_name = null;
         // Keep existing division name or set to a default if soldier is unassigned
         // For now, let's keep the existing division_name if soldier is unassigned
         // updatePayload.division_name = gearItem.division_name; 
@@ -676,7 +678,11 @@ export default function SerializedGearPage() {
               onReassign={handleReassign}
               onViewComment={handleViewComment}
               isAdminOrManager={isAdminOrManager}
-              permissions={currentUser?.permissions || {}}
+              permissions={{
+                canEdit: currentUser?.permissions?.['equipment.update'] || false,
+                canReassign: currentUser?.permissions?.['equipment.update'] || currentUser?.permissions?.['operations.transfer'] || false,
+                canDelete: currentUser?.permissions?.['equipment.delete'] || false
+              }}
             />
           </div>
         </CardContent>

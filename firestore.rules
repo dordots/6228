@@ -102,7 +102,9 @@ service cloud.firestore {
     
     // Soldiers collection
     match /soldiers/{soldierID} {
-      allow read: if hasPermission('personnel.view') && canAccessByScope(resource.data);
+      allow read: if hasPermission('personnel.view') &&
+        (canAccessByScope(resource.data) ||
+         (isAuthenticated() && request.auth.token.linked_soldier_id == resource.data.soldier_id));
       allow create: if hasPermission('personnel.create');
       allow update: if hasPermission('personnel.update') && canAccessByScope(resource.data);
       allow delete: if hasPermission('personnel.delete') && canAccessByScope(resource.data);
@@ -116,7 +118,15 @@ service cloud.firestore {
          (getUserScope() == 'division' && getUserDivision() != null &&
           request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update');
+      allow update: if hasPermission('equipment.update') &&
+        (isAdmin() || getUserScope() == 'global' ||
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          (getUserDivision() == resource.data.division_name || getUserDivision() == resource.data.division ||
+           getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
+         (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
+          getUserDivision() == resource.data.division_name &&
+          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
+           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
       allow delete: if hasPermission('equipment.delete');
     }
     
@@ -128,7 +138,15 @@ service cloud.firestore {
          (getUserScope() == 'division' && getUserDivision() != null &&
           request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update');
+      allow update: if hasPermission('equipment.update') &&
+        (isAdmin() || getUserScope() == 'global' ||
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          (getUserDivision() == resource.data.division_name || getUserDivision() == resource.data.division ||
+           getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
+         (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
+          getUserDivision() == resource.data.division_name &&
+          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
+           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
       allow delete: if hasPermission('equipment.delete') &&
         (isAdmin() || getUserScope() == 'global' ||
          (getUserScope() == 'division' && getUserDivision() != null &&
@@ -143,7 +161,15 @@ service cloud.firestore {
          (getUserScope() == 'division' && getUserDivision() != null &&
           request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update');
+      allow update: if hasPermission('equipment.update') &&
+        (isAdmin() || getUserScope() == 'global' ||
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          (getUserDivision() == resource.data.division_name || getUserDivision() == resource.data.division ||
+           getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
+         (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
+          getUserDivision() == resource.data.division_name &&
+          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
+           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
       allow delete: if hasPermission('equipment.delete');
     }
     
@@ -155,7 +181,15 @@ service cloud.firestore {
          (getUserScope() == 'division' && getUserDivision() != null &&
           request.resource.data.division_name != null &&
           (getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)));
-      allow update: if hasPermission('equipment.update');
+      allow update: if hasPermission('equipment.update') &&
+        (isAdmin() || getUserScope() == 'global' ||
+         (getUserScope() == 'division' && getUserDivision() != null &&
+          (getUserDivision() == resource.data.division_name || getUserDivision() == resource.data.division ||
+           getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
+         (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
+          getUserDivision() == resource.data.division_name &&
+          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
+           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
       allow delete: if hasPermission('equipment.delete');
     }
     

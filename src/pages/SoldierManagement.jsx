@@ -6,6 +6,7 @@ import { SerializedGear } from "@/api/entities";
 import { DroneSet } from "@/api/entities";
 import { Equipment } from "@/api/entities";
 import { ActivityLog } from "@/api/entities";
+import { User } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,17 +41,40 @@ export default function SoldierManagement() {
   const [dialogContent, setDialogContent] = useState({ title: '', description: '', activityId: null, soldier: null });
   const [isGeneratingForm, setIsGeneratingForm] = useState(false);
 
-  // Placeholder for current user and performing soldier for compilation
-  const currentUser = useMemo(() => ({
-    full_name: "System Admin", 
-    id: "system-admin-id", 
-  }), []);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  const performingSoldier = null; 
-                                  
+  const performingSoldier = null;
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Get current user first
+      const user = await User.me();
+      setCurrentUser(user);
+
+      const userDivision = user?.division;
+      const userTeam = user?.team;
+      const isAdmin = user?.role === 'admin';
+      const isManager = user?.custom_role === 'manager';
+
+      // Build filters based on user role
+      let soldierFilter = {};
+      let equipmentFilter = {};
+
+      if (isAdmin || isManager) {
+        // Admins and managers see everything
+        soldierFilter = {};
+        equipmentFilter = {};
+      } else if (userDivision && userTeam) {
+        // Team leaders see only their team's soldiers and their division's unassigned equipment
+        soldierFilter = { division_name: userDivision, team_name: userTeam };
+        equipmentFilter = { division_name: userDivision };
+      } else if (userDivision) {
+        // Division managers see their division
+        soldierFilter = { division_name: userDivision };
+        equipmentFilter = { division_name: userDivision };
+      }
+
       const [
         soldiersData,
         allW,
@@ -58,14 +82,14 @@ export default function SoldierManagement() {
         allDS,
         allE
       ] = await Promise.all([
-        Soldier.list("-created_date"),
-        Weapon.list(),
-        SerializedGear.list(),
-        DroneSet.list(),
-        Equipment.list()
+        soldierFilter && Object.keys(soldierFilter).length > 0 ? Soldier.filter(soldierFilter) : Soldier.list("-created_date"),
+        equipmentFilter && Object.keys(equipmentFilter).length > 0 ? Weapon.filter(equipmentFilter) : Weapon.list(),
+        equipmentFilter && Object.keys(equipmentFilter).length > 0 ? SerializedGear.filter(equipmentFilter) : SerializedGear.list(),
+        equipmentFilter && Object.keys(equipmentFilter).length > 0 ? DroneSet.filter(equipmentFilter) : DroneSet.list(),
+        equipmentFilter && Object.keys(equipmentFilter).length > 0 ? Equipment.filter(equipmentFilter) : Equipment.list()
       ]);
 
-      // Filter for unassigned items on the client side for reliability
+      // Filter for unassigned items only
       const unassignedW = (allW || []).filter(item => !item.assigned_to);
       const unassignedG = (allG || []).filter(item => !item.assigned_to);
       const unassignedDS = (allDS || []).filter(item => !item.assigned_to);

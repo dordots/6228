@@ -96,22 +96,29 @@ export default function Soldiers() {
 
       // Build filter based on role hierarchy
       let filter = {};
+      let equipmentFilter = {}; // Separate filter for equipment
+
       if (isAdmin || isManager) {
         filter = {}; // See everything
+        equipmentFilter = {};
       } else if (isDivisionManager && userDivision) {
         filter = { division_name: userDivision }; // See division only
+        equipmentFilter = { division_name: userDivision };
       } else if (isTeamLeader && userDivision && userTeam) {
         filter = { division_name: userDivision, team_name: userTeam }; // See team only
+        // For equipment, only filter by division since most items don't have team_name yet
+        equipmentFilter = { division_name: userDivision };
       } else if (userDivision) {
         filter = { division_name: userDivision }; // Fallback
+        equipmentFilter = { division_name: userDivision };
       }
 
       const results = await Promise.allSettled([
         Soldier.filter(filter), // Remove sort - orderBy excludes docs without the field
-        Weapon.filter(filter),
-        SerializedGear.filter(filter),
-        DroneSet.filter(filter),
-        Equipment.filter(filter) // This loads all equipment
+        Weapon.filter(equipmentFilter),
+        SerializedGear.filter(equipmentFilter),
+        DroneSet.filter(equipmentFilter),
+        Equipment.filter(equipmentFilter) // This loads all equipment
       ]);
 
       // Get raw soldier data from Firestore

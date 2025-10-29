@@ -308,7 +308,8 @@ export default function VerificationHistoryPage() {
                       <TableCell className="text-sm text-slate-500">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {verification.created_date ? format(new Date(verification.created_date), 'HH:mm') : 'N/A'}
+                          {verification.verification_timestamp ? format(new Date(verification.verification_timestamp), 'HH:mm') :
+                           verification.created_date ? format(new Date(verification.created_date), 'HH:mm') : 'N/A'}
                         </div>
                       </TableCell>
                     </TableRow>

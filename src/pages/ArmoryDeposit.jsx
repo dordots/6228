@@ -188,11 +188,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
   const handleDepositClick = (soldier) => {
     // Permission checks added
-    if (activeTab === 'deposit' && !currentUser?.permissions?.can_deposit_equipment && currentUser?.role !== 'admin') {
+    if (activeTab === 'deposit' && !currentUser?.permissions?.['operations.deposit']) {
       alert("You do not have permission to deposit equipment.");
       return;
     }
-    if (activeTab === 'release' && !currentUser?.permissions?.can_release_equipment && currentUser?.role !== 'admin') {
+    if (activeTab === 'release' && !currentUser?.permissions?.['operations.release']) {
       alert("You do not have permission to release equipment.");
       return;
     }
@@ -209,9 +209,15 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
       const updatePromises = [];
 
+      // Build base update payload with team_name from soldier for security rules
+      const basePayload = { armory_status: armoryStatus };
+      if (soldier?.team_name) {
+        basePayload.team_name = soldier.team_name;
+      }
+
       // Update weapons
       for (const weaponId of weaponIds) {
-        const updatePayload = { armory_status: armoryStatus };
+        const updatePayload = { ...basePayload };
         if (mode === 'deposit' && depositLocation) {
           updatePayload.deposit_location = depositLocation;
         } else if (mode === 'release') {
@@ -222,7 +228,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
       // Update gear
       for (const gearId of gearIds) {
-        const updatePayload = { armory_status: armoryStatus };
+        const updatePayload = { ...basePayload };
         if (mode === 'deposit' && depositLocation) {
           updatePayload.deposit_location = depositLocation;
         } else if (mode === 'release') {
@@ -233,7 +239,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
       // Update drone sets
       for (const droneSetId of droneSetIds) {
-        const updatePayload = { armory_status: armoryStatus };
+        const updatePayload = { ...basePayload };
         if (mode === 'deposit' && depositLocation) {
           updatePayload.deposit_location = depositLocation;
         } else if (mode === 'release') {
@@ -267,26 +273,49 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         });
       }
 
+    } catch (error) {
+      console.error("Error processing deposit/release:", error);
+    } finally {
+      // Always close dialog and refresh, even if there was an error
       setShowDepositDialog(false);
       setSelectedSoldier(null);
       await loadData();
-    } catch (error) {
-      console.error("Error processing deposit/release:", error);
     }
   };
 
   const handleDepositUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature, depositLocation }) => {
     try {
       const currentUser = await User.me();
-      const updatePayload = { armory_status: 'in_deposit', assigned_to: null, deposit_location: depositLocation };
 
+      // Update each item, preserving its division_name to satisfy security rules
       for (const weaponId of weaponIds) {
+        const weapon = unassignedToDeposit.weapons.find(w => w.id === weaponId);
+        const updatePayload = {
+          armory_status: 'in_deposit',
+          assigned_to: null,
+          deposit_location: depositLocation,
+          division_name: weapon?.division_name // Preserve division_name
+        };
         await Weapon.update(weaponId, updatePayload);
       }
       for (const gearId of gearIds) {
+        const gearItem = unassignedToDeposit.gear.find(g => g.id === gearId);
+        const updatePayload = {
+          armory_status: 'in_deposit',
+          assigned_to: null,
+          deposit_location: depositLocation,
+          division_name: gearItem?.division_name // Preserve division_name
+        };
         await SerializedGear.update(gearId, updatePayload);
       }
       for (const droneSetId of droneSetIds) {
+        const droneSet = unassignedToDeposit.droneSets.find(d => d.id === droneSetId);
+        const updatePayload = {
+          armory_status: 'in_deposit',
+          assigned_to: null,
+          deposit_location: depositLocation,
+          division_name: droneSet?.division_name // Preserve division_name
+        };
         await DroneSet.update(droneSetId, updatePayload);
       }
 
@@ -305,25 +334,46 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
               user_full_name: currentUser?.full_name || 'System'
           });
       }
-
-      await loadData();
     } catch (error) {
         console.error("Error depositing unassigned items:", error);
+    } finally {
+      await loadData();
     }
   };
 
   const handleReleaseUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature }) => {
     try {
       const currentUser = await User.me();
-      const updatePayload = { armory_status: 'with_soldier', assigned_to: null, deposit_location: null };
 
+      // Update each item, preserving its division_name to satisfy security rules
       for (const weaponId of weaponIds) {
+        const weapon = unassignedInDeposit.weapons.find(w => w.id === weaponId);
+        const updatePayload = {
+          armory_status: 'with_soldier',
+          assigned_to: null,
+          deposit_location: null,
+          division_name: weapon?.division_name // Preserve division_name
+        };
         await Weapon.update(weaponId, updatePayload);
       }
       for (const gearId of gearIds) {
+        const gearItem = unassignedInDeposit.gear.find(g => g.id === gearId);
+        const updatePayload = {
+          armory_status: 'with_soldier',
+          assigned_to: null,
+          deposit_location: null,
+          division_name: gearItem?.division_name // Preserve division_name
+        };
         await SerializedGear.update(gearId, updatePayload);
       }
       for (const droneSetId of droneSetIds) {
+        const droneSet = unassignedInDeposit.droneSets.find(d => d.id === droneSetId);
+        const updatePayload = {
+          armory_status: 'with_soldier',
+          assigned_to: null,
+          deposit_location: null,
+          division_name: droneSet?.division_name // Preserve division_name
+        };
         await DroneSet.update(droneSetId, updatePayload);
       }
 
@@ -340,10 +390,10 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
               user_full_name: currentUser?.full_name || 'System'
           });
       }
-
-      await loadData();
     } catch (error) {
         console.error("Error releasing unassigned items:", error);
+    } finally {
+      await loadData();
     }
   };
 
@@ -414,23 +464,36 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="deposit" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700">
-            <Package className="w-4 h-4 mr-2"/>
-            Deposit into Armory
-          </TabsTrigger>
-          <TabsTrigger value="release" className="data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
-            <PackageOpen className="w-4 h-4 mr-2"/>
-            Release from Armory
-          </TabsTrigger>
-          <TabsTrigger value="unassigned" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700">
-            <ArchiveRestore className="w-4 h-4 mr-2"/>
-            Deposit Unassigned
-          </TabsTrigger>
-          <TabsTrigger value="release-unassigned" className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700">
-            <PackageOpen className="w-4 h-4 mr-2"/>
-            Release Unassigned
-          </TabsTrigger>
+        <TabsList className={`grid w-full grid-cols-${[
+          currentUser?.permissions?.['operations.deposit'],
+          currentUser?.permissions?.['operations.release'],
+          currentUser?.custom_role !== 'team_leader',
+          currentUser?.custom_role !== 'team_leader'
+        ].filter(Boolean).length}`}>
+          {currentUser?.permissions?.['operations.deposit'] && (
+            <TabsTrigger value="deposit" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700">
+              <Package className="w-4 h-4 mr-2"/>
+              Deposit into Armory
+            </TabsTrigger>
+          )}
+          {currentUser?.permissions?.['operations.release'] && (
+            <TabsTrigger value="release" className="data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
+              <PackageOpen className="w-4 h-4 mr-2"/>
+              Release from Armory
+            </TabsTrigger>
+          )}
+          {currentUser?.custom_role !== 'team_leader' && (
+            <>
+              <TabsTrigger value="unassigned" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700">
+                <ArchiveRestore className="w-4 h-4 mr-2"/>
+                Deposit Unassigned
+              </TabsTrigger>
+              <TabsTrigger value="release-unassigned" className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700">
+                <PackageOpen className="w-4 h-4 mr-2"/>
+                Release Unassigned
+              </TabsTrigger>
+            </>
+          )}
         </TabsList>
         <TabsContent value="deposit">
           <Card className="border-blue-200">
@@ -459,11 +522,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
                       <CardContent className="space-y-3">
                         <p className="text-xs text-slate-600">ID: {soldier.soldier_id}</p>
                         <Badge variant="outline">{soldier.division_name || 'N/A'}</Badge>
-                        <Button 
-                          onClick={() => handleDepositClick(soldier)} 
+                        <Button
+                          onClick={() => handleDepositClick(soldier)}
                           className="w-full bg-blue-600 hover:bg-blue-700"
                           // Disable button based on permissions
-                          disabled={!currentUser?.permissions?.can_deposit_equipment && currentUser?.role !== 'admin'}
+                          disabled={!currentUser?.permissions?.['operations.deposit']}
                         >
                           Select for Deposit
                         </Button>
@@ -502,11 +565,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
                       <CardContent className="space-y-3">
                         <p className="text-xs text-slate-600">ID: {soldier.soldier_id}</p>
                         <Badge variant="outline">{soldier.division_name || 'N/A'}</Badge>
-                        <Button 
-                          onClick={() => handleDepositClick(soldier)} 
+                        <Button
+                          onClick={() => handleDepositClick(soldier)}
                           className="w-full bg-green-600 hover:bg-green-700"
                           // Disable button based on permissions
-                          disabled={!currentUser?.permissions?.can_release_equipment && currentUser?.role !== 'admin'}
+                          disabled={!currentUser?.permissions?.['operations.release']}
                         >
                           Select for Release
                         </Button>

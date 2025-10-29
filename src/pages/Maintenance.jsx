@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Soldier } from "@/api/entities";
 import { Weapon } from "@/api/entities";
 import { SerializedGear } from "@/api/entities";
+import { User } from "@/api/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -37,10 +38,26 @@ export default function MaintenancePage() {
   const loadAllData = async () => {
     setIsLoading(true);
     try {
+      const user = await User.me();
+      const isAdmin = user?.role === 'admin';
+      const isManager = user?.custom_role === 'manager';
+      const isDivisionManager = user?.custom_role === 'division_manager';
+      const userDivision = user?.division;
+
+      // Build filter based on role hierarchy
+      let filter = {};
+      if (isAdmin || isManager) {
+        filter = {}; // See everything
+      } else if (isDivisionManager && userDivision) {
+        filter = { division_name: userDivision }; // See division only
+      } else if (userDivision) {
+        filter = { division_name: userDivision }; // Fallback
+      }
+
       const [soldiersData, weaponsData, gearData] = await Promise.all([
-        Soldier.list().catch(() => []),
-        Weapon.list().catch(() => []),
-        SerializedGear.list().catch(() => [])
+        Soldier.filter(filter).catch(() => []),
+        Weapon.filter(filter).catch(() => []),
+        SerializedGear.filter(filter).catch(() => [])
       ]);
       setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
       setWeapons(Array.isArray(weaponsData) ? weaponsData : []);

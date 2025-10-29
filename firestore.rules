@@ -224,7 +224,7 @@ service cloud.firestore {
       allow read: if hasPermission('operations.verify') && canAccessByScope(resource.data);
       allow create: if hasPermission('operations.verify');
       allow update: if false; // Immutable once created
-      allow delete: if isAdmin();
+      allow delete: if hasPermission('operations.verify') && canAccessByScope(resource.data);
     }
     
     // Users collection - for profile management

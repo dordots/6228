@@ -150,21 +150,21 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       url: createPageUrl("DailyVerification"),
       icon: ClipboardCheck,
       permission: 'operations.verify',
-      hideForRoles: ['team_leader', 'division_manager']
+      hideForRoles: ['team_leader']
     },
     {
       title: "Verification History",
       url: createPageUrl("VerificationHistory"),
       icon: Calendar,
       permission: 'operations.verify',
-      hideForRoles: ['team_leader', 'division_manager']
+      hideForRoles: ['team_leader']
     },
     {
       title: "Maintenance",
       url: createPageUrl("Maintenance"),
       icon: ClipboardCheck,
       permission: 'operations.maintain',
-      hideForRoles: ['team_leader', 'division_manager']
+      hideForRoles: ['team_leader']
     },
     { 
       title: "Equipment", 
@@ -183,7 +183,7 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       url: createPageUrl("DataExport"),
       icon: Download,
       permission: 'system.export',
-      hideForRoles: ['team_leader', 'division_manager']
+      hideForRoles: ['team_leader']
     },
     {
       title: "Security",

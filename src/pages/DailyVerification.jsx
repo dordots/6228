@@ -8,7 +8,8 @@ import { User } from "@/api/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Shield, ClipboardCheck, Users, Loader2, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Shield, ClipboardCheck, Users, Loader2, Search, CheckSquare, Square } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import SoldierVerificationCard from "../components/verification/SoldierVerificationCard";
@@ -28,7 +29,8 @@ export default function DailyVerificationPage() {
   
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  
+  const [selectedSoldiers, setSelectedSoldiers] = useState(new Set());
+
   const [isLoading, setIsLoading] = useState(true);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -139,11 +141,13 @@ export default function DailyVerificationPage() {
     if (!currentUser || !soldier) return;
 
     try {
+      const now = new Date().toISOString();
       await DailyVerification.create({
         soldier_id: soldier.soldier_id,
         soldier_name: `${soldier.first_name} ${soldier.last_name}`,
         verification_date: today,
         created_date: today,
+        verification_timestamp: now,
         verified_by_user_id: currentUser.id,
         verified_by_user_name: currentUser.full_name,
         verified_by: currentUser.full_name,
@@ -155,30 +159,132 @@ export default function DailyVerificationPage() {
         drone_sets_checked: [],
         signature: null,
       });
-      // Refresh all data to ensure UI is up-to-date
-      await loadData();
     } catch (error) {
       console.error("Error creating verification:", error);
-      alert("Failed to save verification. Please try again.");
+      // Silently ignore error and just refresh
+    } finally {
+      // Refresh all data to ensure UI is up-to-date
+      await loadData();
     }
   };
-  
+
   const handleUndoVerify = async (verificationId) => {
     if (!currentUser || !verificationId) return;
 
     try {
       await DailyVerification.delete(verificationId);
-      // Refresh all data to ensure UI is up-to-date
-      await loadData();
     } catch (error) {
       console.error("Error undoing verification:", error);
-      alert("Failed to undo verification. Please try again.");
+      // Silently ignore error and just refresh
+    } finally {
+      // Refresh all data to ensure UI is up-to-date
+      await loadData();
     }
   };
-  
-  const verifiedSoldierIds = useMemo(() => 
+
+  const toggleSoldierSelection = (soldierId) => {
+    setSelectedSoldiers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(soldierId)) {
+        newSet.delete(soldierId);
+      } else {
+        newSet.add(soldierId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllUnverified = () => {
+    const unverifiedIds = finalDisplayedSoldiers
+      .filter(soldier => !verifiedSoldierIds.has(soldier.soldier_id))
+      .map(soldier => soldier.soldier_id);
+    setSelectedSoldiers(new Set(unverifiedIds));
+  };
+
+  const selectAllVerified = () => {
+    const verifiedIds = finalDisplayedSoldiers
+      .filter(soldier => verifiedSoldierIds.has(soldier.soldier_id))
+      .map(soldier => soldier.soldier_id);
+    setSelectedSoldiers(new Set(verifiedIds));
+  };
+
+  const clearSelection = () => {
+    setSelectedSoldiers(new Set());
+  };
+
+  const handleBulkVerify = async () => {
+    if (selectedSoldiers.size === 0 || !currentUser) return;
+
+    try {
+      const soldiersToVerify = finalDisplayedSoldiers.filter(s =>
+        selectedSoldiers.has(s.soldier_id) && !verifiedSoldierIds.has(s.soldier_id)
+      );
+
+      await Promise.all(soldiersToVerify.map(soldier => {
+        const now = new Date().toISOString();
+        return DailyVerification.create({
+          soldier_id: soldier.soldier_id,
+          soldier_name: `${soldier.first_name} ${soldier.last_name}`,
+          verification_date: today,
+          created_date: today,
+          verification_timestamp: now,
+          verified_by_user_id: currentUser.id,
+          verified_by_user_name: currentUser.full_name,
+          verified_by: currentUser.full_name,
+          division_name: soldier.division_name,
+          status: 'verified',
+          weapons_checked: [],
+          equipment_checked: [],
+          gear_checked: [],
+          drone_sets_checked: [],
+          signature: null,
+        });
+      }));
+    } catch (error) {
+      console.error("Error bulk verifying:", error);
+      // Silently ignore error and just refresh
+    } finally {
+      setSelectedSoldiers(new Set()); // Clear selection after refresh
+      await loadData();
+    }
+  };
+
+  const handleBulkUnverify = async () => {
+    if (selectedSoldiers.size === 0 || !currentUser) return;
+
+    try {
+      const verificationsToDelete = finalDisplayedSoldiers
+        .filter(s => selectedSoldiers.has(s.soldier_id) && verifiedSoldierIds.has(s.soldier_id))
+        .map(s => displayedVerifications.find(v => v.soldier_id === s.soldier_id))
+        .filter(v => v?.id);
+
+      await Promise.all(verificationsToDelete.map(v => DailyVerification.delete(v.id)));
+    } catch (error) {
+      console.error("Error bulk unverifying:", error);
+      // Silently ignore error and just refresh
+    } finally {
+      setSelectedSoldiers(new Set()); // Clear selection after refresh
+      await loadData();
+    }
+  };
+
+  const selectAll = () => {
+    const allIds = finalDisplayedSoldiers.map(soldier => soldier.soldier_id);
+    setSelectedSoldiers(new Set(allIds));
+  };
+
+  const verifiedSoldierIds = useMemo(() =>
     new Set(displayedVerifications.map(v => v.soldier_id))
   , [displayedVerifications]);
+
+  // Computed counts for action buttons
+  const selectedUnverifiedCount = useMemo(() => {
+    return Array.from(selectedSoldiers).filter(id => !verifiedSoldierIds.has(id)).length;
+  }, [selectedSoldiers, verifiedSoldierIds]);
+
+  const selectedVerifiedCount = useMemo(() => {
+    return Array.from(selectedSoldiers).filter(id => verifiedSoldierIds.has(id)).length;
+  }, [selectedSoldiers, verifiedSoldierIds]);
   
   const verifiedCount = finalDisplayedSoldiers.filter(s => verifiedSoldierIds.has(s.soldier_id)).length;
   const verificationProgress = finalDisplayedSoldiers.length > 0 ? (verifiedCount / finalDisplayedSoldiers.length) * 100 : 0;
@@ -197,7 +303,7 @@ export default function DailyVerificationPage() {
     );
   }
 
-  if (!currentUser?.permissions?.can_perform_daily_verification && currentUser?.role !== 'admin') {
+  if (!currentUser?.permissions?.['operations.verify'] && currentUser?.role !== 'admin') {
     return (
       <div className="p-6">
         <Alert variant="destructive">
@@ -292,7 +398,59 @@ export default function DailyVerificationPage() {
           </div>
         </CardContent>
       </Card>
-      
+
+      {finalDisplayedSoldiers.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                onClick={selectAll}
+                variant="outline"
+                size="sm"
+              >
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Select All ({finalDisplayedSoldiers.length})
+              </Button>
+              <Button
+                onClick={selectAllUnverified}
+                variant="outline"
+                size="sm"
+                disabled={finalDisplayedSoldiers.filter(s => !verifiedSoldierIds.has(s.soldier_id)).length === 0}
+              >
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Select All Unverified ({finalDisplayedSoldiers.filter(s => !verifiedSoldierIds.has(s.soldier_id)).length})
+              </Button>
+              <Button
+                onClick={selectAllVerified}
+                variant="outline"
+                size="sm"
+                disabled={finalDisplayedSoldiers.filter(s => verifiedSoldierIds.has(s.soldier_id)).length === 0}
+              >
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Select All Verified ({finalDisplayedSoldiers.filter(s => verifiedSoldierIds.has(s.soldier_id)).length})
+              </Button>
+              {selectedSoldiers.size > 0 && (
+                <>
+                  <Button onClick={clearSelection} variant="outline" size="sm">
+                    Clear Selection
+                  </Button>
+                  {selectedUnverifiedCount > 0 && (
+                    <Button onClick={handleBulkVerify} size="sm" className="bg-green-600 hover:bg-green-700">
+                      Verify Selected ({selectedUnverifiedCount})
+                    </Button>
+                  )}
+                  {selectedVerifiedCount > 0 && (
+                    <Button onClick={handleBulkUnverify} size="sm" className="bg-orange-600 hover:bg-orange-700">
+                      Unverify Selected ({selectedVerifiedCount})
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {finalDisplayedSoldiers.length === 0 ? (
         <Card>
             <CardContent className="p-8 text-center">
@@ -319,6 +477,8 @@ export default function DailyVerificationPage() {
                 verificationRecord={verificationRecord}
                 onVerify={() => handleVerify(soldier)}
                 onUndoVerify={() => handleUndoVerify(verificationRecord?.id)}
+                isSelected={selectedSoldiers.has(soldier.soldier_id)}
+                onToggleSelect={() => toggleSoldierSelection(soldier.soldier_id)}
               />
             );
           })}

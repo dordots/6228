@@ -2,10 +2,11 @@ import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { User, Target, Binoculars, CheckCircle, ShieldCheck, Loader2, Undo2 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function SoldierVerificationCard({ soldier, assignedWeapons, assignedGear, isVerified, verificationRecord, onVerify, onUndoVerify }) {
+export default function SoldierVerificationCard({ soldier, assignedWeapons, assignedGear, isVerified, verificationRecord, onVerify, onUndoVerify, isSelected, onToggleSelect }) {
   const [isVerifying, setIsVerifying] = React.useState(false);
   const [isUndoing, setIsUndoing] = React.useState(false);
 
@@ -22,9 +23,16 @@ export default function SoldierVerificationCard({ soldier, assignedWeapons, assi
   };
 
   return (
-    <Card className={`flex flex-col h-full transition-all duration-300 ${isVerified ? 'bg-green-50 border-green-200' : 'bg-white'}`}>
+    <Card className={`flex flex-col h-full transition-all duration-300 ${isVerified ? (isSelected ? 'bg-green-100 border-green-400' : 'bg-green-50 border-green-200') : (isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white')}`}>
       <CardHeader>
         <div className="flex items-center gap-3">
+            {onToggleSelect && (
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={onToggleSelect}
+                className="mt-1"
+              />
+            )}
             <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
                 <User className="w-5 h-5 text-slate-600" />
             </div>

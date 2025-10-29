@@ -1,75 +1,132 @@
-# Fix Unassigned Deposit Tab - Complete
+# Add Verification Timestamp to Daily Verification
 
 ## Date: 29 October 2025
 
-## Changes Made
+## Problem
 
-### 1. Fixed Unassigned Filter to Include Empty String
-**File:** [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx)
+Currently, daily verification records only store the date but not the time of verification. Need to add timestamp to track exactly when each soldier was verified.
 
-**Problem:** Items with `assigned_to: ""` (empty string) were not being shown in the "Deposit Unassigned" tab because the filter only checked for `assigned_to: null`.
+## Solution
 
-**Solution:**
-- Changed from Firestore filter `assigned_to: null` to fetching by `armory_status` only
-- Filter client-side for unassigned items: `!item.assigned_to || item.assigned_to === null || item.assigned_to === ''`
+1. Add timestamp field (`verification_timestamp`) to verification records
+2. Display the time in the verification history screen
 
-**Lines Changed:** 93-100 (team leader section) and 153-160 (admin/manager section)
+## Plan
+
+- [ ] 1. Find and read the verification history screen file
+- [ ] 2. Update DailyVerification.jsx to add timestamp when creating verification records
+- [ ] 3. Update verification history screen to display the timestamp
+- [ ] 4. Test the changes
 
 ---
 
-### 2. Added Sample Data Exclusion
-**File:** [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx)
+# Previous: Fix Variable Declaration Order Error in Daily Verification
 
-**Problem:** Sample/test items were appearing in the unassigned deposit list.
+## Date: 29 October 2025
 
-**Solution:** Added `!item.is_sample` check to filter function:
-```javascript
-const isUnassigned = (item) =>
-  (!item.assigned_to || item.assigned_to === null || item.assigned_to === '')
-  && !item.is_sample;
+## Problem
+
+Daily Verification page crashes with error:
+```
+ReferenceError: Cannot access 'verifiedSoldierIds' before initialization
+    at DailyVerification.jsx:275
 ```
 
-**Lines Changed:** 94 and 154
+## Root Cause
+
+Variable hoisting issue in [DailyVerification.jsx](src/pages/DailyVerification.jsx):
+- Lines 273-279: `selectedUnverifiedCount` and `selectedVerifiedCount` useMemo hooks reference `verifiedSoldierIds` in their dependencies
+- Line 281-283: `verifiedSoldierIds` is declared AFTER it's being used
+
+This is a Temporal Dead Zone (TDZ) error where a variable is accessed before its declaration.
+
+## Solution
+
+Move the `verifiedSoldierIds` useMemo declaration above the two hooks that depend on it.
+
+## Changes Made
+
+- Fixed variable declaration order in [DailyVerification.jsx](src/pages/DailyVerification.jsx#L272-L283)
 
 ---
 
-### 3. Added Search Bar to Unassigned Deposit Tab
-**File:** [UnassignedDepositTab.jsx](src/components/armory/UnassignedDepositTab.jsx)
+# Previous: Fix Division Manager Permission Error for Unassigned Item Deposit
 
-**Added:**
-1. Search input with icon (lines 163-171)
-2. Search state management (line 54)
-3. Filtering logic using `useMemo` (lines 117-143):
-   - Weapons: searches `weapon_id` and `weapon_type`
-   - Gear: searches `gear_id` and `gear_type`
-   - Drones: searches `set_serial_number` and `set_type`
-4. Updated tab counts to show filtered results (lines 176, 179, 182)
-5. Updated lists to use filtered arrays (lines 187, 192, 197)
+## Date: 29 October 2025
 
-**Features:**
-- Real-time filtering as you type
-- Case-insensitive search
-- Searches both ID and type fields
-- Works across all three tabs (Weapons, Gear, Drones)
+## Problem
+
+When division managers try to deposit unassigned items, they get a "Missing or insufficient permissions" error from Firestore, even though they have `equipment.update` permission and `scope: division`.
+
+## Root Cause Found!
+
+The issue is in `handleDepositUnassigned` function at line 283 of [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx#L283).
+
+The update payload is:
+```javascript
+{ armory_status: 'in_deposit', assigned_to: null, deposit_location: depositLocation }
+```
+
+**The problem**: The payload doesn't include `division_name`, which causes it to be removed from the document during the update.
+
+The Firestore security rule checks (lines 141-149 in firestore.rules):
+```
+getUserDivision() == resource.data.division_name ||
+getUserDivision() == request.resource.data.division_name
+```
+
+Since `request.resource.data.division_name` becomes undefined after the update (because it's not in the payload), the security check fails!
+
+## Solution
+
+Preserve the `division_name` field in the update payload when depositing/releasing unassigned items. This is a simple one-line fix for each equipment type update.
+
+## Plan
+
+- [x] 1. Identify root cause - Update payload missing division_name
+- [x] 2. Modify `handleDepositUnassigned` to preserve division_name in payload
+- [x] 3. Modify `handleReleaseUnassigned` to preserve division_name in payload
+- [x] 4. Test the fix
+
+## Changes Made
+
+### 1. Fixed `handleDepositUnassigned` function
+**File:** [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx#L280-L336)
+
+Modified to preserve `division_name` field in update payload:
+- Fetch each item from `unassignedToDeposit` state before updating
+- Include `division_name` in the payload to satisfy Firestore security rules
+
+### 2. Fixed `handleReleaseUnassigned` function
+**File:** [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx#L338-L392)
+
+Applied same fix:
+- Fetch each item from `unassignedInDeposit` state before updating
+- Include `division_name` in the payload
+
+## Review
+
+**Problem**: Division managers got "Missing or insufficient permissions" error when depositing unassigned items.
+
+**Root Cause**: Update payloads were missing `division_name` field. Firestore security rules check both old and new document's `division_name` to validate division scope access. Without it in the payload, the security check failed.
+
+**Solution**: Preserve `division_name` from existing items in the update payload.
+
+**Result**: Division managers can now successfully deposit and release unassigned items within their division. Tab refreshes automatically after operations complete.
 
 ---
+
+# Previous: Armory Deposit/Release - Division Manager Access Complete
+
+## Date: 29 October 2025
 
 ## Summary
 
-The "Deposit Unassigned" tab now:
-- ✅ Shows items with `assigned_to: null` OR `assigned_to: ""`
-- ✅ Shows items with `armory_status: 'with_soldier'`
-- ✅ Excludes sample/test items (`is_sample: true`)
-- ✅ Has a search bar to filter by ID or type
-- ✅ Displays accurate counts in tab headers
+Enabled full armory deposit/release functionality for division managers, scoped to their division only.
 
-## Testing
+## Changes Made
 
-To test the changes:
-1. Navigate to Armory Deposit page as admin
-2. Click "Deposit Unassigned" tab
-3. Verify you see all unassigned items with `armory_status: 'with_soldier'`
-4. Verify sample items are NOT shown
-5. Use search bar to filter by weapon ID (e.g., "M4-001")
-6. Use search bar to filter by type (e.g., "M4 Rifle")
-7. Verify tab counts update with filtered results
+### 1. Fixed Dialog Auto-Close and Refresh on Error
+**File:** [ArmoryDeposit.jsx](src/pages/ArmoryDeposit.jsx#L270-L278)
+
+**Problem:** After releasing equipment, if there was an error, the dialog wouldn't close an

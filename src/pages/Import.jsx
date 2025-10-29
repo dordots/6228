@@ -846,17 +846,42 @@ export default function ImportPage() {
             }
 
             // Parse components field if it's a string (from CSV export)
-            // Format: slotName:componentId$slotName2:componentId2
+            // New format: slotName: componentName (componentId); slotName2: componentName2 (componentId2)
+            // Old format: slotName:componentId$slotName2:componentId2
             const droneSetData = { ...droneSet };
             if (droneSetData.components && typeof droneSetData.components === 'string') {
-              const componentPairs = droneSetData.components.split('$').filter(Boolean);
-              droneSetData.components = componentPairs.reduce((acc, pair) => {
-                const [slotName, componentId] = pair.split(':');
-                if (slotName && componentId) {
-                  acc[slotName] = componentId;
-                }
-                return acc;
-              }, {});
+              // Check if it's the new format (contains semicolons and parentheses)
+              const isNewFormat = droneSetData.components.includes('; ') && droneSetData.components.includes('(');
+
+              if (isNewFormat) {
+                // New format: split by '; ' and extract component ID from parentheses
+                const componentPairs = droneSetData.components.split('; ').filter(Boolean);
+                droneSetData.components = componentPairs.reduce((acc, pair) => {
+                  // Extract slotName and componentId from "slotName: componentName (componentId)"
+                  const colonIndex = pair.indexOf(':');
+                  if (colonIndex > -1) {
+                    const slotName = pair.substring(0, colonIndex).trim();
+                    const remainder = pair.substring(colonIndex + 1).trim();
+                    // Extract componentId from parentheses
+                    const match = remainder.match(/\(([^)]+)\)/);
+                    if (match && match[1]) {
+                      const componentId = match[1].trim();
+                      acc[slotName] = componentId;
+                    }
+                  }
+                  return acc;
+                }, {});
+              } else {
+                // Old format: slotName:componentId$slotName2:componentId2
+                const componentPairs = droneSetData.components.split('$').filter(Boolean);
+                droneSetData.components = componentPairs.reduce((acc, pair) => {
+                  const [slotName, componentId] = pair.split(':');
+                  if (slotName && componentId) {
+                    acc[slotName] = componentId;
+                  }
+                  return acc;
+                }, {});
+              }
             }
 
             await DroneSet.create(droneSetData);

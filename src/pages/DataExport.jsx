@@ -70,10 +70,20 @@ export default function DataExport() {
     fetchUserAndDivisions();
   }, []);
 
-  const convertToCSV = (data, headers) => {
+  const convertToCSV = (data, headers, allComponents = []) => {
     const BOM = '\uFEFF'; // UTF-8 Byte Order Mark for proper Hebrew support
     if (!Array.isArray(data) || data.length === 0) {
       return BOM + (headers ? headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',') : '');
+    }
+
+    // Create a map of component ID to component type for quick lookup
+    const componentMap = {};
+    if (Array.isArray(allComponents)) {
+      allComponents.forEach(comp => {
+        if (comp && comp.id && comp.component_type) {
+          componentMap[comp.id] = comp.component_type;
+        }
+      });
     }
 
     const finalHeaders = headers || Object.keys(data[0]);
@@ -86,17 +96,20 @@ export default function DataExport() {
         let value = item[header] !== undefined && item[header] !== null ? item[header] : '';
 
         // Special handling for components object (drone sets)
-        // Format: slotName:componentId$slotName2:componentId2
+        // Format: slotName: componentName (componentId); slotName2: componentName2 (componentId2)
         if (header === 'components' && typeof value === 'object' && value !== null) {
           if (Array.isArray(value)) {
             // If it's an array, join component IDs
-            value = value.map(comp => comp?.component_id || '').filter(Boolean).join('$');
+            value = value.map(comp => comp?.component_id || '').filter(Boolean).join('; ');
           } else {
-            // If it's an object, format as slotName:componentId pairs
+            // If it's an object, format as slotName: componentName (componentId) pairs
             value = Object.entries(value)
               .filter(([key, val]) => val) // Filter out empty values
-              .map(([key, val]) => `${key}:${val}`)
-              .join('$');
+              .map(([key, val]) => {
+                const componentName = componentMap[val] || 'Unknown Component';
+                return `${key}: ${componentName} (${val})`;
+              })
+              .join('; ');
           }
         } else {
           value = String(value);
@@ -155,7 +168,17 @@ export default function DataExport() {
         data = await config.entity.list();
       }
 
-      const csvContent = convertToCSV(data);
+      // If exporting Drone Sets, fetch all components for name mapping
+      let allComponents = [];
+      if (config.name === 'Drone Sets') {
+        try {
+          allComponents = await DroneComponent.list();
+        } catch (error) {
+          console.error('Error fetching drone components for export:', error);
+        }
+      }
+
+      const csvContent = convertToCSV(data, undefined, allComponents);
       downloadCSV(csvContent, config.name.replace(/\s+/g, '_'));
       setExportStatus(`${config.name} exported successfully!`);
     } catch (error) {

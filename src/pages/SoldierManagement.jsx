@@ -65,12 +65,16 @@ export default function SoldierManagement() {
         // Admins and managers see everything
         soldierFilter = {};
         equipmentFilter = {};
-      } else if (userDivision && userTeam) {
-        // Team leaders see only their team's soldiers and their division's unassigned equipment
+      } else if (user?.custom_role === 'division_manager' && userDivision) {
+        // Division managers see all soldiers in their division
+        soldierFilter = { division_name: userDivision };
+        equipmentFilter = { division_name: userDivision };
+      } else if (user?.custom_role === 'team_leader' && userDivision && userTeam) {
+        // Team leaders see only their team's soldiers
         soldierFilter = { division_name: userDivision, team_name: userTeam };
         equipmentFilter = { division_name: userDivision };
       } else if (userDivision) {
-        // Division managers see their division
+        // Fallback: users with division see their division
         soldierFilter = { division_name: userDivision };
         equipmentFilter = { division_name: userDivision };
       }

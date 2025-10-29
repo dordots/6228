@@ -19,7 +19,8 @@ import {
 
 const SkeletonRow = () => (
   <TableRow>
-    {/* Updated SkeletonRow to match the new 8 columns */}
+    {/* Updated SkeletonRow to match the new 9 columns */}
+    <TableCell className="w-12 px-4"><Skeleton className="h-4 w-4" /></TableCell> {/* Checkbox */}
     <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Gear ID */}
     <TableCell><Skeleton className="h-4 w-32" /></TableCell> {/* Type */}
     <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell> {/* Status */}
@@ -41,7 +42,9 @@ export default function GearTable({
   onViewComment, // New prop for viewing comments
   isAdminOrManager, // New prop for broader permissions
   permissions = { canEdit: false, canDelete: false, canReassign: false }, // New prop for granular permissions
-  // Removed sortConfig, onSort, selectedItems, onSelectItem, onSelectAll as they are not in the new outline
+  selectedItems = [],
+  onSelectItem = () => {},
+  onSelectAll = () => {}
 }) {
   // Helper function to get soldier's full name, as implied by the outline
   const getSoldierName = (soldierId) => {
@@ -55,6 +58,13 @@ export default function GearTable({
         <TableHeader>
           <TableRow>
             {/* TableHead elements are replaced as per the outline */}
+            <TableHead className="w-12 px-4">
+              <Checkbox
+                checked={selectedItems.length === gear.length && gear.length > 0}
+                indeterminate={selectedItems.length > 0 && selectedItems.length < gear.length}
+                onCheckedChange={onSelectAll}
+              />
+            </TableHead>
             <TableHead>Gear ID</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Status</TableHead>
@@ -70,7 +80,7 @@ export default function GearTable({
             Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
           ) : !Array.isArray(gear) || gear.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center h-24 text-slate-500">
+              <TableCell colSpan={9} className="text-center h-24 text-slate-500">
                 No gear found.
               </TableCell>
             </TableRow>
@@ -80,6 +90,12 @@ export default function GearTable({
               return (
                 <TableRow key={gearItem.id} className="hover:bg-slate-50 group">
                   {/* TableCell contents and order are adjusted to match the new header */}
+                  <TableCell className="w-12 px-4">
+                    <Checkbox
+                      checked={selectedItems.includes(gearItem.id)}
+                      onCheckedChange={() => onSelectItem(gearItem.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">{gearItem.gear_id}</TableCell>
                   <TableCell>{gearItem.gear_type || 'Unknown'}</TableCell>
                   <TableCell>

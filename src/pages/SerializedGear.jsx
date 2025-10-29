@@ -598,7 +598,7 @@ export default function SerializedGearPage() {
               Delete Selected ({selectedItems.length})
             </Button>
           )}
-          {isAdminOrManager && (
+          {currentUser?.role === 'admin' && (
             <Button variant="outline" onClick={() => setShowRenameDialog(true)}>
               <Edit className="w-4 h-4 mr-2" /> Rename Type
             </Button>
@@ -683,6 +683,9 @@ export default function SerializedGearPage() {
                 canReassign: currentUser?.permissions?.['equipment.update'] || currentUser?.permissions?.['operations.transfer'] || false,
                 canDelete: currentUser?.permissions?.['equipment.delete'] || false
               }}
+              selectedItems={selectedItems}
+              onSelectItem={handleSelectItem}
+              onSelectAll={handleSelectAll}
             />
           </div>
         </CardContent>

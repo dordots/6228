@@ -454,7 +454,7 @@ export default function EquipmentPage() {
               </AlertDialogContent>
             </AlertDialog>
           )}
-          {isAdminOrManager && (
+          {currentUser?.role === 'admin' && (
             <Button variant="outline" onClick={() => setShowRenameDialog(true)}>
               <Edit className="w-4 h-4 mr-2" /> Rename Type
             </Button>

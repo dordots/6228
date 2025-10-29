@@ -764,7 +764,7 @@ export default function Weapons() {
               Delete Selected ({selectedItems.length})
             </Button>
           )}
-          {isAdminOrManager && (
+          {currentUser?.role === 'admin' && (
             <Button variant="outline" onClick={() => setShowRenameDialog(true)}>
               <Edit className="w-4 h-4 mr-2" /> Rename Type
             </Button>
@@ -852,6 +852,9 @@ export default function Weapons() {
                 'equipment.delete': currentUser?.permissions?.['equipment.delete'] || false,
                 'operations.transfer': currentUser?.permissions?.['operations.transfer'] || false
               }}
+              selectedItems={selectedItems}
+              onSelectItem={handleSelectItem}
+              onSelectAll={handleSelectAll}
             />
           </div>
         </CardContent>

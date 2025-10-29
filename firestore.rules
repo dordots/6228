@@ -125,8 +125,8 @@ service cloud.firestore {
            getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
          (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
           getUserDivision() == resource.data.division_name &&
-          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
-           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
+          ((!('assigned_to' in resource.data) || resource.data.assigned_to == null || resource.data.assigned_to == '') ||
+           (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name))));
       allow delete: if hasPermission('equipment.delete');
     }
     
@@ -145,8 +145,8 @@ service cloud.firestore {
            getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
          (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
           getUserDivision() == resource.data.division_name &&
-          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
-           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
+          ((!('assigned_to' in resource.data) || resource.data.assigned_to == null || resource.data.assigned_to == '') ||
+           (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name))));
       allow delete: if hasPermission('equipment.delete') &&
         (isAdmin() || getUserScope() == 'global' ||
          (getUserScope() == 'division' && getUserDivision() != null &&
@@ -168,8 +168,8 @@ service cloud.firestore {
            getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
          (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
           getUserDivision() == resource.data.division_name &&
-          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
-           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
+          ((!('assigned_to' in resource.data) || resource.data.assigned_to == null || resource.data.assigned_to == '') ||
+           (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name))));
       allow delete: if hasPermission('equipment.delete');
     }
     
@@ -188,8 +188,8 @@ service cloud.firestore {
            getUserDivision() == request.resource.data.division_name || getUserDivision() == request.resource.data.division)) ||
          (getUserScope() == 'team' && getUserDivision() != null && getUserTeam() != null &&
           getUserDivision() == resource.data.division_name &&
-          (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name ||
-           (!('assigned_to' in resource.data) || resource.data.assigned_to == null))));
+          ((!('assigned_to' in resource.data) || resource.data.assigned_to == null || resource.data.assigned_to == '') ||
+           (getUserTeam() == resource.data.team_name || getUserTeam() == request.resource.data.team_name))));
       allow delete: if hasPermission('equipment.delete');
     }
     

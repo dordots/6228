@@ -3,6 +3,7 @@ import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MoreHorizontal, MessageSquare } from "lucide-react"; // Removed sorting chevrons, added MessageSquare
 import { Skeleton } from "@/components/ui/skeleton";
 // Removed 'format' import as 'last_checked_date' column is no longer present
@@ -22,9 +23,11 @@ export default function WeaponTable({
   onReassign,
   onViewComment, // New prop for viewing comments
   isLoading,
-  // Removed props related to sorting and selection: sortConfig, onSort, selectedItems, onSelectItem, onSelectAll, currentUser
   isAdminOrManager, // New prop for broader permission checks
   permissions = {}, // New prop for granular permissions
+  selectedItems = [],
+  onSelectItem = () => {},
+  onSelectAll = () => {}
 }) {
 
   // Removed SortableHeader component as sorting is removed from the table headers
@@ -32,6 +35,7 @@ export default function WeaponTable({
   const SkeletonRow = () => (
     <TableRow>
       {/* Skeleton cells adjusted to match the new column structure */}
+      <TableCell className="w-12 px-4"><Skeleton className="h-4 w-4" /></TableCell> {/* Checkbox */}
       <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Weapon ID */}
       <TableCell><Skeleton className="h-4 w-32" /></TableCell> {/* Type */}
       <TableCell><Skeleton className="h-4 w-40" /></TableCell> {/* Assigned To */}
@@ -47,6 +51,13 @@ export default function WeaponTable({
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-12 px-4">
+              <Checkbox
+                checked={selectedItems.length === weapons.length && weapons.length > 0}
+                indeterminate={selectedItems.length > 0 && selectedItems.length < weapons.length}
+                onCheckedChange={onSelectAll}
+              />
+            </TableHead>
             <TableHead className="w-40">Weapon ID</TableHead>
             <TableHead className="w-48">Type</TableHead>
             <TableHead className="w-48">Assigned To</TableHead>
@@ -61,7 +72,7 @@ export default function WeaponTable({
             Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
           ) : !Array.isArray(weapons) || weapons.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center h-24 text-slate-500">
+              <TableCell colSpan={8} className="text-center h-24 text-slate-500">
                 No weapons found.
               </TableCell>
             </TableRow>
@@ -70,6 +81,12 @@ export default function WeaponTable({
               const assignedSoldier = Array.isArray(soldiers) ? soldiers.find(s => s.soldier_id === weapon.assigned_to) : null;
               return (
                 <TableRow key={weapon.id} className="hover:bg-slate-50 group">
+                  <TableCell className="w-12 px-4">
+                    <Checkbox
+                      checked={selectedItems.includes(weapon.id)}
+                      onCheckedChange={() => onSelectItem(weapon.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{weapon.weapon_id}</TableCell>
                   <TableCell>{weapon.weapon_type}</TableCell>
                   <TableCell>

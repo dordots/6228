@@ -1004,31 +1004,35 @@ export default function ImportPage() {
             }
 
             // Check if component already exists in database
-            console.log('[Import] Checking if component exists:', component.component_id);
-            let existingComponent = null;
+            // Duplicate = same component_type AND same component_id (serial number)
+            console.log('[Import] Checking if component exists:', component.component_id, component.component_type);
+            let existingComponents = [];
             try {
-              existingComponent = await DroneComponent.findById(component.component_id);
-              console.log('[Import] findById result for component_id', component.component_id, ':', existingComponent);
+              existingComponents = await DroneComponent.filter({
+                component_id: component.component_id,
+                component_type: component.component_type
+              });
+              console.log('[Import] Filter result for component_id', component.component_id, 'and type', component.component_type, ':', existingComponents);
             } catch (findError) {
               // Component doesn't exist - this is expected for new components
               console.log('[Import] Component does not exist (this is good for new imports)');
             }
 
-            if (existingComponent) {
+            if (existingComponents && existingComponents.length > 0) {
               console.warn('[Import] Component already exists, skipping:', component.component_id, component.component_type);
-              console.warn('[Import] Existing component data:', existingComponent);
+              console.warn('[Import] Existing component data:', existingComponents[0]);
 
               results.push({
                 id: component.component_id,
                 success: false,
-                error: `Component with ID "${component.component_id}" already exists in database`,
+                error: `Component with type "${component.component_type}" and ID "${component.component_id}" already exists in database`,
                 data: component
               });
 
               const errorDetail = {
                 entity: 'drone_components',
                 id: component.component_id,
-                message: `Component with ID "${component.component_id}" already exists in database`,
+                message: `Component with type "${component.component_type}" and ID "${component.component_id}" already exists in database`,
                 data: component
               };
               allErrors.push(errorDetail);

@@ -890,30 +890,19 @@ exports.syncUserOnSignIn = functions
     }
 
     const authUid = context.auth.uid;
-    console.log(`\n========================================`);
-    console.log(`[syncUserOnSignIn] STEP 1: User signed in`);
-    console.log(`  Auth UID: ${authUid}`);
-
     const db = admin.firestore();
 
     try {
-      // STEP 1: Get auth user data
+      // Get auth user data
       const authUser = await admin.auth().getUser(authUid);
-      console.log(`[syncUserOnSignIn] STEP 2: Got auth user data`);
-      console.log(`  Email: ${authUser.email || 'N/A'}`);
-      console.log(`  Phone: ${authUser.phoneNumber || 'N/A'}`);
 
-      // STEP 2: Find user directly in users table by email or phone
+      // Find user directly in users table by email or phone
       let userDoc = null;
       let userData = null;
       let userDocId = null;
-      let searchMethod = null;
 
       // Try to find by email first
       if (authUser.email) {
-        console.log(`[syncUserOnSignIn] STEP 3: Searching users table by email...`);
-        console.log(`  Query: users WHERE email == "${authUser.email}"`);
-
         const usersByEmail = await db.collection('users')
           .where('email', '==', authUser.email)
           .limit(1)
@@ -923,18 +912,11 @@ exports.syncUserOnSignIn = functions
           userDoc = usersByEmail.docs[0];
           userData = userDoc.data();
           userDocId = userDoc.id;
-          searchMethod = 'email';
-          console.log(`  ✅ FOUND: User document ${userDocId} by email`);
-        } else {
-          console.log(`  ❌ NOT FOUND by email`);
         }
       }
 
       // Try to find by phone if email didn't match
       if (!userDoc && authUser.phoneNumber) {
-        console.log(`[syncUserOnSignIn] STEP 3: Searching users table by phone...`);
-        console.log(`  Query: users WHERE phoneNumber == "${authUser.phoneNumber}"`);
-
         const usersByPhone = await db.collection('users')
           .where('phoneNumber', '==', authUser.phoneNumber)
           .limit(1)
@@ -944,70 +926,160 @@ exports.syncUserOnSignIn = functions
           userDoc = usersByPhone.docs[0];
           userData = userDoc.data();
           userDocId = userDoc.id;
-          searchMethod = 'phone';
-          console.log(`  ✅ FOUND: User document ${userDocId} by phone`);
-        } else {
-          console.log(`  ❌ NOT FOUND by phone`);
         }
       }
 
-      // STEP 3: If no user found, throw error
+      // If no user found, throw error
       if (!userData) {
-        console.log(`[syncUserOnSignIn] ❌ ERROR: No user account found`);
-        console.log(`========================================\n`);
         throw new functions.https.HttpsError(
           'not-found',
           'No user account found for this email/phone. Please contact your administrator to set up your account.'
         );
       }
 
-      console.log(`[syncUserOnSignIn] STEP 4: Retrieved user data`);
-      console.log(`  User Doc ID: ${userDocId}`);
-      console.log(`  Found by: ${searchMethod}`);
-      console.log(`  Display Name: ${userData.displayName || 'N/A'}`);
-      console.log(`  Email: ${userData.email || 'N/A'}`);
-      console.log(`  Phone: ${userData.phoneNumber || 'N/A'}`);
-      console.log(`  Role: ${userData.role}`);
-      console.log(`  Custom Role: ${userData.custom_role}`);
-      console.log(`  Division: ${userData.division}`);
-      console.log(`  Team: ${userData.team}`);
-      console.log(`  Linked Soldier ID: ${userData.linked_soldier_id || 'N/A'}`);
-      console.log(`  Permissions:`, JSON.stringify(userData.permissions, null, 2));
-
-      // STEP 4: Optionally find linked soldier for display (if linked_soldier_id exists)
+      // STEP 4: Find and link soldier on sign-in
+      console.log(`[syncUserOnSignIn] STEP 5: Finding soldier to link...`);
       let soldierData = null;
-      if (userData.linked_soldier_id) {
-        console.log(`[syncUserOnSignIn] STEP 5: Finding linked soldier...`);
-        console.log(`  Query: soldiers WHERE soldier_id == "${userData.linked_soldier_id}"`);
+      let shouldUpdateUserDoc = false;
+      let newLinkedSoldierId = userData.linked_soldier_id; // Start with existing value
+
+      // Try to find soldier by phone number
+      if (authUser.phoneNumber) {
+        console.log(`[syncUserOnSignIn] STEP 5a: Searching for soldier by phone number...`);
+        console.log(`  Query: soldiers WHERE phone_number == "${authUser.phoneNumber}"`);
 
         try {
-          const soldierQuery = await db.collection('soldiers')
-            .where('soldier_id', '==', userData.linked_soldier_id)
+          const soldiersByPhone = await db.collection('soldiers')
+            .where('phone_number', '==', authUser.phoneNumber)
             .limit(1)
             .get();
 
-          if (!soldierQuery.empty) {
-            soldierData = soldierQuery.docs[0].data();
-            console.log(`  ✅ FOUND: Soldier ${soldierData.soldier_id} (${soldierData.first_name} ${soldierData.last_name})`);
+          console.log(`  Result: Found ${soldiersByPhone.size} soldier(s)`);
+
+          if (!soldiersByPhone.empty) {
+            soldierData = soldiersByPhone.docs[0].data();
+            console.log(`  ✅ FOUND: Soldier ${soldierData.soldier_id} by phone`);
+            console.log(`    Name: ${soldierData.first_name} ${soldierData.last_name}`);
+            console.log(`    Division: ${soldierData.division_name || 'N/A'}`);
+            console.log(`    Team: ${soldierData.team_name || 'N/A'}`);
+
+            // Update linked soldier ID if it changed
+            if (newLinkedSoldierId !== soldierData.soldier_id) {
+              console.log(`  📝 Updating linked_soldier_id from "${newLinkedSoldierId || 'null'}" to "${soldierData.soldier_id}"`);
+              newLinkedSoldierId = soldierData.soldier_id;
+              shouldUpdateUserDoc = true;
+            }
           } else {
-            console.log(`  ⚠️  Soldier not found for linked_soldier_id: ${userData.linked_soldier_id}`);
+            console.log(`  ❌ NOT FOUND by phone`);
           }
-        } catch (soldierError) {
-          console.warn(`  ⚠️  Error finding soldier:`, soldierError.message);
+        } catch (error) {
+          console.error(`  ❌ Error searching by phone:`, error);
         }
       } else {
-        console.log(`[syncUserOnSignIn] STEP 5: No linked_soldier_id, skipping soldier lookup`);
+        console.log(`[syncUserOnSignIn] STEP 5a: Skipping phone search (no phone number)`);
       }
 
-      // STEP 5: Update custom claims with the user's data
-      console.log(`[syncUserOnSignIn] STEP 6: Updating custom claims for auth UID ${authUid}...`);
+      // Try to find soldier by email if not found by phone
+      if (!soldierData && authUser.email) {
+        console.log(`[syncUserOnSignIn] STEP 5b: Searching for soldier by email...`);
+        console.log(`  Query: soldiers WHERE email == "${authUser.email}"`);
 
-      // Use displayName from user document
-      const displayName = userData.displayName ||
-                         (soldierData ? `${soldierData.first_name || ''} ${soldierData.last_name || ''}`.trim() : null) ||
-                         userData.email ||
-                         userData.phoneNumber;
-      console.log(`  Display Name: ${displayName}`);
+        try {
+          const soldiersByEmail = await db.collection('soldiers')
+            .where('email', '==', authUser.email)
+            .limit(1)
+            .get();
+
+          console.log(`  Result: Found ${soldiersByEmail.size} soldier(s)`);
+
+          if (!soldiersByEmail.empty) {
+            soldierData = soldiersByEmail.docs[0].data();
+            console.log(`  ✅ FOUND: Soldier ${soldierData.soldier_id} by email`);
+            console.log(`    Name: ${soldierData.first_name} ${soldierData.last_name}`);
+            console.log(`    Division: ${soldierData.division_name || 'N/A'}`);
+            console.log(`    Team: ${soldierData.team_name || 'N/A'}`);
+
+            // Update linked soldier ID if it changed
+            if (newLinkedSoldierId !== soldierData.soldier_id) {
+              console.log(`  📝 Updating linked_soldier_id from "${newLinkedSoldierId || 'null'}" to "${soldierData.soldier_id}"`);
+              newLinkedSoldierId = soldierData.soldier_id;
+              shouldUpdateUserDoc = true;
+            }
+          } else {
+            console.log(`  ❌ NOT FOUND by email`);
+          }
+        } catch (error) {
+          console.error(`  ❌ Error searching by email:`, error);
+        }
+      } else if (!soldierData) {
+        console.log(`[syncUserOnSignIn] STEP 5b: Skipping email search (no email or already found)`);
+      }
+
+      // If no soldier found, use "SAMPLE_SOLDIER" as the ID and set division/team to null
+      if (!soldierData) {
+        console.log(`[syncUserOnSignIn] STEP 5c: No soldier found, using SAMPLE_SOLDIER ID...`);
+
+        // Update linked soldier ID to "SAMPLE_SOLDIER" and clear division/team
+        const needsUpdate = newLinkedSoldierId !== 'SAMPLE_SOLDIER' || userData.division !== null || userData.team !== null;
+
+        if (needsUpdate) {
+          console.log(`  📝 Updating user:`);
+          console.log(`    - linked_soldier_id: "${newLinkedSoldierId || 'null'}" → "SAMPLE_SOLDIER"`);
+          console.log(`    - division: "${userData.division || 'null'}" → null`);
+          console.log(`    - team: "${userData.team || 'null'}" → null`);
+          newLinkedSoldierId = 'SAMPLE_SOLDIER';
+          shouldUpdateUserDoc = true;
+        } else {
+          console.log(`  ℹ️  Already set: linked_soldier_id="SAMPLE_SOLDIER", division=null, team=null`);
+        }
+      } else {
+        console.log(`[syncUserOnSignIn] STEP 5c: Soldier found, skipping SAMPLE_SOLDIER fallback`);
+      }
+
+      // Calculate display name from soldier data
+      // Display name is always from soldier: first_name + last_name, or "Sample Soldier" if no soldier found
+      const displayName = soldierData
+        ? `${soldierData.first_name || ''} ${soldierData.last_name || ''}`.trim()
+        : 'Sample Soldier';
+
+      console.log(`[syncUserOnSignIn] STEP 5d: Display name will be: "${displayName}"`);
+
+      // Update user document if linked_soldier_id changed
+      if (shouldUpdateUserDoc && userDoc) {
+        console.log(`[syncUserOnSignIn] STEP 5e: Updating user document...`);
+        console.log(`  User Doc ID: ${userDocId}`);
+        console.log(`  New linked_soldier_id: ${newLinkedSoldierId}`);
+
+        try {
+          const updateData = {
+            linked_soldier_id: newLinkedSoldierId,
+            division: soldierData?.division_name || null,
+            team: soldierData?.team_name || null,
+            displayName: displayName,
+            updated_at: admin.firestore.FieldValue.serverTimestamp()
+          };
+
+          console.log(`  Update data:`, {
+            linked_soldier_id: updateData.linked_soldier_id,
+            division: updateData.division,
+            team: updateData.team,
+            displayName: updateData.displayName
+          });
+
+          await userDoc.ref.update(updateData);
+          console.log(`  ✅ Successfully updated user document`);
+
+          // Update userData object for use below
+          userData.linked_soldier_id = newLinkedSoldierId;
+          userData.division = soldierData?.division_name || null;
+          userData.team = soldierData?.team_name || null;
+          userData.displayName = displayName;
+        } catch (updateError) {
+          console.error(`  ❌ Error updating user document:`, updateError);
+        }
+      } else if (!shouldUpdateUserDoc) {
+        console.log(`[syncUserOnSignIn] STEP 5e: No update needed (linked_soldier_id unchanged)`);
+      }
 
       try {
         const customClaims = {
@@ -1018,8 +1090,8 @@ exports.syncUserOnSignIn = functions
           division: soldierData?.division_name || userData.division || null,
           team: soldierData?.team_name || userData.team || null,
           linked_soldier_id: userData.linked_soldier_id || null,
-          user_doc_id: userDocId, // Store the actual user document ID
-          displayName: displayName, // Store display name in claims
+          user_doc_id: userDocId,
+          displayName: displayName,
           email: userData.email || authUser.email,
           phoneNumber: userData.phoneNumber || authUser.phoneNumber,
           totp_enabled: userData.totp_enabled || false,
@@ -1027,36 +1099,10 @@ exports.syncUserOnSignIn = functions
           totp_temp_secret: authUser.customClaims?.totp_temp_secret || null
         };
 
-        console.log(`  Setting custom claims:`, JSON.stringify({
-          role: customClaims.role,
-          custom_role: customClaims.custom_role,
-          scope: customClaims.scope,
-          division: customClaims.division,
-          team: customClaims.team,
-          linked_soldier_id: customClaims.linked_soldier_id,
-          user_doc_id: customClaims.user_doc_id,
-          displayName: customClaims.displayName,
-          email: customClaims.email,
-          phoneNumber: customClaims.phoneNumber,
-          totp_enabled: customClaims.totp_enabled
-        }, null, 2));
-        console.log(`  Permissions being set:`, JSON.stringify(customClaims.permissions, null, 2));
-
         await admin.auth().setCustomUserClaims(authUid, customClaims);
-        console.log(`  ✅ Custom claims updated successfully`);
       } catch (claimsError) {
-        console.warn(`  ⚠️  Could not update custom claims:`, claimsError.message);
+        console.warn(`[syncUserOnSignIn] Could not update custom claims:`, claimsError.message);
       }
-
-      console.log(`[syncUserOnSignIn] ✅ SUCCESS: User signed in successfully`);
-      console.log(`  Signed in as: ${displayName}`);
-      console.log(`  Role: ${userData.custom_role}`);
-      console.log(`  Division: ${userData.division || 'N/A'}`);
-      console.log(`  Team: ${userData.team || 'N/A'}`);
-      if (soldierData) {
-        console.log(`  Linked Soldier: ${soldierData.first_name} ${soldierData.last_name} (${soldierData.soldier_id})`);
-      }
-      console.log(`========================================\n`);
 
       // Return the user's complete data
       return {
@@ -1091,8 +1137,7 @@ exports.syncUserOnSignIn = functions
         throw error;
       }
 
-      console.error(`[syncUserOnSignIn] ❌ UNEXPECTED ERROR:`, error);
-      console.log(`========================================\n`);
+      console.error(`[syncUserOnSignIn] ERROR:`, error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to sync user data: ${error.message}`

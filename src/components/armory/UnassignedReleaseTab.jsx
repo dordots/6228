@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, Binoculars, Joystick, PackageOpen } from "lucide-react";
+import { Target, Binoculars, Joystick, PackageOpen, Search } from "lucide-react";
 import SignatureCanvas from "../soldiers/SignatureCanvas";
 
 const ItemRow = ({ item, isSelected, onSelect, type }) => {
@@ -53,6 +54,7 @@ export default function UnassignedReleaseTab({ items, isLoading, onSubmit }) {
     const [selectedDroneSetIds, setSelectedDroneSetIds] = useState([]);
     const [signature, setSignature] = useState("");
     const [activeTab, setActiveTab] = useState("weapons");
+    const [searchTerm, setSearchTerm] = useState("");
 
     useEffect(() => {
         // Reset selections when items change
@@ -101,13 +103,41 @@ export default function UnassignedReleaseTab({ items, isLoading, onSubmit }) {
         setSignature("");
     };
 
+    const { weapons = [], gear = [], droneSets = [] } = items || {};
+
+    // Filter items by search term (search both ID and type)
+    const filteredWeapons = useMemo(() => {
+        if (!searchTerm.trim()) return weapons;
+        const search = searchTerm.toLowerCase();
+        return weapons.filter(w =>
+            w.weapon_id?.toLowerCase().includes(search) ||
+            w.weapon_type?.toLowerCase().includes(search)
+        );
+    }, [weapons, searchTerm]);
+
+    const filteredGear = useMemo(() => {
+        if (!searchTerm.trim()) return gear;
+        const search = searchTerm.toLowerCase();
+        return gear.filter(g =>
+            g.gear_id?.toLowerCase().includes(search) ||
+            g.gear_type?.toLowerCase().includes(search)
+        );
+    }, [gear, searchTerm]);
+
+    const filteredDroneSets = useMemo(() => {
+        if (!searchTerm.trim()) return droneSets;
+        const search = searchTerm.toLowerCase();
+        return droneSets.filter(d =>
+            d.set_serial_number?.toLowerCase().includes(search) ||
+            d.set_type?.toLowerCase().includes(search)
+        );
+    }, [droneSets, searchTerm]);
+
+    const allItemsEmpty = weapons.length === 0 && gear.length === 0 && droneSets.length === 0;
+
     if (isLoading) {
         return <p className="text-center py-8 text-slate-500">Loading items...</p>;
     }
-
-    const { weapons = [], gear = [], droneSets = [] } = items || {};
-
-    const allItemsEmpty = weapons.length === 0 && gear.length === 0 && droneSets.length === 0;
 
     return (
         <Card className="border-purple-200">
@@ -125,31 +155,41 @@ export default function UnassignedReleaseTab({ items, isLoading, onSubmit }) {
                      <p className="text-center py-8 text-slate-500">No unassigned items found in deposit.</p>
                 ) : (
                     <>
+                        <div className="relative mb-4">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                            <Input
+                                placeholder="Search by ID or type..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10"
+                            />
+                        </div>
+
                         <Tabs value={activeTab} onValueChange={setActiveTab}>
                             <TabsList className="grid w-full grid-cols-3">
                                 <TabsTrigger value="weapons" className="flex items-center gap-2">
-                                    <Target className="w-4 h-4"/> Weapons ({weapons.length})
+                                    <Target className="w-4 h-4"/> Weapons ({filteredWeapons.length})
                                 </TabsTrigger>
                                 <TabsTrigger value="gear" className="flex items-center gap-2">
-                                    <Binoculars className="w-4 h-4"/> Gear ({gear.length})
+                                    <Binoculars className="w-4 h-4"/> Gear ({filteredGear.length})
                                 </TabsTrigger>
                                 <TabsTrigger value="drones" className="flex items-center gap-2">
-                                    <Joystick className="w-4 h-4"/> Drones ({droneSets.length})
+                                    <Joystick className="w-4 h-4"/> Drones ({filteredDroneSets.length})
                                 </TabsTrigger>
                             </TabsList>
                             <TabsContent value="weapons" className="space-y-3 pt-4">
-                                {weapons.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned weapons in deposit.</p> :
-                                weapons.map(w => <ItemRow key={w.id} item={w} isSelected={selectedWeaponIds.includes(w.id)} onSelect={() => handleSelect(w.id, 'weapon')} type="weapon" />)
+                                {filteredWeapons.length === 0 ? <p className="text-center py-8 text-slate-500">No weapons found matching search.</p> :
+                                filteredWeapons.map(w => <ItemRow key={w.id} item={w} isSelected={selectedWeaponIds.includes(w.id)} onSelect={() => handleSelect(w.id, 'weapon')} type="weapon" />)
                                 }
                             </TabsContent>
                              <TabsContent value="gear" className="space-y-3 pt-4">
-                                {gear.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned gear in deposit.</p> :
-                                gear.map(g => <ItemRow key={g.id} item={g} isSelected={selectedGearIds.includes(g.id)} onSelect={() => handleSelect(g.id, 'gear')} type="gear" />)
+                                {filteredGear.length === 0 ? <p className="text-center py-8 text-slate-500">No gear found matching search.</p> :
+                                filteredGear.map(g => <ItemRow key={g.id} item={g} isSelected={selectedGearIds.includes(g.id)} onSelect={() => handleSelect(g.id, 'gear')} type="gear" />)
                                 }
                             </TabsContent>
                              <TabsContent value="drones" className="space-y-3 pt-4">
-                                {droneSets.length === 0 ? <p className="text-center py-8 text-slate-500">No unassigned drone sets in deposit.</p> :
-                                droneSets.map(ds => <ItemRow key={ds.id} item={ds} isSelected={selectedDroneSetIds.includes(ds.id)} onSelect={() => handleSelect(ds.id, 'droneSet')} type="droneSet" />)
+                                {filteredDroneSets.length === 0 ? <p className="text-center py-8 text-slate-500">No drone sets found matching search.</p> :
+                                filteredDroneSets.map(ds => <ItemRow key={ds.id} item={ds} isSelected={selectedDroneSetIds.includes(ds.id)} onSelect={() => handleSelect(ds.id, 'droneSet')} type="droneSet" />)
                                 }
                             </TabsContent>
                         </Tabs>

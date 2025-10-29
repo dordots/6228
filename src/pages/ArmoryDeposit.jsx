@@ -71,24 +71,33 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
         // Step 2: Get all division items, then filter client-side
         const divisionFilter = { division_name: userDivision };
-        const unassignedToDepositFilter = { ...divisionFilter, armory_status: 'with_soldier', assigned_to: null };
-        const unassignedInDepositFilter = { ...divisionFilter, armory_status: 'in_deposit', assigned_to: null };
+        const withSoldierFilter = { ...divisionFilter, armory_status: 'with_soldier' };
+        const inDepositFilter = { ...divisionFilter, armory_status: 'in_deposit' };
 
         const [
           allWeapons, allGear, allDrones,
-          unassignedToDepositWeapons, unassignedToDepositGear, unassignedToDepositDrones,
-          unassignedInDepositWeapons, unassignedInDepositGear, unassignedInDepositDrones
+          withSoldierWeapons, withSoldierGear, withSoldierDrones,
+          inDepositWeapons, inDepositGear, inDepositDrones
         ] = await Promise.all([
           Weapon.filter(divisionFilter),
           SerializedGear.filter(divisionFilter),
           DroneSet.filter(divisionFilter),
-          Weapon.filter(unassignedToDepositFilter),
-          SerializedGear.filter(unassignedToDepositFilter),
-          DroneSet.filter(unassignedToDepositFilter),
-          Weapon.filter(unassignedInDepositFilter),
-          SerializedGear.filter(unassignedInDepositFilter),
-          DroneSet.filter(unassignedInDepositFilter),
+          Weapon.filter(withSoldierFilter),
+          SerializedGear.filter(withSoldierFilter),
+          DroneSet.filter(withSoldierFilter),
+          Weapon.filter(inDepositFilter),
+          SerializedGear.filter(inDepositFilter),
+          DroneSet.filter(inDepositFilter),
         ]);
+
+        // Filter for unassigned items (null or empty string) and exclude samples
+        const isUnassigned = (item) => (!item.assigned_to || item.assigned_to === null || item.assigned_to === '') && item.is_sample !== true && item.is_sample !== 'true';
+        const unassignedToDepositWeapons = withSoldierWeapons.filter(isUnassigned);
+        const unassignedToDepositGear = withSoldierGear.filter(isUnassigned);
+        const unassignedToDepositDrones = withSoldierDrones.filter(isUnassigned);
+        const unassignedInDepositWeapons = inDepositWeapons.filter(isUnassigned);
+        const unassignedInDepositGear = inDepositGear.filter(isUnassigned);
+        const unassignedInDepositDrones = inDepositDrones.filter(isUnassigned);
 
         const soldierIdSet = new Set(soldierIds);
         const weaponsData = allWeapons.filter(w => w.assigned_to && soldierIdSet.has(w.assigned_to));
@@ -121,25 +130,34 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         } else if (userDivision) {
           filter = { division_name: userDivision }; // Fallback
         }
-        const unassignedToDepositFilter = { ...filter, armory_status: 'with_soldier', assigned_to: null };
-        const unassignedInDepositFilter = { ...filter, armory_status: 'in_deposit', assigned_to: null };
+        const withSoldierFilter = { ...filter, armory_status: 'with_soldier' };
+        const inDepositFilter = { ...filter, armory_status: 'in_deposit' };
 
         const [
           soldiersData, weaponsData, gearData, droneSetsData,
-          unassignedToDepositWeapons, unassignedToDepositGear, unassignedToDepositDrones,
-          unassignedInDepositWeapons, unassignedInDepositGear, unassignedInDepositDrones
+          withSoldierWeapons, withSoldierGear, withSoldierDrones,
+          inDepositWeapons, inDepositGear, inDepositDrones
         ] = await Promise.all([
           Soldier.filter(filter),
           Weapon.filter(filter),
           SerializedGear.filter(filter),
           DroneSet.filter(filter),
-          Weapon.filter(unassignedToDepositFilter),
-          SerializedGear.filter(unassignedToDepositFilter),
-          DroneSet.filter(unassignedToDepositFilter),
-          Weapon.filter(unassignedInDepositFilter),
-          SerializedGear.filter(unassignedInDepositFilter),
-          DroneSet.filter(unassignedInDepositFilter),
+          Weapon.filter(withSoldierFilter),
+          SerializedGear.filter(withSoldierFilter),
+          DroneSet.filter(withSoldierFilter),
+          Weapon.filter(inDepositFilter),
+          SerializedGear.filter(inDepositFilter),
+          DroneSet.filter(inDepositFilter),
         ]);
+
+        // Filter for unassigned items (null or empty string) and exclude samples
+        const isUnassigned = (item) => (!item.assigned_to || item.assigned_to === null || item.assigned_to === '') && item.is_sample !== true && item.is_sample !== 'true';
+        const unassignedToDepositWeapons = withSoldierWeapons.filter(isUnassigned);
+        const unassignedToDepositGear = withSoldierGear.filter(isUnassigned);
+        const unassignedToDepositDrones = withSoldierDrones.filter(isUnassigned);
+        const unassignedInDepositWeapons = inDepositWeapons.filter(isUnassigned);
+        const unassignedInDepositGear = inDepositGear.filter(isUnassigned);
+        const unassignedInDepositDrones = inDepositDrones.filter(isUnassigned);
 
         setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
         setWeapons(Array.isArray(weaponsData) ? weaponsData : []);

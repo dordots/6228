@@ -845,7 +845,21 @@ export default function ImportPage() {
               throw new Error(`Duplicate serial number: ${droneSet.set_serial_number} already exists`);
             }
 
-            await DroneSet.create(droneSet);
+            // Parse components field if it's a string (from CSV export)
+            // Format: slotName:componentId$slotName2:componentId2
+            const droneSetData = { ...droneSet };
+            if (droneSetData.components && typeof droneSetData.components === 'string') {
+              const componentPairs = droneSetData.components.split('$').filter(Boolean);
+              droneSetData.components = componentPairs.reduce((acc, pair) => {
+                const [slotName, componentId] = pair.split(':');
+                if (slotName && componentId) {
+                  acc[slotName] = componentId;
+                }
+                return acc;
+              }, {});
+            }
+
+            await DroneSet.create(droneSetData);
             results.push({ id: droneSet.drone_set_id, success: true });
 
             // Update progress

@@ -80,15 +80,33 @@ export default function DataExport() {
     const csvRows = [
       finalHeaders.map(h => `"${String(h).replace(/"/g, '""')}"`).join(',')
     ];
-    
+
     data.forEach(item => {
       const row = finalHeaders.map(header => {
-        const value = item[header] !== undefined && item[header] !== null ? String(item[header]) : '';
+        let value = item[header] !== undefined && item[header] !== null ? item[header] : '';
+
+        // Special handling for components object (drone sets)
+        // Format: slotName:componentId$slotName2:componentId2
+        if (header === 'components' && typeof value === 'object' && value !== null) {
+          if (Array.isArray(value)) {
+            // If it's an array, join component IDs
+            value = value.map(comp => comp?.component_id || '').filter(Boolean).join('$');
+          } else {
+            // If it's an object, format as slotName:componentId pairs
+            value = Object.entries(value)
+              .filter(([key, val]) => val) // Filter out empty values
+              .map(([key, val]) => `${key}:${val}`)
+              .join('$');
+          }
+        } else {
+          value = String(value);
+        }
+
         return `"${value.replace(/"/g, '""')}"`;
       });
       csvRows.push(row.join(','));
     });
-    
+
     return BOM + csvRows.join('\n');
   };
 

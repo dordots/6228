@@ -128,7 +128,7 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
         setIsTestingSendGrid(true);
         setTestResult(null); // Clear previous test result
         try {
-            const response = await testSendGrid({ testEmail });
+            const response = await testSendGrid({ email: testEmail });
             if (response && response.data && response.data.success) {
                 setTestResult({ error: false, message: `Success! Test email sent to ${testEmail}. SendGrid Response: ${response.data.sendGridStatus}` });
             } else {

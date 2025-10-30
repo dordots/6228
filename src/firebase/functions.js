@@ -77,6 +77,7 @@ export const firebaseFunctions = {
   generateSigningForm: createFunction('generateSigningForm'),
   generateReleaseForm: createFunction('generateReleaseForm'),
   sendSigningForm: createFunction('sendSigningForm'),
+  sendSigningFormByActivity: createFunction('sendSigningFormByActivity'),
   sendReleaseFormByActivity: createFunction('sendReleaseFormByActivity'),
   sendBulkEquipmentForms: createFunction('sendBulkEquipmentForms'),
   

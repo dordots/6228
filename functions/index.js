@@ -29,6 +29,7 @@ module.exports = {
   generateSigningForm: formFunctions.generateSigningForm,
   generateReleaseForm: formFunctions.generateReleaseForm,
   sendSigningForm: formFunctions.sendSigningForm,
+  sendSigningFormByActivity: formFunctions.sendSigningFormByActivity,
   sendReleaseFormByActivity: formFunctions.sendReleaseFormByActivity,
   sendBulkEquipmentForms: formFunctions.sendBulkEquipmentForms,
   

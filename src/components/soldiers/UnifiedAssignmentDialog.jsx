@@ -26,7 +26,7 @@ import { Equipment } from "@/api/entities";
 import { ActivityLog } from '@/api/entities';
 import { User } from '@/api/entities';
 import { Soldier } from "@/api/entities";
-import { sendSigningForm } from "@/api/functions";
+import { sendSigningFormByActivity } from "@/api/functions";
 
 // Import the full forms for creating new items
 import WeaponForm from "../weapons/WeaponForm";
@@ -404,9 +404,8 @@ export default function UnifiedAssignmentDialog({
 
             if (soldier.email && hasSelectedItems) {
                 try {
-                    await sendSigningForm({
-                        activityId: newActivityLog.id,
-                        soldier: soldier
+                    await sendSigningFormByActivity({
+                        activityId: newActivityLog.id
                     });
                 } catch (emailError) {
                     console.warn("Failed to send signing email, but assignment was successful:", emailError);

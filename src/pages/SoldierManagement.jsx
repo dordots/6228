@@ -15,7 +15,6 @@ import UnifiedAssignmentDialog from "../components/soldiers/UnifiedAssignmentDia
 import SigningSoldierTable from "../components/signing/SigningSoldierTable";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { generateSigningForm } from "@/api/functions";
-import { sendSigningForm } from "@/api/functions";
 
 export default function SoldierManagement() {
   const [soldiers, setSoldiers] = useState([]);

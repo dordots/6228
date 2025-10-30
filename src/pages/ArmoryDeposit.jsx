@@ -464,12 +464,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={`grid w-full grid-cols-${[
-          currentUser?.permissions?.['operations.deposit'],
-          currentUser?.permissions?.['operations.release'],
-          currentUser?.custom_role !== 'team_leader',
-          currentUser?.custom_role !== 'team_leader'
-        ].filter(Boolean).length}`}>
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2">
           {currentUser?.permissions?.['operations.deposit'] && (
             <TabsTrigger value="deposit" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700">
               <Package className="w-4 h-4 mr-2"/>

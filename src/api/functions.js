@@ -4,9 +4,9 @@ import { firebaseFunctions } from '../firebase/functions';
 // Use Firebase functions if enabled, otherwise fall back to Base44
 const USE_FIREBASE = import.meta.env.VITE_USE_FIREBASE !== 'false';
 
-let sendDailyReport, deleteAllEquipment, deleteAllSoldiers, deleteAllWeapons, 
+let sendDailyReport, deleteAllEquipment, deleteAllSoldiers, deleteAllWeapons,
     deleteAllSerializedGear, generateTotp, verifyTotp, exportAllData,
-    generateSigningForm, generateReleaseForm, sendSigningForm, 
+    generateSigningForm, generateReleaseForm, sendSigningForm, sendSigningFormByActivity,
     sendReleaseFormByActivity, sendBulkEquipmentForms, sendEmailViaSendGrid, testSendGrid;
 
 if (USE_FIREBASE) {
@@ -22,6 +22,7 @@ if (USE_FIREBASE) {
   generateSigningForm = firebaseFunctions.generateSigningForm;
   generateReleaseForm = firebaseFunctions.generateReleaseForm;
   sendSigningForm = firebaseFunctions.sendSigningForm;
+  sendSigningFormByActivity = firebaseFunctions.sendSigningFormByActivity;
   sendReleaseFormByActivity = firebaseFunctions.sendReleaseFormByActivity;
   sendBulkEquipmentForms = firebaseFunctions.sendBulkEquipmentForms;
   sendEmailViaSendGrid = firebaseFunctions.sendEmailViaSendGrid;
@@ -42,6 +43,7 @@ if (USE_FIREBASE) {
     generateSigningForm = base44.functions.generateSigningForm;
     generateReleaseForm = base44.functions.generateReleaseForm;
     sendSigningForm = base44.functions.sendSigningForm;
+    sendSigningFormByActivity = base44.functions.sendSigningFormByActivity;
     sendReleaseFormByActivity = base44.functions.sendReleaseFormByActivity;
     sendBulkEquipmentForms = base44.functions.sendBulkEquipmentForms;
     sendEmailViaSendGrid = base44.functions.sendEmailViaSendGrid;
@@ -64,6 +66,7 @@ export {
   generateSigningForm,
   generateReleaseForm,
   sendSigningForm,
+  sendSigningFormByActivity,
   sendReleaseFormByActivity,
   sendBulkEquipmentForms,
   sendEmailViaSendGrid,

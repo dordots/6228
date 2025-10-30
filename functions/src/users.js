@@ -1044,17 +1044,21 @@ exports.syncUserOnSignIn = functions
 
       console.log(`[syncUserOnSignIn] STEP 5d: Display name will be: "${displayName}"`);
 
-      // Update user document if linked_soldier_id changed
-      if (shouldUpdateUserDoc && userDoc) {
-        console.log(`[syncUserOnSignIn] STEP 5e: Updating user document...`);
+      // ALWAYS update user document with latest soldier data (division, team, displayName, linked_soldier_id)
+      if (userDoc) {
+        console.log(`[syncUserOnSignIn] STEP 5e: Updating user document with soldier data...`);
         console.log(`  User Doc ID: ${userDocId}`);
-        console.log(`  New linked_soldier_id: ${newLinkedSoldierId}`);
+        console.log(`  Linked soldier ID: ${newLinkedSoldierId}`);
 
         try {
+          // Set division and team from soldier if they exist, otherwise null
+          const newDivision = soldierData?.division_name || null;
+          const newTeam = soldierData?.team_name || null;
+
           const updateData = {
             linked_soldier_id: newLinkedSoldierId,
-            division: soldierData?.division_name || null,
-            team: soldierData?.team_name || null,
+            division: newDivision,
+            team: newTeam,
             displayName: displayName,
             updated_at: admin.firestore.FieldValue.serverTimestamp()
           };
@@ -1066,19 +1070,24 @@ exports.syncUserOnSignIn = functions
             displayName: updateData.displayName
           });
 
+          if (soldierData) {
+            console.log(`  ℹ️  Division from soldier: ${soldierData.division_name ? `"${soldierData.division_name}"` : 'null (soldier has no division)'}`);
+            console.log(`  ℹ️  Team from soldier: ${soldierData.team_name ? `"${soldierData.team_name}"` : 'null (soldier has no team)'}`);
+          } else {
+            console.log(`  ℹ️  No soldier found - division and team set to null`);
+          }
+
           await userDoc.ref.update(updateData);
           console.log(`  ✅ Successfully updated user document`);
 
           // Update userData object for use below
           userData.linked_soldier_id = newLinkedSoldierId;
-          userData.division = soldierData?.division_name || null;
-          userData.team = soldierData?.team_name || null;
+          userData.division = newDivision;
+          userData.team = newTeam;
           userData.displayName = displayName;
         } catch (updateError) {
           console.error(`  ❌ Error updating user document:`, updateError);
         }
-      } else if (!shouldUpdateUserDoc) {
-        console.log(`[syncUserOnSignIn] STEP 5e: No update needed (linked_soldier_id unchanged)`);
       }
 
       try {

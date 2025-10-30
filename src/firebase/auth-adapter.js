@@ -185,10 +185,21 @@ export const User = {
         console.log(`  Email: ${user.email || 'N/A'}`);
         console.log(`  Phone: ${user.phoneNumber || 'N/A'}`);
 
-        // Get custom claims (force refresh to get latest claims from server)
+        // ALWAYS sync user data on every page load to ensure permissions are current
+        console.log(`[User.me] STEP 2.5: Syncing user data to check for permission changes`);
+        try {
+          const syncFunction = httpsCallable(functions, 'syncUserOnSignIn');
+          await syncFunction();
+          console.log(`  ✅ User data synced successfully`);
+        } catch (syncError) {
+          console.warn(`  ⚠️  Failed to sync user data:`, syncError.message);
+          // Don't block if sync fails - use cached data
+        }
+
+        // Get custom claims (force refresh to get latest claims from server after sync)
         // Custom claims now contain the linked user's data (set by syncUserOnSignIn)
         console.log(`[User.me] STEP 3: Fetching ID token and custom claims from Firebase Auth`);
-        const idTokenResult = await user.getIdTokenResult(forceRefresh);
+        const idTokenResult = await user.getIdTokenResult(true); // Always force refresh after sync
         const claims = idTokenResult.claims;
 
         console.log(`[User.me] STEP 4: Retrieved custom claims`);

@@ -53,8 +53,7 @@ export default function UserManagement() {
   const [showCreateUserDialog, setShowCreateUserDialog] = useState(false);
   const [newUserData, setNewUserData] = useState({
     phoneNumber: "",
-    role: "soldier",
-    displayName: ""
+    role: "soldier"
   });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
@@ -171,16 +170,14 @@ export default function UserManagement() {
       await User.create({
         phoneNumber: newUserData.phoneNumber,
         role: newUserData.role,
-        customRole: newUserData.role,
-        displayName: newUserData.displayName || null
+        customRole: newUserData.role
       });
 
       setSuccess("User created successfully!");
       setShowCreateUserDialog(false);
       setNewUserData({
         phoneNumber: "",
-        role: "soldier",
-        displayName: ""
+        role: "soldier"
       });
       await loadData();
     } catch (error) {
@@ -319,17 +316,6 @@ export default function UserManagement() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="displayName">Display Name (Optional)</Label>
-              <Input
-                id="displayName"
-                type="text"
-                placeholder="John Doe"
-                value={newUserData.displayName}
-                onChange={(e) => setNewUserData({...newUserData, displayName: e.target.value})}
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
               <Select value={newUserData.role} onValueChange={(value) => setNewUserData({...newUserData, role: value})}>
                 <SelectTrigger>
@@ -358,8 +344,7 @@ export default function UserManagement() {
                   setShowCreateUserDialog(false);
                   setNewUserData({
                     phoneNumber: "",
-                    role: "soldier",
-                    displayName: ""
+                    role: "soldier"
                   });
                 }}
                 className="flex-1"

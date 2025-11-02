@@ -142,11 +142,19 @@ export default function UnifiedAssignmentDialog({
     return filtered;
   }, [equipment, soldier]);
 
-  // Filter weapons: prevent selecting multiple of the same type
+  // Filter weapons: prevent selecting types soldier already owns or already selected
   const weaponOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedWeapons) || !soldier) return [];
 
-    // Get types of already selected weapons
+    // Get types of weapons soldier already owns (from weapons prop)
+    const alreadyOwnedTypes = new Set(
+      (weapons || [])
+        .filter(w => w.assigned_to === soldier.soldier_id)
+        .map(w => w.weapon_type)
+        .filter(Boolean)
+    );
+
+    // Get types of already selected weapons in current session
     const selectedTypes = new Set(
       selectedWeaponIds
         .map(id => localUnassignedWeapons.find(w => w.id === id)?.weapon_type)
@@ -156,19 +164,28 @@ export default function UnifiedAssignmentDialog({
     return localUnassignedWeapons.filter(weapon => {
       const matchesDivision = !weapon.division_name || weapon.division_name === soldier.division_name;
       const notSelected = !selectedWeaponIds.includes(weapon.id);
-      const typeNotSelected = !selectedTypes.has(weapon.weapon_type); // NEW: prevent duplicate types
+      const typeNotOwned = !alreadyOwnedTypes.has(weapon.weapon_type); // Block types soldier already owns
+      const typeNotSelected = !selectedTypes.has(weapon.weapon_type); // Prevent duplicate types in current selection
       const matchesSearch = weaponSearch.length === 0 ||
          (weapon.weapon_type && weapon.weapon_type.toLowerCase().includes(weaponSearch.toLowerCase())) ||
          (weapon.weapon_id && weapon.weapon_id.toLowerCase().includes(weaponSearch.toLowerCase()));
 
-      return weapon && matchesDivision && notSelected && typeNotSelected && matchesSearch;
+      return weapon && matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch;
     });
-  }, [localUnassignedWeapons, weaponSearch, selectedWeaponIds, soldier]);
+  }, [localUnassignedWeapons, weaponSearch, selectedWeaponIds, soldier, weapons]);
 
   const gearOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedGear) || !soldier) return [];
 
-    // Get types of already selected gear
+    // Get types of gear soldier already owns (from gear prop)
+    const alreadyOwnedTypes = new Set(
+      (gear || [])
+        .filter(g => g.assigned_to === soldier.soldier_id)
+        .map(g => g.gear_type)
+        .filter(Boolean)
+    );
+
+    // Get types of already selected gear in current session
     const selectedTypes = new Set(
       selectedGearIds
         .map(id => localUnassignedGear.find(g => g.id === id)?.gear_type)
@@ -178,19 +195,28 @@ export default function UnifiedAssignmentDialog({
     return localUnassignedGear.filter(gearItem => {
       const matchesDivision = !gearItem.division_name || gearItem.division_name === soldier.division_name;
       const notSelected = !selectedGearIds.includes(gearItem.id);
-      const typeNotSelected = !selectedTypes.has(gearItem.gear_type); // NEW: prevent duplicate types
+      const typeNotOwned = !alreadyOwnedTypes.has(gearItem.gear_type); // Block types soldier already owns
+      const typeNotSelected = !selectedTypes.has(gearItem.gear_type); // Prevent duplicate types in current selection
       const matchesSearch = gearSearch.length === 0 ||
         (gearItem.gear_type && gearItem.gear_type.toLowerCase().includes(gearSearch.toLowerCase())) ||
         (gearItem.gear_id && gearItem.gear_id.toLowerCase().includes(gearSearch.toLowerCase()));
 
-        return gearItem && matchesDivision && notSelected && typeNotSelected && matchesSearch;
+        return gearItem && matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch;
     });
-  }, [localUnassignedGear, gearSearch, selectedGearIds, soldier]);
+  }, [localUnassignedGear, gearSearch, selectedGearIds, soldier, gear]);
 
   const droneSetOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedDroneSets) || !soldier) return [];
 
-    // Get types of already selected drone sets
+    // Get types of drones soldier already owns (from drones prop)
+    const alreadyOwnedTypes = new Set(
+      (drones || [])
+        .filter(d => d.assigned_to === soldier.soldier_id)
+        .map(d => d.set_type)
+        .filter(Boolean)
+    );
+
+    // Get types of already selected drone sets in current session
     const selectedTypes = new Set(
       selectedDroneSetIds
         .map(id => localUnassignedDroneSets.find(d => d.id === id)?.set_type)
@@ -200,14 +226,15 @@ export default function UnifiedAssignmentDialog({
     return localUnassignedDroneSets.filter(droneSet => {
       const matchesDivision = !droneSet.division_name || droneSet.division_name === soldier.division_name;
       const notSelected = !selectedDroneSetIds.includes(droneSet.id);
-      const typeNotSelected = !selectedTypes.has(droneSet.set_type); // NEW: prevent duplicate types
+      const typeNotOwned = !alreadyOwnedTypes.has(droneSet.set_type); // Block types soldier already owns
+      const typeNotSelected = !selectedTypes.has(droneSet.set_type); // Prevent duplicate types in current selection
       const matchesSearch = droneSetSearch.length === 0 ||
          (droneSet.set_serial_number && droneSet.set_serial_number.toLowerCase().includes(droneSetSearch.toLowerCase())) ||
          (droneSet.set_type && droneSet.set_type.toLowerCase().includes(droneSetSearch.toLowerCase()));
 
-      return droneSet && matchesDivision && notSelected && typeNotSelected && matchesSearch;
+      return droneSet && matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch;
     });
-  }, [localUnassignedDroneSets, droneSetSearch, selectedDroneSetIds, soldier]);
+  }, [localUnassignedDroneSets, droneSetSearch, selectedDroneSetIds, soldier, drones]);
 
   const equipmentOptions = useMemo(() => {
     // If availableEquipment is empty, means no stock or no division, so no options

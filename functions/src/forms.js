@@ -1,6 +1,8 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const PDFDocument = require("pdfkit");
+const puppeteer = require("puppeteer-core");
+const chromium = require("@sparticuz/chromium");
 const sgMail = require("@sendgrid/mail");
 
 const db = admin.firestore();
@@ -357,7 +359,11 @@ exports.sendSigningForm = functions
  * Send signing form by activity
  */
 exports.sendSigningFormByActivity = functions
-  .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
+  .runWith({
+    serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com",
+    memory: "2GB",
+    timeoutSeconds: 60
+  })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -479,9 +485,12 @@ exports.sendSigningFormByActivity = functions
     const dateStr = now.toLocaleDateString('he-IL');
     const timeStr = now.toLocaleTimeString('he-IL');
 
+    // Generate PDF from HTML using Puppeteer
+    console.log('[PDF Generation] Starting HTML-to-PDF generation for soldier:', soldierID);
+
     // Embed signature directly as base64 data URI
     const signatureHtml = signatureData
-      ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;" />`
+      ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;object-fit:contain;" />`
       : '<p><em>No signature provided</em></p>';
 
     // Build items table rows for newly assigned items
@@ -530,90 +539,131 @@ exports.sendSigningFormByActivity = functions
       </table>`;
     }
 
-    // Send email with HTML formatted signing form
+    const htmlContent = `<!DOCTYPE html>
+      <html lang="he" dir="rtl">
+      <head>
+          <meta charset="UTF-8">
+          <title>Equipment Assignment Form</title>
+          <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+          <style>
+              @page { size: A4; margin: 0.5in; }
+              * { box-sizing: border-box; }
+              body { font-family: 'Heebo', Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #000; direction: rtl; text-align: right; margin: 0; padding: 20px; background: white; }
+              .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+              .header h1 { font-size: 24px; font-weight: bold; margin: 0 0 5px 0; direction: ltr; }
+              .header h2 { font-size: 20px; font-weight: bold; margin: 0; direction: rtl; }
+              .section { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; page-break-inside: avoid; }
+              .section h3 { font-size: 16px; font-weight: bold; margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+              .info-row { margin-bottom: 8px; }
+              .info-row strong { font-weight: 600; }
+              .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+              .items-table th, .items-table td { border: 1px solid #666; padding: 8px; text-align: right; font-size: 11px; vertical-align: top; }
+              .items-table th { background-color: #f5f5f5; font-weight: bold; }
+              .assigned-items { background-color: #f0fff4; }
+              .total-items { background-color: #f0f9ff; }
+              .signature-box { border: 1px solid #666; min-height: 120px; padding: 10px; margin-top: 10px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
+              .footer { margin-top: 30px; font-size: 10px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
+          </style>
+      </head>
+      <body>
+          <div class="header">
+              <h1>Equipment Assignment Form</h1>
+              <h2>טופס חתימה על ציוד</h2>
+          </div>
+          <div class="section">
+              <h3>פרטי הפעילות - Activity Details</h3>
+              <div class="info-row"><strong>תאריך:</strong> ${dateStr} בשעה ${timeStr}</div>
+              <div class="info-row"><strong>מאושר על ידי:</strong> ${performerName}</div>
+          </div>
+          <div class="section">
+              <h3>פרטי החייל - Soldier Information</h3>
+              <div class="info-row"><strong>שם:</strong> ${soldier.first_name} ${soldier.last_name}</div>
+              <div class="info-row"><strong>מספר אישי:</strong> ${soldier.soldier_id}</div>
+              <div class="info-row"><strong>יחידה:</strong> ${soldier.division_name || 'N/A'}</div>
+          </div>
+          <div class="section assigned-items">
+              <h3>ציוד שנחתם באירוע זה - Equipment Assigned in This Event (${assignedItems.length} items)</h3>
+              <table class="items-table">
+                  <thead>
+                      <tr>
+                          <th>#</th>
+                          <th>סוג</th>
+                          <th>שם הפריט</th>
+                          <th>מספר סידורי</th>
+                          <th>סטטוס</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${newItemsTableRows}
+                  </tbody>
+              </table>
+          </div>
+          <div class="section total-items">
+              <h3>ציוד קודם ברשות החייל - Previously Assigned Equipment (${previousItems.length} items)</h3>
+              ${previousItemsHtml}
+          </div>
+          <div class="section">
+              <h3>חתימת החייל - Soldier Signature</h3>
+              <div class="signature-box">
+                  ${signatureHtml}
+              </div>
+          </div>
+          <div class="footer">
+              <p>נוצר ב-${dateStr}, ${timeStr}</p>
+          </div>
+      </body>
+      </html>`;
+
+    // Generate PDF from HTML using puppeteer with chromium
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless
+    });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
+    });
+    await browser.close();
+
+    const pdfBase64 = pdfBuffer.toString('base64');
+    console.log('[PDF Generation] PDF generated successfully. Size:', pdfBuffer.length, 'bytes');
+
+    // Send email with PDF attachment
     const msg = {
       to: soldier.email,
       from: functions.config().sendgrid?.from_email || "noreply@armory.com",
       subject: `טופס חתימה על ציוד - Equipment Assignment Form - ${soldier.first_name} ${soldier.last_name}`,
-      html: `<!DOCTYPE html>
-        <html lang="he" dir="rtl">
-        <head>
-            <meta charset="UTF-8">
-            <title>Equipment Assignment Form</title>
-            <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
-            <style>
-                @page { size: A4; margin: 0.5in; }
-                * { box-sizing: border-box; }
-                body { font-family: 'Heebo', Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #000; direction: rtl; text-align: right; margin: 0; padding: 20px; background: white; }
-                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
-                .header h1 { font-size: 24px; font-weight: bold; margin: 0 0 5px 0; direction: ltr; }
-                .header h2 { font-size: 20px; font-weight: bold; margin: 0; direction: rtl; }
-                .section { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; page-break-inside: avoid; }
-                .section h3 { font-size: 16px; font-weight: bold; margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-                .info-row { margin-bottom: 8px; }
-                .info-row strong { font-weight: 600; }
-                .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                .items-table th, .items-table td { border: 1px solid #666; padding: 8px; text-align: right; font-size: 11px; vertical-align: top; }
-                .items-table th { background-color: #f5f5f5; font-weight: bold; }
-                .assigned-items { background-color: #f0fff4; }
-                .total-items { background-color: #f0f9ff; }
-                .signature-box { border: 1px solid #666; min-height: 120px; padding: 10px; margin-top: 10px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
-                .signature-box img { max-width: 100%; max-height: 100px; object-fit: contain; }
-                .footer { margin-top: 30px; font-size: 10px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>Equipment Assignment Form</h1>
-                <h2>טופס חתימה על ציוד</h2>
-            </div>
-            <div class="section">
-                <h3>פרטי הפעילות - Activity Details</h3>
-                <div class="info-row"><strong>תאריך:</strong> ${dateStr} בשעה ${timeStr}</div>
-                <div class="info-row"><strong>מאושר על ידי:</strong> ${performerName}</div>
-            </div>
-            <div class="section">
-                <h3>פרטי החייל - Soldier Information</h3>
-                <div class="info-row"><strong>שם:</strong> ${soldier.first_name} ${soldier.last_name}</div>
-                <div class="info-row"><strong>מספר אישי:</strong> ${soldier.soldier_id}</div>
-                <div class="info-row"><strong>יחידה:</strong> ${soldier.division_name || 'N/A'}</div>
-            </div>
-            <div class="section assigned-items">
-                <h3>ציוד שנחתם באירוע זה - Equipment Assigned in This Event (${assignedItems.length} items)</h3>
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>סוג</th>
-                            <th>שם הפריט</th>
-                            <th>מספר סידורי</th>
-                            <th>סטטוס</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${newItemsTableRows}
-                    </tbody>
-                </table>
-            </div>
-            <div class="section total-items">
-                <h3>ציוד קודם ברשות החייל - Previously Assigned Equipment (${previousItems.length} items)</h3>
-                ${previousItemsHtml}
-            </div>
-            <div class="section">
-                <h3>חתימת החייל - Soldier Signature</h3>
-                <div class="signature-box">
-                    ${signatureHtml}
-                </div>
-            </div>
-            <div class="footer">
-                <p>נוצר ב-${dateStr}, ${timeStr}</p>
-            </div>
-        </body>
-        </html>
+      html: `
+        <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>טופס חתימה על ציוד</h2>
+          <h3>Equipment Assignment Form</h3>
+          <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
+          <p>Dear ${soldier.first_name} ${soldier.last_name},</p>
+          <p>מצורף טופס חתימה על ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
+          <p>Please find attached your equipment signing form. Please save this file for your records.</p>
+          <hr>
+          <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
+          <p><small>This email was sent automatically by the Armory Management System</small></p>
+        </div>
       `,
+      attachments: [
+        {
+          content: pdfBase64,
+          filename: `equipment_assignment_${soldier.soldier_id}_${Date.now()}.pdf`,
+          type: "application/pdf",
+          disposition: "attachment",
+        },
+      ],
     };
 
+    console.log('[Email] Sending email with PDF attachment to:', soldier.email);
     await sgMail.send(msg);
+    console.log('[Email] Email sent successfully');
 
     return { success: true, message: `Signing form sent to ${soldier.email}` };
   } catch (error) {
@@ -629,7 +679,11 @@ exports.sendSigningFormByActivity = functions
  * Send release form by activity
  */
 exports.sendReleaseFormByActivity = functions
-  .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
+  .runWith({
+    serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com",
+    memory: "2GB",
+    timeoutSeconds: 60
+  })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -750,10 +804,13 @@ exports.sendReleaseFormByActivity = functions
     const dateStr = now.toLocaleDateString('he-IL');
     const timeStr = now.toLocaleTimeString('he-IL');
 
+    // Generate PDF from HTML using Puppeteer
+    console.log('[PDF Generation] Starting HTML-to-PDF generation for release form, soldier:', soldierID);
+
     // Get signature from activity if available - embed directly as base64 data URI
     const signatureData = activity.context?.signature || '';
     const signatureHtml = signatureData
-      ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;" />`
+      ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;object-fit:contain;" />`
       : '<p><em>No signature provided</em></p>';
 
     // Build items table rows for released items
@@ -805,89 +862,131 @@ exports.sendReleaseFormByActivity = functions
     // Get performer name from activity
     const performerName = activity.user_full_name || 'System';
 
+    const htmlContent = `<!DOCTYPE html>
+      <html lang="he" dir="rtl">
+      <head>
+          <meta charset="UTF-8">
+          <title>Equipment Release Form</title>
+          <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+          <style>
+              @page { size: A4; margin: 0.5in; }
+              * { box-sizing: border-box; }
+              body { font-family: 'Heebo', Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #000; direction: rtl; text-align: right; margin: 0; padding: 20px; background: white; }
+              .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+              .header h1 { font-size: 24px; font-weight: bold; margin: 0 0 5px 0; direction: ltr; }
+              .header h2 { font-size: 20px; font-weight: bold; margin: 0; direction: rtl; }
+              .section { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; page-break-inside: avoid; }
+              .section h3 { font-size: 16px; font-weight: bold; margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+              .info-row { margin-bottom: 8px; }
+              .info-row strong { font-weight: 600; }
+              .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+              .items-table th, .items-table td { border: 1px solid #666; padding: 8px; text-align: right; font-size: 11px; vertical-align: top; }
+              .items-table th { background-color: #f5f5f5; font-weight: bold; }
+              .released-items { background-color: #fffbe6; }
+              .remaining-items { background-color: #f0f9ff; }
+              .signature-box { border: 1px solid #666; min-height: 120px; padding: 10px; margin-top: 10px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
+              .footer { margin-top: 30px; font-size: 10px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
+          </style>
+      </head>
+      <body>
+          <div class="header">
+              <h1>Equipment Release Form</h1>
+              <h2>טופס שחרור ציוד</h2>
+          </div>
+          <div class="section">
+              <h3>פרטי הפעילות - Activity Details</h3>
+              <div class="info-row"><strong>תאריך:</strong> ${dateStr} בשעה ${timeStr}</div>
+              <div class="info-row"><strong>מאושר על ידי:</strong> ${performerName}</div>
+          </div>
+          <div class="section">
+              <h3>פרטי החייל - Soldier Information</h3>
+              <div class="info-row"><strong>שם:</strong> ${soldier.first_name} ${soldier.last_name}</div>
+              <div class="info-row"><strong>מספר אישי:</strong> ${soldier.soldier_id}</div>
+              <div class="info-row"><strong>יחידה:</strong> ${soldier.division_name || 'N/A'}</div>
+          </div>
+          <div class="section released-items">
+              <h3>ציוד ששוחרר באירוע זה - Equipment Released in This Event (${releasedItems.length} items)</h3>
+              <table class="items-table">
+                  <thead>
+                      <tr>
+                          <th>#</th>
+                          <th>סוג</th>
+                          <th>שם הפריט</th>
+                          <th>מספר סידורי</th>
+                          <th>סטטוס</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${itemsTableRows}
+                  </tbody>
+              </table>
+          </div>
+          <div class="section remaining-items">
+              <h3>סה"כ ציוד שנותר אצל החייל - Total Equipment Remaining with Soldier (${remainingItems.length} items)</h3>
+              ${remainingItemsHtml}
+          </div>
+          <div class="section">
+              <h3>חתימת החייל - Soldier Signature</h3>
+              <div class="signature-box">
+                  ${signatureHtml}
+              </div>
+          </div>
+          <div class="footer">
+              <p>נוצר ב-${dateStr}, ${timeStr}</p>
+          </div>
+      </body>
+      </html>`;
+
+    // Generate PDF from HTML using puppeteer with chromium
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless
+    });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '0.5in', right: '0.5in', bottom: '0.5in', left: '0.5in' }
+    });
+    await browser.close();
+
+    const pdfBase64 = pdfBuffer.toString('base64');
+    console.log('[PDF Generation] Release form PDF generated successfully. Size:', pdfBuffer.length, 'bytes');
+
+    // Send email with PDF attachment
     const msg = {
       to: soldier.email,
       from: functions.config().sendgrid?.from_email || "noreply@armory.com",
       subject: `טופס שחרור ציוד - Equipment Release Form - ${soldier.first_name} ${soldier.last_name}`,
-      html: `<!DOCTYPE html>
-        <html lang="he" dir="rtl">
-        <head>
-            <meta charset="UTF-8">
-            <title>Equipment Release Form</title>
-            <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
-            <style>
-                @page { size: A4; margin: 0.5in; }
-                * { box-sizing: border-box; }
-                body { font-family: 'Heebo', Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #000; direction: rtl; text-align: right; margin: 0; padding: 20px; background: white; }
-                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
-                .header h1 { font-size: 24px; font-weight: bold; margin: 0 0 5px 0; direction: ltr; }
-                .header h2 { font-size: 20px; font-weight: bold; margin: 0; direction: rtl; }
-                .section { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; page-break-inside: avoid; }
-                .section h3 { font-size: 16px; font-weight: bold; margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
-                .info-row { margin-bottom: 8px; }
-                .info-row strong { font-weight: 600; }
-                .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                .items-table th, .items-table td { border: 1px solid #666; padding: 8px; text-align: right; font-size: 11px; }
-                .items-table th { background-color: #f5f5f5; font-weight: bold; }
-                .released-items { background-color: #fffbe6; }
-                .remaining-items { background-color: #f0f9ff; }
-                .signature-box { border: 1px solid #666; min-height: 120px; padding: 10px; margin-top: 10px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
-                .signature-box img { max-width: 100%; max-height: 100px; object-fit: contain; }
-                .footer { margin-top: 30px; font-size: 10px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>Equipment Release Form</h1>
-                <h2>טופס שחרור ציוד</h2>
-            </div>
-            <div class="section">
-                <h3>פרטי הפעילות - Activity Details</h3>
-                <div class="info-row"><strong>תאריך:</strong> ${dateStr} בשעה ${timeStr}</div>
-                <div class="info-row"><strong>מאושר על ידי:</strong> ${performerName}</div>
-            </div>
-            <div class="section">
-                <h3>פרטי החייל - Soldier Information</h3>
-                <div class="info-row"><strong>שם:</strong> ${soldier.first_name} ${soldier.last_name}</div>
-                <div class="info-row"><strong>מספר אישי:</strong> ${soldier.soldier_id}</div>
-                <div class="info-row"><strong>יחידה:</strong> ${soldier.division_name || 'N/A'}</div>
-            </div>
-            <div class="section released-items">
-                <h3>ציוד ששוחרר באירוע זה - Equipment Released in This Event (${releasedItems.length} items)</h3>
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>סוג</th>
-                            <th>שם הפריט</th>
-                            <th>מספר סידורי</th>
-                            <th>סטטוס</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsTableRows}
-                    </tbody>
-                </table>
-            </div>
-            <div class="section remaining-items">
-                <h3>סה"כ ציוד שנותר אצל החייל - Total Equipment Remaining with Soldier (${remainingItems.length} items)</h3>
-                ${remainingItemsHtml}
-            </div>
-            <div class="section">
-                <h3>חתימת החייל - Soldier Signature</h3>
-                <div class="signature-box">
-                    ${signatureHtml}
-                </div>
-            </div>
-            <div class="footer">
-                <p>נוצר ב-${dateStr}, ${timeStr}</p>
-            </div>
-        </body>
-        </html>
+      html: `
+        <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>טופס שחרור ציוד</h2>
+          <h3>Equipment Release Form</h3>
+          <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
+          <p>Dear ${soldier.first_name} ${soldier.last_name},</p>
+          <p>מצורף טופס שחרור ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
+          <p>Please find attached your equipment release form. Please save this file for your records.</p>
+          <hr>
+          <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
+          <p><small>This email was sent automatically by the Armory Management System</small></p>
+        </div>
       `,
+      attachments: [
+        {
+          content: pdfBase64,
+          filename: `equipment_release_${soldier.soldier_id}_${Date.now()}.pdf`,
+          type: "application/pdf",
+          disposition: "attachment",
+        },
+      ],
     };
 
+    console.log('[Email] Sending release form email with PDF attachment to:', soldier.email);
     await sgMail.send(msg);
+    console.log('[Email] Release form email sent successfully');
 
     return { success: true, message: `Release form sent to ${soldier.email}` };
   } catch (error) {

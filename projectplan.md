@@ -1,351 +1,255 @@
-# Fix Release Form Email Error
+# Update Maintenance Status Options by Equipment Type
 
-## Date: 30 October 2025
-
-## New Issue: Release Form Email Failing
-
-**Error**: "Activity does not contain soldier information"
-
-**Analysis**:
-Looking at the code:
-1. [SoldierRelease.jsx:829-838](src/pages/SoldierRelease.jsx#L829-L838) creates an ActivityLog with:
-   - `soldier_id` field (at root level)
-   - `context.soldierId` field (nested)
-
-2. [forms.js:385](functions/src/forms.js#L385) tries to get `soldierID` from:
-   - `activity.details?.soldier_id`
-
-**Root Cause**: Mismatch in field locations:
-- Frontend stores: `soldier_id` (root) and `context.soldierId`
-- Backend expects: `details.soldier_id`
-
-**Solution**: Updated [forms.js:386-388](functions/src/forms.js#L386-L388) to check multiple locations:
-```javascript
-const soldierID = activity.details?.soldier_id ||
-                  activity.context?.soldierId ||
-                  activity.soldier_id;
-```
-
-**Deployment**:
-The code fix is complete. You need to deploy the functions. Try these commands in order:
-
-Option 1 (specific function):
-```bash
-firebase deploy --only functions:sendReleaseFormByActivity
-```
-
-If that fails, Option 2 (all functions):
-```bash
-firebase deploy --only functions
-```
-
-**Note**: If deployment fails with permission errors, you may need to:
-1. Check that you're logged into the correct Firebase account
-2. Verify you have deployment permissions for the project
-3. Wait a few minutes and retry (sometimes Firebase has temporary issues)
-
-**After Successful Deployment**:
-Test the release form email again - it should now work correctly.
-
-## Update: Fixed Function Calling Issue
-
-**Error #2**: "Soldier ID is required"
-
-**Root Cause**: The `sendReleaseFormByActivity` function was trying to call `exports.generateReleaseForm.run()` which doesn't work correctly for internal function calls between Cloud Functions.
-
-**Solution**:
-1. Created a helper function `generateReleaseFormPDF()` at [forms.js:147-229](functions/src/forms.js#L147-L229) that contains the PDF generation logic
-2. Updated `generateReleaseForm` to use the helper
-3. Updated `sendReleaseFormByActivity` to call the helper directly instead of using `.run()`
-4. Also updated to get `unassignedItems` from `activity.context` which is where the frontend stores them
-
-**Next Step**: Deploy the updated functions:
-```bash
-firebase deploy --only functions
-```
-
-Then test again. If the soldier still doesn't have an email, you'll need to either:
-1. Add an email to the soldier record in the database, OR
-2. We can modify the function to skip email sending gracefully
-
-## Update: Email Format Issue
-
-**Issue**: The release form was being sent as a PDF attachment, but it should be sent as an HTML email with the form content.
-
-**Solution**: Updated [forms.js:424-519](functions/src/forms.js#L424-L519) to send a beautifully formatted HTML email that includes:
-- Professional styling with proper colors and spacing
-- Soldier information table
-- Released items list with color-coded styling
-- Signature section with lines for signatures and dates
-- Footer with generation timestamp
-
-**Changes Made**:
-- Removed PDF attachment
-- Added full HTML email template with inline CSS
-- Includes all soldier info, released items, and signature lines
-- Professional layout that looks great in email clients
-
-**Next Step**: Deploy the updated function:
-```bash
-firebase deploy --only functions:sendReleaseFormByActivity
-```
-
-Or deploy all functions:
-```bash
-firebase deploy --only functions
-```
-
-## ✅ RESOLVED: Signing Form Email Implementation
-
-Created `sendSigningFormByActivity` function similar to the release form:
-
-**Changes Made**:
-1. Created new function `sendSigningFormByActivity` in [forms.js:356-540](functions/src/forms.js#L356-L540)
-2. Added Hebrew RTL HTML email template matching the signing form example
-3. Updated frontend to call the new function with just `activityId`
-4. Exported the function in all necessary files
-
-**Features**:
-- Same Hebrew RTL format as release form
-- Includes soldier signature image
-- Shows newly assigned items in a table
-- Professional bilingual layout
-- Color-coded sections (green for assigned items)
-
-**Next Step**: Deploy the functions:
-```bash
-firebase deploy --only functions
-```
-
-Then rebuild and deploy the frontend:
-```bash
-npm run build
-firebase deploy --only hosting
-```
-
-## ✅ RESOLVED: Release Form Email Working Successfully
-
-The release form emails are now working correctly with the Hebrew RTL format!
-
-## Update: Changed to Hebrew RTL Format
-
-**Changes**:
-- Updated HTML to use Hebrew (he-IL) locale with RTL direction
-- Added Heebo font from Google Fonts for Hebrew text
-- Bilingual headers (English + Hebrew)
-- Hebrew section titles with English translations
-- Items displayed in a professional table format
-- Includes soldier signature image if available
-- Hebrew date/time formatting
-- All styling matches the provided example
-
-**Features**:
-- Professional A4 print layout
-- Color-coded sections (yellow for released items)
-- Signature box that displays the base64 signature image
-- Performer name from activity log
-- Hebrew and English bilingual throughout
-
----
-
-# Previous: Fix SendGrid Email Test Error
-
-## Date: 30 October 2025
-
-## Problem Analysis
-
-The error `Email address is required` occurs when calling the `testSendGrid` function. After reviewing the code:
-
-1. **Frontend Issue**: In [SecuritySettings.jsx:131](src/pages/SecuritySettings.jsx#L131), the function is called with:
-   ```javascript
-   const response = await testSendGrid({ testEmail });
-   ```
-   This creates an object with a `testEmail` property.
-
-2. **Backend Expectation**: In [email.js:103](functions/src/email.js#L103), the Firebase function expects:
-   ```javascript
-   const { email } = data;
-   ```
-   It's looking for an `email` property, not `testEmail`.
-
-3. **Validation**: At [email.js:104-109](functions/src/email.js#L104-L109), it checks for `email` and throws the error if not found.
-
-## Solution Plan
-
-- [x] Update the frontend to pass `email` instead of `testEmail` to match the backend expectation
-- [ ] Test the fix to ensure the email is sent successfully
-
-## Implementation Steps
-
-### Step 1: Fix Frontend Parameter
-Update [SecuritySettings.jsx:131](src/pages/SecuritySettings.jsx#L131) to pass the correct parameter name that matches the backend.
-
-**Change from:**
-```javascript
-const response = await testSendGrid({ testEmail });
-```
-
-**Change to:**
-```javascript
-const response = await testSendGrid({ email: testEmail });
-```
-
-This simple one-line change will pass the email address with the correct property name that the backend expects.
-
-## New Issues Found
-
-After testing with localhost and hosting URL, discovered two separate issues:
-
-### Issue 1: Localhost Error - "SendGrid API key not configured"
-The Firebase function config doesn't have the SendGrid API key set. This needs to be configured with:
-```bash
-firebase functions:config:set sendgrid.api_key="YOUR_SENDGRID_API_KEY"
-firebase functions:config:set sendgrid.from_email="your-verified@email.com"
-```
-
-### Issue 2: Hosting URL Error - "Email address is required" (original error)
-The hosted version is still running the old code. The fix needs to be deployed.
-
-## Next Steps
-
-- [x] Deploy the updated frontend code to hosting
-- [ ] Configure SendGrid API key in Firebase functions config
-- [ ] Test again from both localhost and hosting URL
-
-## Update: Both localhost and hosting now show same error
-
-Good progress! Both environments now show "SendGrid API key not configured", which means:
-1. ✅ The code fix was successfully deployed
-2. ✅ Both environments are using the updated code
-3. ⏳ Need to configure SendGrid API key in Firebase
-
-## Review
-
-**Problem**: The SendGrid test function was failing with "Email address is required" error because of a parameter name mismatch between frontend and backend.
-
-**Root Cause**:
-- Frontend was passing `{ testEmail: "value" }`
-- Backend expected `{ email: "value" }`
-
-**Solution**: Changed [SecuritySettings.jsx:131](src/pages/SecuritySettings.jsx#L131) from `testSendGrid({ testEmail })` to `testSendGrid({ email: testEmail })`.
-
-**Additional Issues Found**:
-1. Hosted version needs deployment with the fix
-2. SendGrid API key not configured in Firebase functions config
-
----
-
-# Previous: Enhance Drone Sets Export/Import with Component Names
-
-## Date: 29 October 2025
+## Date: 2 November 2025
 
 ## Problem
+The maintenance inspection form currently uses the same status options for all equipment types:
+- functioning
+- not functioning
+- missing
 
-The current drone sets export format for the `components` field uses the format:
-```
-slotName:componentId$slotName2:componentId2
-```
+However, different equipment types should have different status options:
+- **Weapons and Gear**: functioning, not functioning, missing
+- **Drones**: operational, maintenance, damaged, missing
 
-This needs to be enhanced to include component names and IDs in a more readable format:
-```
-slotName: componentName (componentId); slotName2: componentName2 (componentId2)
-```
+## Solution
+Update the MaintenanceInspectionForm component to show different status options based on the item type (weapon/gear vs drone).
 
-Example:
-```
-evo_drone: Evo Drone (4507); evo_remote_control: Evo Remote Control (4507)
-```
-
-The import functionality also needs to be updated to parse this new format.
-
-## Plan
-
-- [x] 1. Read current export code for drone sets to understand component handling
-- [x] 2. Read current import code for drone sets to understand component parsing
-- [x] 3. Update export to include component names in format: `slotName: componentName (componentId)`
-- [x] 4. Update import to parse the new format with component names
-- [x] 5. Test export and import functionality
+## Todo Items
+- [ ] Update the status dropdown in the inspection form to conditionally show options based on item type
+- [ ] Update the getStatusBadge function to handle drone-specific statuses (operational, maintenance, damaged)
+- [ ] Update the default status initialization based on item type
+- [ ] Test that weapons/gear show: functioning, not functioning, missing
+- [ ] Test that drones show: operational, maintenance, damaged, missing
 
 ## Implementation Details
 
-### Current Format
-- Export: `slotName:componentId$slotName2:componentId2`
-- Example: `evo_drone:4507$evo_remote_control:4508`
+### Changes to [MaintenanceInspectionForm.jsx](src/components/maintenance/MaintenanceInspectionForm.jsx)
 
-### New Format
-- Export: `slotName: componentName (componentId); slotName2: componentName2 (componentId2)`
-- Example: `evo_drone: Evo Drone (4507); evo_remote_control: Evo Remote Control (4508)`
-
-### Files to Modify
-1. [src/pages/DataExport.jsx](src/pages/DataExport.jsx) - Lines 88-100 (component export logic)
-2. [src/pages/Import.jsx](src/pages/Import.jsx) - Lines 848-860 (component import parsing)
-
----
-
-# Previous: Fix Drone Components Export/Import
-
-## Date: 29 October 2025
-
-## Problem
-
-When exporting drone sets in both admin and division manager roles, the `components` field shows `[object Object]` instead of the actual component serial numbers. This makes the export unusable and import fails.
-
-## Solution
-
-1. Update drone export to serialize components as serial numbers with a delimiter (e.g., `$`)
-2. Update drone import to parse the serialized components back into objects
-
-## Plan
-
-- [x] 1. Find and read the drone export code
-- [x] 2. Update drone export to serialize components with delimiter
-- [x] 3. Update drone import to parse serialized components
-- [x] 4. Test export and import functionality
-
-## Changes Made
-
-### 1. Fixed drone components export
-**File:** [DataExport.jsx](src/pages/DataExport.jsx#L88-L91)
-
-- Updated `convertToCSV` function to handle `components` array specially
-- Components are now serialized as component IDs separated by `$` delimiter
-- Example: `comp1$comp2$comp3` instead of `[object Object]`
-
-### 2. Fixed drone components import
-**File:** [Import.jsx](src/pages/Import.jsx#L848-L858)
-
-- Added parsing logic to detect serialized components string
-- Converts `$`-delimited string back to object format: `{ slot1: comp1, slot2: comp2, ... }`
-- Maintains backwards compatibility with existing object format
+1. **Line 81**: Update default status initialization to use 'functioning' for weapons/gear and 'operational' for drones
+2. **Lines 95-112**: Update `getStatusBadge` function to include drone statuses (operational, maintenance, damaged)
+3. **Lines 400-414**: Update the status Select component to conditionally render options based on `item.type`
 
 ## Review
 
-**Problem**: Drone set exports showed `[object Object]` for components field, making exports unusable.
+**Changes Made:**
+
+### [MaintenanceInspectionForm.jsx](src/components/maintenance/MaintenanceInspectionForm.jsx)
+
+1. **Updated default status initialization** (line 81)
+   - Changed from: Always use `'functioning'` as default
+   - Changed to: Use `'operational'` for drones, `'functioning'` for weapons/gear
+   - Code: `const defaultStatus = type === 'drone' ? 'operational' : 'functioning';`
+
+2. **Updated getStatusBadge function** (lines 100-109)
+   - Added drone-specific status configurations:
+     - `operational`: Green badge (same as functioning)
+     - `maintenance`: Yellow badge
+     - `damaged`: Red badge (same as not functioning)
+     - `missing`: Amber badge (shared with weapons/gear)
+
+3. **Updated status dropdown** (lines 406-432)
+   - Added conditional rendering based on `item.type`
+   - **For drones**: Shows operational, maintenance, damaged, missing
+   - **For weapons/gear**: Shows functioning, not functioning, missing
+   - Updated default value to match item type
+
+**Result:**
+- Weapons and gear now show status options: functioning, not functioning, missing
+- Drones now show status options: operational, maintenance, damaged, missing
+- Each equipment type has appropriate default status when selected
+- Status badges display correctly for all status types with appropriate colors
+
+---
+
+# Previous: Fix Drone Display Fields and Filter SAMPLE Items in Maintenance Form
+
+## Date: 2 November 2025
+
+## Problem
+The MaintenanceInspectionForm component had multiple issues:
+1. Reference error: `Drone is not defined` at line 302
+2. Displaying wrong drone field name (`drone_set_type` instead of `set_type`)
+3. SAMPLE items (weapons, gear, drones) should not appear in maintenance inspections
+
+## Analysis
+- **Error 1**: `ReferenceError: Drone is not defined` at line 302
+- **Error 2**: Drone items showed wrong field - should use `set_type` (not `drone_set_type`) and `set_serial_number`
+- **Error 3**: Items with IDs containing "SAMPLE" should be filtered out from all equipment lists
+
+## Solution
+1. Replace `<Drone>` with `<Plane>` at line 302
+2. Update all drone display fields to use `set_type` instead of `drone_set_type`
+3. Filter out SAMPLE items from weapons, gear, and drones
+4. Update search filters to use correct fields
+
+## Todo Items
+- [x] Fix the icon reference at line 302 from `Drone` to `Plane`
+- [x] Update renderDroneItem to display `set_type` and `set_serial_number`
+- [x] Update getSelectedItemsDetails to use correct drone fields
+- [x] Update filteredDrones search to filter by `set_type` and `set_serial_number`
+- [x] Filter out SAMPLE weapons from filteredWeapons
+- [x] Filter out SAMPLE gear from filteredGear
+- [x] Filter out SAMPLE drones from filteredDrones
+- [x] Update item counts to exclude SAMPLE items
+
+## Changes Made
+
+### [MaintenanceInspectionForm.jsx](src/components/maintenance/MaintenanceInspectionForm.jsx)
+
+1. **Fixed Icon Import Error** (line 318)
+   - Changed `<Drone>` to `<Plane>` to match existing imports
+
+2. **Created Non-SAMPLE Filter Memos** (lines 20-33)
+   - Added `nonSampleWeapons` - filters out weapons where `weapon_id` contains "SAMPLE"
+   - Added `nonSampleGear` - filters out gear where `gear_id` contains "SAMPLE"
+   - Added `nonSampleDrones` - filters out drones where `set_serial_number` contains "SAMPLE"
+   - These are used as the base for all filtering and counting
+
+3. **Updated Search Filters** (lines 35-63)
+   - `filteredWeapons` now filters from `nonSampleWeapons` instead of `assignedWeapons`
+   - `filteredGear` now filters from `nonSampleGear` instead of `assignedGear`
+   - `filteredDrones` now filters from `nonSampleDrones` and uses `set_type` field
+
+4. **Updated renderDroneItem function** (lines 179-180)
+   - Changed from: `drone.drone_set_type`
+   - Changed to: `drone.set_type` (correct field name)
+
+5. **Updated getSelectedItemsDetails** (lines 226-227)
+   - Changed from: `name: drone.drone_set_type`
+   - Changed to: `name: drone.set_type`
+
+6. **Updated Item Counts**
+   - Line 236: `totalItems` now counts only non-SAMPLE items
+   - Line 262: Changed condition from `assignedWeapons.length > 0` to `nonSampleWeapons.length > 0`
+   - Line 267: Count display shows `({filteredWeapons.length} of {nonSampleWeapons.length})`
+   - Line 288: Changed condition from `assignedGear.length > 0` to `nonSampleGear.length > 0`
+   - Line 293: Count display shows `({filteredGear.length} of {nonSampleGear.length})`
+   - Line 314: Changed condition from `assignedDrones.length > 0` to `nonSampleDrones.length > 0`
+   - Line 319: Count display shows `({filteredDrones.length} of {nonSampleDrones.length})`
+
+## Review
+**Problem**: MaintenanceInspectionForm crashed, displayed incorrect drone fields, showed SAMPLE equipment items, and counted SAMPLE items in totals.
 
 **Solution**:
-- Export: Serialize components array to `component_id1$component_id2$...` format
-- Import: Parse the serialized string back to object format with slot keys
+- Fixed undefined `Drone` icon reference by using `Plane` instead
+- Updated all drone display fields to use `set_type` (the correct field name) and `set_serial_number`
+- Created separate memos for non-SAMPLE items (`nonSampleWeapons`, `nonSampleGear`, `nonSampleDrones`)
+- Updated search functionality to filter from non-SAMPLE items
+- Updated all item counts and conditional rendering to use non-SAMPLE counts
 
-**Result**: Drone sets can now be exported and re-imported successfully with proper component data.
-
----
-
-# Previous: Add Verification Timestamp to Daily Verification
-
-## Date: 29 October 2025
-
-## Changes Made
-
-- Added `verification_timestamp` field to verification records in DailyVerification.jsx
-- Updated VerificationHistory.jsx to display exact time of verification
-- Fixed TDZ error by moving verifiedSoldierIds declaration
+**Result**: The component now:
+- Renders correctly without errors
+- Displays drone information using the correct `set_type` field (e.g., "Evo", "Matrice")
+- Filters out all SAMPLE equipment items from the maintenance inspection lists
+- Shows accurate counts that exclude SAMPLE items (e.g., "5 of 8" instead of "5 of 10" when 2 are SAMPLE)
+- Only displays equipment sections that have non-SAMPLE items
+- Matches the pattern used for weapons (type + ID) and gear (type + ID)
 
 ---
 
-# Previous: Fix Variable Declaration Order Error in Daily Verification
+# Previous: Maintenance Screen Redesign with Checkbox Selection
 
-## Date: 29 October 2025
+## Date: 2 November 2025
 
-## Changes Made
+## Overview
+Redesign the maintenance screen with:
+1. **Two Tabs**: "Inspect by Soldier" and "Inspect Unassigned"
+2. **Search Functionality**: Separate search bars for weapons and gear
+3. **Checkbox Selection**: Select multiple items to inspect at once
+4. **Sticky Inspection Form**: Bottom form appears when items are selected, allowing bulk status updates
 
-- Fixed variable declaration order in [DailyVerification.jsx](src/pages/DailyVerification.jsx#L272-L283)
+## Todo Items
+- [x] Import Tabs components into Maintenance.jsx
+- [x] Create two-tab structure (Inspect by Soldier, Inspect Unassigned)
+- [x] Add search bars for weapons and gear in both tabs
+- [x] Add checkbox selection for equipment items
+- [x] Create sticky bottom inspection form for selected items
+- [x] Update inspection submission logic
+- [x] Test both tabs and new workflow
+- [x] Verify all functionality works correctly
+
+## Implementation Details
+
+### Changes to Maintenance.jsx
+- Import `Tabs`, `TabsList`, `TabsTrigger`, and `TabsContent` from "@/components/ui/tabs"
+- Add `unassignedWeapons` and `unassignedGear` memos to filter equipment without assignments
+- Create two tab sections:
+  - "Inspect by Soldier": Search and select soldier, then inspect their equipment
+  - "Inspect Unassigned": Directly inspect all unassigned weapons and gear
+- Both tabs use the redesigned `MaintenanceInspectionForm` component
+
+### Complete Rewrite of MaintenanceInspectionForm.jsx
+- **Search Functionality**: Added separate search bars for weapons and gear with filtering
+- **Checkbox Selection**: Items can be selected individually or by clicking the entire card
+- **Visual Feedback**: Selected items highlight with blue background
+- **Sticky Inspection Form**: Bottom form appears when items are selected
+  - Shows count of selected items
+  - Dropdown for status (functioning/not functioning/missing)
+  - Comments field for optional notes
+  - Submit button to apply status to all selected items
+- **Batch Updates**: Single form updates all selected items at once
+- Removed signature requirement (simplified workflow)
+- Removed per-item radio buttons (replaced with batch selection + form)
+
+### UI/UX Improvements
+- Clean, modern card-based layout for equipment items
+- Search bars positioned next to section headers
+- Clickable equipment cards with visual selection state
+- Sticky bottom form stays visible while scrolling
+- Status dropdown matches the example with functioning/not functioning/missing options
+
+## Review
+
+### Implementation Complete
+
+**Changes Made:**
+
+#### [Maintenance.jsx](src/pages/Maintenance.jsx)
+1. Added Tabs component imports
+2. Added `unassignedWeapons` and `unassignedGear` memos
+3. Two-tab structure:
+   - **"Inspect by Soldier"** - Search soldier, inspect their equipment
+   - **"Inspect Unassigned"** - Inspect unassigned equipment directly
+
+#### [MaintenanceInspectionForm.jsx](src/components/maintenance/MaintenanceInspectionForm.jsx) - Complete Rewrite
+1. **Search Features**:
+   - Separate search bars for weapons and gear
+   - Real-time filtering using `useMemo`
+   - Search by type or ID
+
+2. **Selection System**:
+   - Checkbox on each item
+   - Clickable cards toggle selection
+   - Visual feedback with blue highlight
+   - Tracks selected items with Set data structure
+
+3. **Sticky Inspection Form**:
+   - Appears at bottom when items selected
+   - Shows count of selected items
+   - Status dropdown (functioning/not functioning/missing)
+   - Comments input field
+   - Single submit updates all selected items
+
+4. **Simplified Workflow**:
+   - No signature required
+   - No per-item status selection
+   - Batch processing of multiple items
+   - Form resets after submission
+
+**Key Implementation Details:**
+- Used `useMemo` for efficient search filtering
+- Set data structure for O(1) selection lookups
+- Sticky positioning (`sticky bottom-6`) for inspection form
+- Grid layout matching the provided example
+- Status options exactly as specified: functioning, not functioning, missing
+- Total rewrite: ~250 lines in MaintenanceInspectionForm.jsx
+
+**Result:**
+The maintenance screen now provides a modern, efficient workflow:
+1. **Search**: Find specific equipment quickly
+2. **Select**: Choose multiple items with checkboxes
+3. **Inspect**: Update status for all selected items at once
+4. **Submit**: Batch processing reduces repetitive actions
+
+This approach is much faster than the previous per-item inspection method, especially when inspecting many items with the same status.

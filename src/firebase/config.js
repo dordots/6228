@@ -4,6 +4,7 @@ import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported } from 'firebase/analytics';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,6 +25,26 @@ export const db = getFirestore(app);
 export const functions = getFunctions(app);
 export const storage = getStorage(app);
 
+// Initialize App Check (only in production)
+export let appCheck = null;
+if (typeof window !== 'undefined' && !import.meta.env.DEV) {
+  const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+
+  if (recaptchaSiteKey) {
+    try {
+      appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+        isTokenAutoRefreshEnabled: true
+      });
+      console.log('✅ App Check initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize App Check:', error);
+    }
+  } else {
+    console.warn('⚠️  VITE_RECAPTCHA_SITE_KEY not found. App Check not initialized.');
+  }
+}
+
 // Analytics only available in browser environment
 export let analytics = null;
 if (typeof window !== 'undefined') {
@@ -32,6 +53,13 @@ if (typeof window !== 'undefined') {
 
 // Helper to check if we're in development
 export const isDevelopment = import.meta.env.DEV;
+
+// Enable App Check debug token in development
+if (isDevelopment && typeof window !== 'undefined') {
+  // @ts-ignore
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  console.log('🔧 App Check debug mode enabled for development');
+}
 
 // Import emulator connectors
 import { connectAuthEmulator } from 'firebase/auth';

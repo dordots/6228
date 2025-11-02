@@ -6,8 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { generateTotp } from '@/api/functions';
 import { verifyTotp } from '@/api/functions'; // Keep original separate import
-import { Loader2, ShieldCheck, AlertCircle, Mail, LogOut } from 'lucide-react'; // Updated icon imports
-import { testSendGrid } from '@/api/functions'; // New import for SendGrid test
+import { Loader2, ShieldCheck, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function SecuritySettings({ onSetupComplete, isRequired = false }) {
@@ -22,11 +21,6 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
 
     const [error, setError] = useState('');     // General error message for all operations
     const [success, setSuccess] = useState(''); // General success message for all operations
-
-    // New state for SendGrid testing
-    const [testEmail, setTestEmail] = useState('');
-    const [isTestingSendGrid, setIsTestingSendGrid] = useState(false);
-    const [testResult, setTestResult] = useState(null); // Stores the outcome of SendGrid test
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
     useEffect(() => {
@@ -120,32 +114,6 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
         }
     };
 
-    const handleTestSendGrid = async () => {
-        if (!testEmail) {
-            setTestResult({ error: true, message: 'Please enter an email address to test.' });
-            return;
-        }
-        setIsTestingSendGrid(true);
-        setTestResult(null); // Clear previous test result
-        try {
-            const response = await testSendGrid({ email: testEmail });
-            if (response && response.data && response.data.success) {
-                setTestResult({ error: false, message: `Success! Test email sent to ${testEmail}. SendGrid Response: ${response.data.sendGridStatus}` });
-            } else {
-                // Handle cases where the function returns an error structure from the API
-                const errorMessage = response?.data?.details || response?.data?.error || 'An unknown error occurred.';
-                setTestResult({ error: true, message: `Test failed. Details: ${errorMessage}` });
-            }
-        } catch (err) {
-            console.error("SendGrid Test CATCH block error:", err);
-            // Handle network errors or unexpected exceptions
-            const errorMessage = err.response?.data?.details || err.response?.data?.error || err.message || "An unexpected error occurred.";
-            setTestResult({ error: true, message: `Test failed. Details: ${errorMessage}` });
-        } finally {
-            setIsTestingSendGrid(false);
-        }
-    };
-    
     const handleLogout = async () => {
         try {
             await User.logout();
@@ -303,41 +271,6 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                                     </Button>
                                 )}
                             </div>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* New Integration Testing Card */}
-            <Card className="border-slate-200 shadow-sm">
-                <CardHeader>
-                    <CardTitle>Integration Testing</CardTitle>
-                    <CardDescription>
-                        Use these tools to debug integrations like email sending.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <label htmlFor="test-email" className="font-medium text-slate-800">SendGrid Test</label>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            <Input
-                                id="test-email"
-                                type="email"
-                                placeholder="Enter email to send test to"
-                                value={testEmail}
-                                onChange={(e) => setTestEmail(e.target.value)}
-                                disabled={isTestingSendGrid} // Disable input while testing
-                            />
-                            <Button onClick={handleTestSendGrid} disabled={isTestingSendGrid} className="w-full sm:w-auto">
-                                {isTestingSendGrid ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                                Run SendGrid Test
-                            </Button>
-                        </div>
-                    </div>
-                    {testResult && (
-                        <div className={`flex items-start gap-3 p-4 rounded-md text-sm ${testResult.error ? 'bg-red-50 text-red-900 border border-red-200' : 'bg-green-50 text-green-900 border border-green-200'}`}>
-                            {testResult.error ? <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" /> : <ShieldCheck className="w-5 h-5 mt-0.5 shrink-0" />}
-                            <div className="break-all">{testResult.message}</div>
                         </div>
                     )}
                 </CardContent>

@@ -103,11 +103,12 @@ service cloud.firestore {
     // Soldiers collection
     match /soldiers/{soldierID} {
       allow read: if hasPermission('personnel.view') &&
-        (canAccessByScope(resource.data) ||
+        (isAdmin() || getUserScope() == 'global' ||
+         canAccessByScope(resource.data) ||
          (isAuthenticated() && request.auth.token.linked_soldier_id == resource.data.soldier_id));
       allow create: if hasPermission('personnel.create');
-      allow update: if hasPermission('personnel.update') && canAccessByScope(resource.data);
-      allow delete: if hasPermission('personnel.delete') && canAccessByScope(resource.data);
+      allow update: if hasPermission('personnel.update') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data));
+      allow delete: if hasPermission('personnel.delete') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data));
     }
     
     // Equipment collection
@@ -212,7 +213,7 @@ service cloud.firestore {
 
     // Activity logs - read with permission, write for authenticated
     match /activity_logs/{logID} {
-      allow read: if hasPermission('system.history') && canAccessByScope(resource.data);
+      allow read: if hasPermission('system.history') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data));
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() &&
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activity_log_id', 'updated_at']));
@@ -221,10 +222,10 @@ service cloud.firestore {
     
     // Daily verifications
     match /daily_verifications/{verificationID} {
-      allow read: if hasPermission('operations.verify') && canAccessByScope(resource.data);
+      allow read: if hasPermission('operations.verify') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data));
       allow create: if hasPermission('operations.verify');
       allow update: if false; // Immutable once created
-      allow delete: if hasPermission('operations.verify') && canAccessByScope(resource.data);
+      allow delete: if hasPermission('operations.verify') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data));
     }
     
     // Users collection - for profile management

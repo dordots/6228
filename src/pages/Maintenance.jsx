@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Soldier } from "@/api/entities";
 import { Weapon } from "@/api/entities";
 import { SerializedGear } from "@/api/entities";
+import { DroneSet } from "@/api/entities";
 import { User } from "@/api/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Users, ChevronDown, ClipboardCheck, Target, Binoculars } from "lucide-react";
 import MaintenanceInspectionForm from "../components/maintenance/MaintenanceInspectionForm";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +27,7 @@ export default function MaintenancePage() {
   const [soldiers, setSoldiers] = useState([]);
   const [weapons, setWeapons] = useState([]);
   const [serializedGear, setSerializedGear] = useState([]);
+  const [droneSets, setDroneSets] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSoldier, setSelectedSoldier] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,19 +57,22 @@ export default function MaintenancePage() {
         filter = { division_name: userDivision }; // Fallback
       }
 
-      const [soldiersData, weaponsData, gearData] = await Promise.all([
+      const [soldiersData, weaponsData, gearData, dronesData] = await Promise.all([
         Soldier.filter(filter).catch(() => []),
         Weapon.filter(filter).catch(() => []),
-        SerializedGear.filter(filter).catch(() => [])
+        SerializedGear.filter(filter).catch(() => []),
+        DroneSet.filter(filter).catch(() => [])
       ]);
       setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
       setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
       setSerializedGear(Array.isArray(gearData) ? gearData : []);
+      setDroneSets(Array.isArray(dronesData) ? dronesData : []);
     } catch (error) {
       console.error("Error loading data:", error);
       setSoldiers([]);
       setWeapons([]);
       setSerializedGear([]);
+      setDroneSets([]);
     }
     setIsLoading(false);
   };
@@ -133,22 +139,47 @@ export default function MaintenancePage() {
     const updatePromises = [];
 
     // Process weapon updates
-    for (const [weaponId, newStatus] of Object.entries(inspectionResults.weapons)) {
+    for (const [weaponId, data] of Object.entries(inspectionResults.weapons)) {
         const weaponToUpdate = weapons.find(w => w.id === weaponId);
         if (weaponToUpdate) {
-            updatePromises.push(
-                Weapon.update(weaponId, { status: newStatus, last_checked_date: today })
-            );
+            const updateData = {
+              status: data.status,
+              last_checked_date: today
+            };
+            if (data.comments) {
+              updateData.maintenance_comments = data.comments;
+            }
+            updatePromises.push(Weapon.update(weaponId, updateData));
         }
     }
 
     // Process gear updates
-    for (const [gearId, newStatus] of Object.entries(inspectionResults.gear)) {
+    for (const [gearId, data] of Object.entries(inspectionResults.gear)) {
         const gearToUpdate = serializedGear.find(g => g.id === gearId);
         if (gearToUpdate) {
-            updatePromises.push(
-                SerializedGear.update(gearId, { status: newStatus, last_checked_date: today })
-            );
+            const updateData = {
+              status: data.status,
+              last_checked_date: today
+            };
+            if (data.comments) {
+              updateData.maintenance_comments = data.comments;
+            }
+            updatePromises.push(SerializedGear.update(gearId, updateData));
+        }
+    }
+
+    // Process drone updates
+    for (const [droneId, data] of Object.entries(inspectionResults.drones)) {
+        const droneToUpdate = droneSets.find(d => d.id === droneId);
+        if (droneToUpdate) {
+            const updateData = {
+              status: data.status,
+              last_checked_date: today
+            };
+            if (data.comments) {
+              updateData.maintenance_comments = data.comments;
+            }
+            updatePromises.push(DroneSet.update(droneId, updateData));
         }
     }
 
@@ -178,6 +209,23 @@ export default function MaintenancePage() {
     return serializedGear.filter(g => g.assigned_to === selectedSoldier.soldier_id);
   }, [selectedSoldier, serializedGear]);
 
+  const assignedDrones = useMemo(() => {
+    if (!selectedSoldier) return [];
+    return droneSets.filter(d => d.assigned_to === selectedSoldier.soldier_id);
+  }, [selectedSoldier, droneSets]);
+
+  const unassignedWeapons = useMemo(() => {
+    return weapons.filter(w => !w.assigned_to || w.assigned_to === '');
+  }, [weapons]);
+
+  const unassignedGear = useMemo(() => {
+    return serializedGear.filter(g => !g.assigned_to || g.assigned_to === '');
+  }, [serializedGear]);
+
+  const unassignedDrones = useMemo(() => {
+    return droneSets.filter(d => !d.assigned_to || d.assigned_to === '');
+  }, [droneSets]);
+
 
   return (
     <div className="p-6 space-y-6">
@@ -194,81 +242,113 @@ export default function MaintenancePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    
+
       <div className="space-y-2">
         <h1 className="text-3xl font-bold text-slate-900">Maintenance Inspection</h1>
-        <p className="text-slate-600">Search for a soldier, weapon, or gear to inspect assigned equipment.</p>
+        <p className="text-slate-600">Manage and inspect equipment maintenance.</p>
       </div>
 
-      <Card className="border-slate-200 shadow-sm max-w-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Search className="w-5 h-5" />
-            Find Equipment or Soldier
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Popover open={searchOpen} onOpenChange={setSearchOpen}>
-            <PopoverTrigger asChild>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                <Input
-                  placeholder="Search by name, ID, weapon ID, or gear ID..."
-                  value={searchTerm}
-                  onChange={(e) => { setSearchTerm(e.target.value); setSearchOpen(e.target.value.length >= 2); }}
-                  className="pl-9 pr-10"
-                />
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-              </div>
-            </PopoverTrigger>
-            <PopoverContent 
-              className="w-[--radix-popover-trigger-width] p-0"
-              onOpenAutoFocus={(e) => e.preventDefault()}
-            >
-              <ScrollArea className="h-60">
-                {searchResults.length > 0 ? (
-                  searchResults.map(result => (
-                    <div key={result.id} onClick={() => selectSoldier(result.soldier)} className="p-3 hover:bg-slate-100 cursor-pointer flex items-center gap-3">
-                      {result.type === 'soldier' && <Users className="w-4 h-4 text-slate-500" />}
-                      {result.type === 'weapon' && <Target className="w-4 h-4 text-slate-500" />}
-                      {result.type === 'gear' && <Binoculars className="w-4 h-4 text-slate-500" />}
-                      <div>
-                        <p className="font-medium text-slate-900">{result.display}</p>
-                        <p className="text-sm text-slate-600">{result.subDisplay}</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-4 text-center text-slate-500">No results found.</div>
-                )}
-              </ScrollArea>
-            </PopoverContent>
-          </Popover>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="inspect-by-soldier" className="w-full">
+        <TabsList>
+          <TabsTrigger value="inspect-by-soldier">Inspect by Soldier</TabsTrigger>
+          <TabsTrigger value="inspect-unassigned">Inspect Unassigned</TabsTrigger>
+        </TabsList>
 
-      {selectedSoldier ? (
-        <MaintenanceInspectionForm
-          key={selectedSoldier.id} // Re-mount component when soldier changes
-          soldier={selectedSoldier}
-          assignedWeapons={assignedWeapons}
-          assignedGear={assignedGear}
-          onSubmit={handleSubmitInspection}
-          onCancel={() => {
-            setSelectedSoldier(null);
-            setSearchTerm('');
-          }}
-          isLoading={isLoading}
-        />
-      ) : (
-        <Card className="border-slate-200 shadow-sm bg-slate-50">
-          <CardContent className="p-8 text-center">
-            <ClipboardCheck className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-xl font-medium text-slate-700">No Soldier Selected</h3>
-            <p className="text-slate-600">Search and select an item to begin an inspection.</p>
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="inspect-by-soldier" className="space-y-6">
+          <Card className="border-slate-200 shadow-sm max-w-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Search className="w-5 h-5" />
+                Find Equipment or Soldier
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search by name, ID, weapon ID, or gear ID..."
+                      value={searchTerm}
+                      onChange={(e) => { setSearchTerm(e.target.value); setSearchOpen(e.target.value.length >= 2); }}
+                      className="pl-9 pr-10"
+                    />
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-[--radix-popover-trigger-width] p-0"
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                  <ScrollArea className="h-60">
+                    {searchResults.length > 0 ? (
+                      searchResults.map(result => (
+                        <div key={result.id} onClick={() => selectSoldier(result.soldier)} className="p-3 hover:bg-slate-100 cursor-pointer flex items-center gap-3">
+                          {result.type === 'soldier' && <Users className="w-4 h-4 text-slate-500" />}
+                          {result.type === 'weapon' && <Target className="w-4 h-4 text-slate-500" />}
+                          {result.type === 'gear' && <Binoculars className="w-4 h-4 text-slate-500" />}
+                          <div>
+                            <p className="font-medium text-slate-900">{result.display}</p>
+                            <p className="text-sm text-slate-600">{result.subDisplay}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-slate-500">No results found.</div>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+            </CardContent>
+          </Card>
+
+          {selectedSoldier ? (
+            <MaintenanceInspectionForm
+              key={selectedSoldier.id} // Re-mount component when soldier changes
+              soldier={selectedSoldier}
+              assignedWeapons={assignedWeapons}
+              assignedGear={assignedGear}
+              assignedDrones={assignedDrones}
+              onSubmit={handleSubmitInspection}
+              onCancel={() => {
+                setSelectedSoldier(null);
+                setSearchTerm('');
+              }}
+              isLoading={isLoading}
+            />
+          ) : (
+            <Card className="border-slate-200 shadow-sm bg-slate-50">
+              <CardContent className="p-8 text-center">
+                <ClipboardCheck className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-xl font-medium text-slate-700">No Soldier Selected</h3>
+                <p className="text-slate-600">Search and select an item to begin an inspection.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="inspect-unassigned" className="space-y-6">
+          {(unassignedWeapons.length > 0 || unassignedGear.length > 0 || unassignedDrones.length > 0) ? (
+            <MaintenanceInspectionForm
+              soldier={null}
+              assignedWeapons={unassignedWeapons}
+              assignedGear={unassignedGear}
+              assignedDrones={unassignedDrones}
+              onSubmit={handleSubmitInspection}
+              onCancel={() => {}}
+              isLoading={isLoading}
+            />
+          ) : (
+            <Card className="border-slate-200 shadow-sm bg-slate-50">
+              <CardContent className="p-8 text-center">
+                <ClipboardCheck className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-xl font-medium text-slate-700">No Unassigned Equipment</h3>
+                <p className="text-slate-600">All equipment is currently assigned to soldiers.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

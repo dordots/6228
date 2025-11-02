@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Target, Binoculars, Plane, Search, ClipboardCheck } from "lucide-react";
+import { Target, Binoculars, Joystick, Search, ClipboardCheck } from "lucide-react";
 import { format } from "date-fns";
 
 export default function MaintenanceInspectionForm({ soldier, assignedWeapons, assignedGear, assignedDrones = [], onSubmit, onCancel, isLoading }) {
@@ -207,7 +207,7 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
           checked={isSelected}
           onCheckedChange={() => toggleItemSelection('drone', drone.id)}
         />
-        <Plane className="w-5 h-5 text-purple-500 flex-shrink-0" />
+        <Joystick className="w-5 h-5 text-purple-500 flex-shrink-0" />
         <div className="flex-1">
           <p className="font-semibold">{drone.set_type}</p>
           <p className="text-sm text-gray-500 font-mono">{drone.set_serial_number}</p>
@@ -259,7 +259,7 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
           details.push({
             key,
             type: 'drone',
-            icon: Plane,
+            icon: Joystick,
             iconColor: 'text-purple-500',
             name: drone.set_type,
             id: drone.set_serial_number
@@ -352,7 +352,7 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <Plane className="w-5 h-5" /> {soldier ? 'Assigned Drones' : 'Unassigned Drones'}
+                  <Joystick className="w-5 h-5" /> {soldier ? 'Assigned Drones' : 'Unassigned Drones'}
                   <span className="text-sm text-slate-500 font-normal">({filteredDrones.length} of {nonSampleDrones.length})</span>
                 </h3>
                 <div className="relative w-64">

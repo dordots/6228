@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Users, ChevronDown, ClipboardCheck, Target, Binoculars } from "lucide-react";
+import { Search, Users, ChevronDown, ClipboardCheck, Target, Binoculars, Joystick } from "lucide-react";
 import MaintenanceInspectionForm from "../components/maintenance/MaintenanceInspectionForm";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -33,6 +33,7 @@ export default function MaintenancePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState("inspect-by-soldier");
 
   useEffect(() => {
     loadAllData();
@@ -194,9 +195,15 @@ export default function MaintenancePage() {
 
   const handleSuccessDialogClose = () => {
     setShowSuccessDialog(false);
-    setSelectedSoldier(null);
-    setSearchTerm('');
-    loadAllData(); // Refresh data for next inspection
+    if (activeTab === 'inspect-by-soldier') {
+      // Keep soldier selected in bySoldier mode for quick re-inspection
+      loadAllData(); // Refresh data but keep soldier selected
+    } else {
+      // Clear soldier in unassigned mode
+      setSelectedSoldier(null);
+      setSearchTerm('');
+      loadAllData();
+    }
   };
 
   const assignedWeapons = useMemo(() => {
@@ -248,7 +255,7 @@ export default function MaintenancePage() {
         <p className="text-slate-600">Manage and inspect equipment maintenance.</p>
       </div>
 
-      <Tabs defaultValue="inspect-by-soldier" className="w-full">
+      <Tabs defaultValue="inspect-by-soldier" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList>
           <TabsTrigger value="inspect-by-soldier">Inspect by Soldier</TabsTrigger>
           <TabsTrigger value="inspect-unassigned">Inspect Unassigned</TabsTrigger>

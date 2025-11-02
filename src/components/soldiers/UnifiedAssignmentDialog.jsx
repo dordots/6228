@@ -142,46 +142,70 @@ export default function UnifiedAssignmentDialog({
     return filtered;
   }, [equipment, soldier]);
 
-  // SIMPLIFIED: Just filter by search terms, no complex logic for now
+  // Filter weapons: prevent selecting multiple of the same type
   const weaponOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedWeapons) || !soldier) return [];
+
+    // Get types of already selected weapons
+    const selectedTypes = new Set(
+      selectedWeaponIds
+        .map(id => localUnassignedWeapons.find(w => w.id === id)?.weapon_type)
+        .filter(Boolean)
+    );
 
     return localUnassignedWeapons.filter(weapon => {
       const matchesDivision = !weapon.division_name || weapon.division_name === soldier.division_name;
       const notSelected = !selectedWeaponIds.includes(weapon.id);
+      const typeNotSelected = !selectedTypes.has(weapon.weapon_type); // NEW: prevent duplicate types
       const matchesSearch = weaponSearch.length === 0 ||
          (weapon.weapon_type && weapon.weapon_type.toLowerCase().includes(weaponSearch.toLowerCase())) ||
          (weapon.weapon_id && weapon.weapon_id.toLowerCase().includes(weaponSearch.toLowerCase()));
 
-      return weapon && matchesDivision && notSelected && matchesSearch;
+      return weapon && matchesDivision && notSelected && typeNotSelected && matchesSearch;
     });
   }, [localUnassignedWeapons, weaponSearch, selectedWeaponIds, soldier]);
 
   const gearOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedGear) || !soldier) return [];
 
+    // Get types of already selected gear
+    const selectedTypes = new Set(
+      selectedGearIds
+        .map(id => localUnassignedGear.find(g => g.id === id)?.gear_type)
+        .filter(Boolean)
+    );
+
     return localUnassignedGear.filter(gearItem => {
       const matchesDivision = !gearItem.division_name || gearItem.division_name === soldier.division_name;
       const notSelected = !selectedGearIds.includes(gearItem.id);
+      const typeNotSelected = !selectedTypes.has(gearItem.gear_type); // NEW: prevent duplicate types
       const matchesSearch = gearSearch.length === 0 ||
         (gearItem.gear_type && gearItem.gear_type.toLowerCase().includes(gearSearch.toLowerCase())) ||
         (gearItem.gear_id && gearItem.gear_id.toLowerCase().includes(gearSearch.toLowerCase()));
 
-        return gearItem && matchesDivision && notSelected && matchesSearch;
+        return gearItem && matchesDivision && notSelected && typeNotSelected && matchesSearch;
     });
   }, [localUnassignedGear, gearSearch, selectedGearIds, soldier]);
 
   const droneSetOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedDroneSets) || !soldier) return [];
-    
+
+    // Get types of already selected drone sets
+    const selectedTypes = new Set(
+      selectedDroneSetIds
+        .map(id => localUnassignedDroneSets.find(d => d.id === id)?.set_type)
+        .filter(Boolean)
+    );
+
     return localUnassignedDroneSets.filter(droneSet => {
       const matchesDivision = !droneSet.division_name || droneSet.division_name === soldier.division_name;
       const notSelected = !selectedDroneSetIds.includes(droneSet.id);
+      const typeNotSelected = !selectedTypes.has(droneSet.set_type); // NEW: prevent duplicate types
       const matchesSearch = droneSetSearch.length === 0 ||
          (droneSet.set_serial_number && droneSet.set_serial_number.toLowerCase().includes(droneSetSearch.toLowerCase())) ||
          (droneSet.set_type && droneSet.set_type.toLowerCase().includes(droneSetSearch.toLowerCase()));
 
-      return droneSet && matchesDivision && notSelected && matchesSearch;
+      return droneSet && matchesDivision && notSelected && typeNotSelected && matchesSearch;
     });
   }, [localUnassignedDroneSets, droneSetSearch, selectedDroneSetIds, soldier]);
 
@@ -265,6 +289,33 @@ export default function UnifiedAssignmentDialog({
 
     if (!hasSelectedItems) {
       showToast("No items selected for assignment.", "destructive");
+      return;
+    }
+
+    // NEW: Check for duplicate types
+    const weaponTypes = selectedWeapons.map(w => w.weapon_type);
+    const gearTypes = selectedGear.map(g => g.gear_type);
+    const droneTypes = selectedDroneSets.map(d => d.set_type);
+
+    const hasDuplicateWeapons = weaponTypes.length !== new Set(weaponTypes).size;
+    const hasDuplicateGear = gearTypes.length !== new Set(gearTypes).size;
+    const hasDuplicateDrones = droneTypes.length !== new Set(droneTypes).size;
+
+    if (hasDuplicateWeapons || hasDuplicateGear || hasDuplicateDrones) {
+      let errorMessage = "Cannot assign multiple items of the same type:\n";
+      if (hasDuplicateWeapons) {
+        const duplicates = weaponTypes.filter((type, index) => weaponTypes.indexOf(type) !== index);
+        errorMessage += `\n• Weapons: ${[...new Set(duplicates)].join(', ')}`;
+      }
+      if (hasDuplicateGear) {
+        const duplicates = gearTypes.filter((type, index) => gearTypes.indexOf(type) !== index);
+        errorMessage += `\n• Gear: ${[...new Set(duplicates)].join(', ')}`;
+      }
+      if (hasDuplicateDrones) {
+        const duplicates = droneTypes.filter((type, index) => droneTypes.indexOf(type) !== index);
+        errorMessage += `\n• Drones: ${[...new Set(duplicates)].join(', ')}`;
+      }
+      showToast(errorMessage, "destructive");
       return;
     }
 

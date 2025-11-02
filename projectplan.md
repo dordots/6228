@@ -1,4 +1,150 @@
-# Update Weapons Page Filter UI to Popover Dialog
+# Remove English from Email Text (Signing and Release Forms)
+
+## Date: 2 November 2025
+
+## Objective
+Remove all English text from the email body (HTML content) for both signing and release forms. Keep only Hebrew text. This does NOT affect the PDF attachment, only the email message body.
+
+## Files to Modify
+1. `functions/src/forms.js` - Backend email generation for signing and release forms
+
+## Tasks
+
+### Task 1: Update Signing Form Email (sendSigningFormByActivity function)
+- [ ] Remove English from subject line
+- [ ] Remove English email body content (lines 644-651)
+- [ ] Keep only Hebrew text in the email HTML
+
+**Location:** `functions/src/forms.js` lines 636-653
+
+**Current:**
+```javascript
+subject: `טופס חתימה על ציוד - Equipment Assignment Form - ${soldier.first_name} ${soldier.last_name}`,
+html: `
+  <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+    <h2>טופס חתימה על ציוד</h2>
+    <h3>Equipment Assignment Form</h3>
+    <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
+    <p>Dear ${soldier.first_name} ${soldier.last_name},</p>
+    <p>מצורף טופס חתימה על ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
+    <p>Please find attached your equipment signing form. Please save this file for your records.</p>
+    <hr>
+    <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
+    <p><small>This email was sent automatically by the Armory Management System</small></p>
+  </div>
+`,
+```
+
+**Target:**
+```javascript
+subject: `טופס חתימה על ציוד - ${soldier.first_name} ${soldier.last_name}`,
+html: `
+  <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+    <h2>טופס חתימה על ציוד</h2>
+    <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
+    <p>מצורף טופס חתימה על ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
+    <hr>
+    <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
+  </div>
+`,
+```
+
+### Task 2: Update Release Form Email (sendReleaseFormByActivity function)
+- [ ] Remove English from subject line
+- [ ] Remove English email body content (lines 965-975)
+- [ ] Keep only Hebrew text in the email HTML
+
+**Location:** `functions/src/forms.js` lines 960-976
+
+**Current:**
+```javascript
+subject: `טופס שחרור ציוד - Equipment Release Form - ${soldier.first_name} ${soldier.last_name}`,
+html: `
+  <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+    <h2>טופס שחרור ציוד</h2>
+    <h3>Equipment Release Form</h3>
+    <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
+    <p>Dear ${soldier.first_name} ${soldier.last_name},</p>
+    <p>מצורף טופס שחרור ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
+    <p>Please find attached your equipment release form. Please save this file for your records.</p>
+    <hr>
+    <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
+    <p><small>This email was sent automatically by the Armory Management System</small></p>
+  </div>
+`,
+```
+
+**Target:**
+```javascript
+subject: `טופס שחרור ציוד - ${soldier.first_name} ${soldier.last_name}`,
+html: `
+  <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
+    <h2>טופס שחרור ציוד</h2>
+    <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
+    <p>מצורף טופס שחרור ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
+    <hr>
+    <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
+  </div>
+`,
+```
+
+## Summary of Changes
+- Remove all English text from email subject lines
+- Remove all English headings and paragraphs from email HTML bodies
+- Keep only Hebrew text for a cleaner, more localized experience
+- PDF attachments remain bilingual (Hebrew + English headers as currently implemented)
+
+## Impact
+- **Minimal**: Only affects the email message body text
+- **No breaking changes**: Email structure and PDFs remain the same
+- **Users**: Will receive Hebrew-only emails with bilingual PDFs attached
+
+## Review
+
+### Changes Made
+
+**File Modified:** [functions/src/forms.js](functions/src/forms.js)
+
+#### 1. Signing Form Email (sendSigningFormByActivity function) - Lines 637-649
+**Changed:**
+- Subject line: Removed `" - Equipment Assignment Form"`
+- Email HTML body: Removed all English text including:
+  - `<h3>Equipment Assignment Form</h3>`
+  - `<p>Dear ${soldier.first_name} ${soldier.last_name},</p>`
+  - `<p>Please find attached your equipment signing form. Please save this file for your records.</p>`
+  - `<p><small>This email was sent automatically by the Armory Management System</small></p>`
+
+**Kept:**
+- Hebrew subject: `טופס חתימה על ציוד - ${soldier.first_name} ${soldier.last_name}`
+- Hebrew greeting: `שלום ${soldier.first_name} ${soldier.last_name},`
+- Hebrew body: `מצורף טופס חתימה על ציוד. אנא שמור/י את הקובץ לעיון עתידי.`
+- Hebrew footer: `מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה`
+
+#### 2. Release Form Email (sendReleaseFormByActivity function) - Lines 956-968
+**Changed:**
+- Subject line: Removed `" - Equipment Release Form"`
+- Email HTML body: Removed all English text including:
+  - `<h3>Equipment Release Form</h3>`
+  - `<p>Dear ${soldier.first_name} ${soldier.last_name},</p>`
+  - `<p>Please find attached your equipment release form. Please save this file for your records.</p>`
+  - `<p><small>This email was sent automatically by the Armory Management System</small></p>`
+
+**Kept:**
+- Hebrew subject: `טופס שחרור ציוד - ${soldier.first_name} ${soldier.last_name}`
+- Hebrew greeting: `שלום ${soldier.first_name} ${soldier.last_name},`
+- Hebrew body: `מצורף טופס שחרור ציוד. אנא שמור/י את הקובץ לעיון עתידי.`
+- Hebrew footer: `מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה`
+
+### Result
+- Email subjects are now Hebrew-only with soldier names
+- Email body text is now 100% Hebrew
+- PDF attachments remain bilingual (unchanged)
+- Cleaner, more localized email experience for Hebrew-speaking users
+- No functional changes - emails still send correctly with PDF attachments
+
+---
+
+# Previous: Update Weapons Page Filter UI to Popover Dialog
 
 ## Date: 2 November 2025
 

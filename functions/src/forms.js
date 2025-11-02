@@ -637,18 +637,14 @@ exports.sendSigningFormByActivity = functions
     const msg = {
       to: soldier.email,
       from: functions.config().sendgrid?.from_email || "noreply@armory.com",
-      subject: `טופס חתימה על ציוד - Equipment Assignment Form - ${soldier.first_name} ${soldier.last_name}`,
+      subject: `טופס חתימה על ציוד - ${soldier.first_name} ${soldier.last_name}`,
       html: `
         <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
           <h2>טופס חתימה על ציוד</h2>
-          <h3>Equipment Assignment Form</h3>
           <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
-          <p>Dear ${soldier.first_name} ${soldier.last_name},</p>
           <p>מצורף טופס חתימה על ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
-          <p>Please find attached your equipment signing form. Please save this file for your records.</p>
           <hr>
           <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
-          <p><small>This email was sent automatically by the Armory Management System</small></p>
         </div>
       `,
       attachments: [
@@ -960,18 +956,14 @@ exports.sendReleaseFormByActivity = functions
     const msg = {
       to: soldier.email,
       from: functions.config().sendgrid?.from_email || "noreply@armory.com",
-      subject: `טופס שחרור ציוד - Equipment Release Form - ${soldier.first_name} ${soldier.last_name}`,
+      subject: `טופס שחרור ציוד - ${soldier.first_name} ${soldier.last_name}`,
       html: `
         <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px;">
           <h2>טופס שחרור ציוד</h2>
-          <h3>Equipment Release Form</h3>
           <p>שלום ${soldier.first_name} ${soldier.last_name},</p>
-          <p>Dear ${soldier.first_name} ${soldier.last_name},</p>
           <p>מצורף טופס שחרור ציוד. אנא שמור/י את הקובץ לעיון עתידי.</p>
-          <p>Please find attached your equipment release form. Please save this file for your records.</p>
           <hr>
           <p><small>מייל זה נשלח אוטומטית ממערכת ניהול הנשקייה</small></p>
-          <p><small>This email was sent automatically by the Armory Management System</small></p>
         </div>
       `,
       attachments: [

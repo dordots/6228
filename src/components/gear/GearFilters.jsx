@@ -1,8 +1,50 @@
-import React, { useMemo } from 'react';
-import { Input } from "@/components/ui/input";
+import React, { useMemo, useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, Search } from "lucide-react";
-import ComboBox from "@/components/common/ComboBox";
+import { Filter } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+
+// Multi-select button component
+function MultiSelectButton({ options, selected, onToggle, placeholder }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedCount = selected.length;
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="w-full justify-between"
+        >
+          <span>
+            {selectedCount === 0 ? placeholder : `${selectedCount} selected`}
+          </span>
+          <Filter className="w-4 h-4 text-slate-400" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <div className="max-h-64 overflow-y-auto">
+          {options.map((option) => (
+            <div
+              key={option.value}
+              className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+              onClick={() => onToggle(option.value)}
+            >
+              <Checkbox
+                checked={selected.includes(option.value)}
+                onCheckedChange={() => onToggle(option.value)}
+              />
+              <label className="text-sm cursor-pointer flex-1">{option.label}</label>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function GearFilters({ filters, onFilterChange, gear = [], soldiers = [] }) {
   const { divisions, gearTypes } = useMemo(() => {
@@ -18,19 +60,50 @@ export default function GearFilters({ filters, onFilterChange, gear = [], soldie
   const handleFilterChange = (key, value) => {
     onFilterChange({ ...filters, [key]: value });
   };
-  
-  const divisionOptions = [
-    { value: 'all', label: 'All Divisions' },
-    ...divisions.map(d => ({ value: d, label: d }))
+
+  const handleMultiSelectToggle = (key, value) => {
+    const currentValues = filters[key] || [];
+    const newValues = currentValues.includes(value)
+      ? currentValues.filter(v => v !== value)
+      : [...currentValues, value];
+    handleFilterChange(key, newValues);
+  };
+
+  const clearAllFilters = () => {
+    onFilterChange({
+      types: [],
+      conditions: [],
+      divisions: [],
+      armory_statuses: [],
+      assigned_soldiers: []
+    });
+  };
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.types?.length > 0) count += filters.types.length;
+    if (filters.conditions?.length > 0) count += filters.conditions.length;
+    if (filters.divisions?.length > 0) count += filters.divisions.length;
+    if (filters.armory_statuses?.length > 0) count += filters.armory_statuses.length;
+    if (filters.assigned_soldiers?.length > 0) count += filters.assigned_soldiers.length;
+    return count;
+  }, [filters]);
+
+  const gearTypeOptions = gearTypes.map(t => ({ value: t, label: t }));
+
+  const conditionOptions = [
+    { value: 'functioning', label: 'Functioning' },
+    { value: 'not_functioning', label: 'Not Functioning' }
   ];
 
-  const gearTypeOptions = [
-    { value: 'all', label: 'All Types' },
-    ...gearTypes.map(t => ({ value: t, label: t }))
+  const divisionOptions = divisions.map(d => ({ value: d, label: d }));
+
+  const armoryStatusOptions = [
+    { value: 'with_soldier', label: 'With Soldier' },
+    { value: 'in_deposit', label: 'In Deposit' }
   ];
 
   const soldierOptions = [
-    { value: 'all', label: 'All Soldiers' },
     { value: 'unassigned', label: 'Unassigned Items' },
     ...soldiers.map(s => ({
       value: s.soldier_id,
@@ -39,67 +112,94 @@ export default function GearFilters({ filters, onFilterChange, gear = [], soldie
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-3 p-4 bg-slate-50 border-y border-slate-200">
-      <div className="flex items-center gap-2">
-        <Filter className="w-4 h-4 text-slate-500" />
-        <span className="text-sm font-medium text-slate-700">Filter by:</span>
-      </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="relative">
+          <Filter className="w-4 h-4 mr-2" />
+          Filters
+          {activeFilterCount > 0 && (
+            <Badge className="ml-2 bg-red-600 text-white">
+              {activeFilterCount}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="end">
+        {/* Header - Fixed at top */}
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-sm flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              Filter Gear
+            </h4>
+            <Button
+              variant="link"
+              className="h-auto p-0 text-sm"
+              onClick={clearAllFilters}
+            >
+              Clear all
+            </Button>
+          </div>
+        </div>
 
-      <div className="w-48">
-        <ComboBox
-          options={gearTypeOptions}
-          value={filters.type}
-          onSelect={(val) => handleFilterChange('type', val || 'all')}
-          placeholder="Gear Type"
-          searchPlaceholder="Search types..."
-        />
-      </div>
+        {/* Scrollable Filter Options */}
+        <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
+          {/* Gear Type */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Gear Type</Label>
+            <MultiSelectButton
+              options={gearTypeOptions}
+              selected={filters.types || []}
+              onToggle={(value) => handleMultiSelectToggle('types', value)}
+              placeholder="Select types..."
+            />
+          </div>
 
-      <div className="w-48">
-        <Select value={filters.condition} onValueChange={(val) => handleFilterChange('condition', val)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Condition" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Conditions</SelectItem>
-            <SelectItem value="functioning">Functioning</SelectItem>
-            <SelectItem value="not_functioning">Not Functioning</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          {/* Condition */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Condition</Label>
+            <MultiSelectButton
+              options={conditionOptions}
+              selected={filters.conditions || []}
+              onToggle={(value) => handleMultiSelectToggle('conditions', value)}
+              placeholder="Select conditions..."
+            />
+          </div>
 
-      <div className="w-48">
-        <ComboBox
-          options={divisionOptions}
-          value={filters.division}
-          onSelect={(val) => handleFilterChange('division', val || 'all')}
-          placeholder="Division"
-          searchPlaceholder="Search divisions..."
-        />
-      </div>
+          {/* Division */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Division</Label>
+            <MultiSelectButton
+              options={divisionOptions}
+              selected={filters.divisions || []}
+              onToggle={(value) => handleMultiSelectToggle('divisions', value)}
+              placeholder="Select divisions..."
+            />
+          </div>
 
-      <div className="w-48">
-        <Select value={filters.armory_status} onValueChange={(val) => handleFilterChange('armory_status', val)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Armory Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="with_soldier">With Soldier</SelectItem>
-            <SelectItem value="in_deposit">In Deposit</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          {/* Armory Status */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Armory Status</Label>
+            <MultiSelectButton
+              options={armoryStatusOptions}
+              selected={filters.armory_statuses || []}
+              onToggle={(value) => handleMultiSelectToggle('armory_statuses', value)}
+              placeholder="Select armory statuses..."
+            />
+          </div>
 
-      <div className="w-56">
-        <ComboBox
-          options={soldierOptions}
-          value={filters.assigned_to}
-          onSelect={(val) => handleFilterChange('assigned_to', val || 'all')}
-          placeholder="Assigned Soldier"
-          searchPlaceholder="Search soldiers..."
-        />
-      </div>
-    </div>
+          {/* Assigned Soldier */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Assigned Soldier</Label>
+            <MultiSelectButton
+              options={soldierOptions}
+              selected={filters.assigned_soldiers || []}
+              onToggle={(value) => handleMultiSelectToggle('assigned_soldiers', value)}
+              placeholder="Select soldiers..."
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

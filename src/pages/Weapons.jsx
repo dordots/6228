@@ -38,7 +38,16 @@ export default function Weapons() {
   const [showForm, setShowForm] = useState(false);
   const [editingWeapon, setEditingWeapon] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ type: "all", condition: "all", division: "all", armory_status: "all", assigned_to: "all" });
+  const [filters, setFilters] = useState({
+    types: [],
+    conditions: [],
+    divisions: [],
+    armory_statuses: [],
+    assigned_soldiers: [],
+    maintenance_check: 'all',
+    date_from: null,
+    date_to: null
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -64,7 +73,7 @@ export default function Weapons() {
     const urlParams = new URLSearchParams(window.location.search);
     const typeFilter = urlParams.get('type');
     if (typeFilter) {
-      setFilters(prev => ({ ...prev, type: typeFilter }));
+      setFilters(prev => ({ ...prev, types: [typeFilter] }));
     }
   }, []);
 
@@ -577,11 +586,12 @@ export default function Weapons() {
     console.log('Total weapons to filter:', weapons.length);
     console.log('Active filters:', {
       searchTerm: searchTerm || '(none)',
-      type: filters.type,
-      condition: filters.condition,
-      division: filters.division,
-      armory_status: filters.armory_status,
-      assigned_to: filters.assigned_to
+      types: filters.types?.length || 0,
+      conditions: filters.conditions?.length || 0,
+      divisions: filters.divisions?.length || 0,
+      armory_statuses: filters.armory_statuses?.length || 0,
+      assigned_soldiers: filters.assigned_soldiers?.length || 0,
+      maintenance_check: filters.maintenance_check
     });
 
     const filtered = weapons.filter(weapon => {
@@ -592,6 +602,7 @@ export default function Weapons() {
       const lastSignedByName = weapon.last_signed_by ? String(weapon.last_signed_by).toLowerCase() : '';
       const comments = weapon.comments ? String(weapon.comments).toLowerCase() : '';
 
+      // Search match
       const matchesSearch = !searchTerm ||
         (weapon.weapon_type && String(weapon.weapon_type).toLowerCase().includes(searchLower)) ||
         (weapon.weapon_id && String(weapon.weapon_id).toLowerCase().includes(searchLower)) ||
@@ -601,65 +612,58 @@ export default function Weapons() {
         (lastSignedByName && lastSignedByName.includes(searchLower)) ||
         comments.includes(searchLower);
 
-      const matchesType = filters.type === "all" || weapon.weapon_type === filters.type;
-      const matchesCondition = filters.condition === "all" || weapon.status === filters.condition;
-      const matchesDivision = filters.division === "all" || weapon.division_name === filters.division;
-      const matchesArmory = filters.armory_status === "all" || (weapon.armory_status || 'with_soldier') === filters.armory_status;
+      // Multi-select filters (if array is empty, show all)
+      const matchesType = !filters.types || filters.types.length === 0 || filters.types.includes(weapon.weapon_type);
+      const matchesCondition = !filters.conditions || filters.conditions.length === 0 || filters.conditions.includes(weapon.status);
+      const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(weapon.division_name);
+      const matchesArmory = !filters.armory_statuses || filters.armory_statuses.length === 0 ||
+        filters.armory_statuses.includes(weapon.armory_status || 'with_soldier');
 
-      const matchesAssignedTo = !filters.assigned_to || filters.assigned_to === 'all' ||
-        (filters.assigned_to === 'unassigned' && !weapon.assigned_to) ||
-        (weapon.assigned_to === filters.assigned_to);
+      // Assigned soldier filter
+      const matchesAssignedSoldier = !filters.assigned_soldiers || filters.assigned_soldiers.length === 0 ||
+        (filters.assigned_soldiers.includes('unassigned') && !weapon.assigned_to) ||
+        (weapon.assigned_to && filters.assigned_soldiers.includes(weapon.assigned_to));
 
-      return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesArmory && matchesAssignedTo;
+      // Maintenance check filter
+      const matchesMaintenance = !filters.maintenance_check || filters.maintenance_check === 'all' ||
+        (filters.maintenance_check === 'checked' && weapon.last_checked_date) ||
+        (filters.maintenance_check === 'not_checked' && !weapon.last_checked_date);
+
+      // Date range filter
+      let matchesDateRange = true;
+      if (weapon.last_checked_date) {
+        const weaponDate = new Date(weapon.last_checked_date);
+
+        if (filters.date_from && filters.date_to) {
+          // Both dates selected - check if weapon date is between them
+          const fromDate = new Date(filters.date_from);
+          const toDate = new Date(filters.date_to);
+          fromDate.setHours(0, 0, 0, 0);
+          toDate.setHours(23, 59, 59, 999);
+          matchesDateRange = weaponDate >= fromDate && weaponDate <= toDate;
+        } else if (filters.date_from) {
+          // Only from date - check if weapon date is on or after
+          const fromDate = new Date(filters.date_from);
+          fromDate.setHours(0, 0, 0, 0);
+          matchesDateRange = weaponDate >= fromDate;
+        } else if (filters.date_to) {
+          // Only to date - check if weapon date is on or before
+          const toDate = new Date(filters.date_to);
+          toDate.setHours(23, 59, 59, 999);
+          matchesDateRange = weaponDate <= toDate;
+        }
+      } else if (filters.date_from || filters.date_to) {
+        // If date filters are set but weapon has no last_checked_date, exclude it
+        matchesDateRange = false;
+      }
+
+      return matchesSearch && matchesType && matchesCondition && matchesDivision &&
+             matchesArmory && matchesAssignedSoldier && matchesMaintenance && matchesDateRange;
     });
 
     // DEBUG: Show filtering results
     console.log('Weapons after client-side filtering:', filtered.length);
     console.log('Filtered out:', weapons.length - filtered.length, 'weapons');
-
-    // Show breakdown of what filters removed weapons
-    if (weapons.length !== filtered.length) {
-      const failedSearch = weapons.filter(w => {
-        if (!w) return false;
-        const assignedSoldier = Array.isArray(soldiers) ? soldiers.find(s => s && s.soldier_id === w.assigned_to) : null;
-        const assignedSoldierName = assignedSoldier ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}` : '';
-        const searchLower = searchTerm.toLowerCase();
-        const lastSignedByName = w.last_signed_by ? String(w.last_signed_by).toLowerCase() : '';
-        const comments = w.comments ? String(w.comments).toLowerCase() : '';
-
-        const matchesSearch = !searchTerm ||
-          (w.weapon_type && String(w.weapon_type).toLowerCase().includes(searchLower)) ||
-          (w.weapon_id && String(w.weapon_id).toLowerCase().includes(searchLower)) ||
-          (assignedSoldierName && assignedSoldierName.toLowerCase().includes(searchLower)) ||
-          (w.division_name && String(w.division_name).toLowerCase().includes(searchLower)) ||
-          (w.assigned_to && String(w.assigned_to).toLowerCase().includes(searchLower)) ||
-          (lastSignedByName && lastSignedByName.includes(searchLower)) ||
-          comments.includes(searchLower);
-
-        return !matchesSearch;
-      }).length;
-
-      const failedType = weapons.filter(w => w && !(filters.type === "all" || w.weapon_type === filters.type)).length;
-      const failedCondition = weapons.filter(w => w && !(filters.condition === "all" || w.status === filters.condition)).length;
-      const failedDivision = weapons.filter(w => w && !(filters.division === "all" || w.division_name === filters.division)).length;
-      const failedArmory = weapons.filter(w => w && !(filters.armory_status === "all" || (w.armory_status || 'with_soldier') === filters.armory_status)).length;
-      const failedAssignedTo = weapons.filter(w => {
-        if (!w) return false;
-        const matchesAssignedTo = !filters.assigned_to || filters.assigned_to === 'all' ||
-          (filters.assigned_to === 'unassigned' && !w.assigned_to) ||
-          (w.assigned_to === filters.assigned_to);
-        return !matchesAssignedTo;
-      }).length;
-
-      console.log('Filter breakdown (weapons excluded by each filter):');
-      if (failedSearch > 0) console.log(`  - Search term: ${failedSearch}`);
-      if (failedType > 0) console.log(`  - Type filter: ${failedType}`);
-      if (failedCondition > 0) console.log(`  - Condition filter: ${failedCondition}`);
-      if (failedDivision > 0) console.log(`  - Division filter: ${failedDivision}`);
-      if (failedArmory > 0) console.log(`  - Armory status filter: ${failedArmory}`);
-      if (failedAssignedTo > 0) console.log(`  - Assigned to filter: ${failedAssignedTo}`);
-    }
-
     console.log('=== END CLIENT-SIDE FILTERING DEBUG ===\n');
 
     return filtered;

@@ -41,7 +41,7 @@ export default function SerializedGearPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingGear, setEditingGear] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ type: "all", condition: "all", division: "all", armory_status: "all", assigned_to: "all" });
+  const [filters, setFilters] = useState({ types: [], conditions: [], divisions: [], armory_statuses: [], assigned_soldiers: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -63,11 +63,11 @@ export default function SerializedGearPage() {
         }
     };
     fetchUser();
-    
+
     const urlParams = new URLSearchParams(window.location.search);
     const typeFilter = urlParams.get('type');
     if (typeFilter) {
-      setFilters(prev => ({ ...prev, type: typeFilter }));
+      setFilters(prev => ({ ...prev, types: [typeFilter] }));
     }
   }, []);
 
@@ -484,21 +484,11 @@ export default function SerializedGearPage() {
         (lastSignedByName && lastSignedByName.includes(searchLower)) ||
         comments.includes(searchLower);
 
-      let matchesType;
-      if (filters.type === "all") {
-        matchesType = true;
-      } else if (filters.type === "Unknown") {
-        matchesType = !gearItem.gear_type || !String(gearItem.gear_type).trim();
-      } else {
-        matchesType = gearItem.gear_type === filters.type;
-      }
-
-      const matchesCondition = filters.condition === "all" || gearItem.status === filters.condition;
-      const matchesDivision = filters.division === "all" || gearItem.division_name === filters.division;
-      const matchesArmory = filters.armory_status === "all" || (gearItem.armory_status || 'with_soldier') === filters.armory_status;
-      const matchesAssignedTo = !filters.assigned_to || filters.assigned_to === 'all' ||
-        (filters.assigned_to === 'unassigned' && !gearItem.assigned_to) ||
-        (gearItem.assigned_to === filters.assigned_to);
+      const matchesType = !filters.types || filters.types.length === 0 || filters.types.includes(gearItem.gear_type);
+      const matchesCondition = !filters.conditions || filters.conditions.length === 0 || filters.conditions.includes(gearItem.status);
+      const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(gearItem.division_name);
+      const matchesArmory = !filters.armory_statuses || filters.armory_statuses.length === 0 || filters.armory_statuses.includes(gearItem.armory_status || 'with_soldier');
+      const matchesAssignedTo = !filters.assigned_soldiers || filters.assigned_soldiers.length === 0 || filters.assigned_soldiers.includes(gearItem.assigned_to || 'unassigned');
 
       return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesArmory && matchesAssignedTo;
     });

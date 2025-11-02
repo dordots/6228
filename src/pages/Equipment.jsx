@@ -43,7 +43,7 @@ export default function EquipmentPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ type: "all", condition: "all", assignment: "all", division: "all" }); // Added assignment filter
+  const [filters, setFilters] = useState({ types: [], conditions: [], divisions: [] }); // Array-based filters
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -182,14 +182,11 @@ export default function EquipmentPage() {
         (item.division_name && item.division_name.toLowerCase().includes(searchLower)) ||
         (item.assigned_to && String(item.assigned_to).toLowerCase().includes(searchLower));
 
-      const matchesType = filters.type === "all" || item.equipment_type === filters.type;
-      const matchesCondition = filters.condition === "all" || item.condition === filters.condition;
-      const matchesAssignment = filters.assignment === "all" ||
-        (filters.assignment === 'assigned' && !!item.assigned_to) ||
-        (filters.assignment === 'unassigned' && !item.assigned_to);
-      const matchesDivision = filters.division === "all" || item.division_name === filters.division;
+      const matchesType = !filters.types || filters.types.length === 0 || filters.types.includes(item.equipment_type);
+      const matchesCondition = !filters.conditions || filters.conditions.length === 0 || filters.conditions.includes(item.condition);
+      const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(item.division_name);
 
-      return matchesSearch && matchesType && matchesCondition && matchesAssignment && matchesDivision;
+      return matchesSearch && matchesType && matchesCondition && matchesDivision;
     });
   }, [equipment, soldiers, searchTerm, filters]);
 

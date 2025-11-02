@@ -29,7 +29,7 @@ export default function DroneComponents() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [filters, setFilters] = useState({ type: "all", status: "all" });
+  const [filters, setFilters] = useState({ types: [], statuses: [] });
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
@@ -505,8 +505,8 @@ export default function DroneComponents() {
         (component.component_id && String(component.component_id).toLowerCase().includes(searchLower)) ||
         (component.component_type && String(component.component_type).toLowerCase().includes(searchLower));
       
-      const matchesType = filters.type === 'all' || component.component_type === filters.type;
-      const matchesStatus = filters.status === 'all' || component.status === filters.status;
+      const matchesType = !filters.types || filters.types.length === 0 || filters.types.includes(component.component_type);
+      const matchesStatus = !filters.statuses || filters.statuses.length === 0 || filters.statuses.includes(component.status);
 
       return matchesSearch && matchesType && matchesStatus;
     });

@@ -47,7 +47,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   const [showForm, setShowForm] = useState(false);
   const [editingSet, setEditingSet] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ type: "all", status: "all", armory_status: "all", assignment: "all", division: "all", assigned_to: "all" });
+  const [filters, setFilters] = useState({ types: [], statuses: [], locations: [], divisions: [], assigned_soldiers: [] });
   const [selectedItems, setSelectedItems] = useState([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [reassigningSet, setReassigningSet] = useState(null);
@@ -430,18 +430,13 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         (droneSet.assigned_to && droneSet.assigned_to.toLowerCase().includes(searchLower)) ||
         soldierName.includes(searchLower);
 
-      const matchesType = filters.type === 'all' || droneSet.set_type === filters.type;
-      const matchesStatus = filters.status === 'all' || droneSet.status === filters.status;
-      const matchesArmory = filters.armory_status === "all" || (droneSet.armory_status || 'with_soldier') === filters.armory_status;
-      const matchesAssignment = filters.assignment === "all" ||
-        (filters.assignment === 'assigned' && !!droneSet.assigned_to) ||
-        (filters.assignment === 'unassigned' && !droneSet.assigned_to);
-      const matchesDivision = filters.division === 'all' || droneSet.division_name === filters.division;
-      const matchesSoldier = !filters.assigned_to || filters.assigned_to === 'all' ||
-        (filters.assigned_to === 'unassigned' && !droneSet.assigned_to) ||
-        droneSet.assigned_to === filters.assigned_to;
+      const matchesType = !filters.types || filters.types.length === 0 || filters.types.includes(droneSet.set_type);
+      const matchesStatus = !filters.statuses || filters.statuses.length === 0 || filters.statuses.includes(droneSet.status);
+      const matchesLocation = !filters.locations || filters.locations.length === 0 || filters.locations.includes(droneSet.location);
+      const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(droneSet.division_name);
+      const matchesSoldier = !filters.assigned_soldiers || filters.assigned_soldiers.length === 0 || filters.assigned_soldiers.includes(droneSet.assigned_to || 'unassigned');
 
-      return matchesSearch && matchesType && matchesStatus && matchesArmory && matchesAssignment && matchesDivision && matchesSoldier;
+      return matchesSearch && matchesType && matchesStatus && matchesLocation && matchesDivision && matchesSoldier;
     });
   }, [droneSets, soldiers, searchTerm, filters]);
 

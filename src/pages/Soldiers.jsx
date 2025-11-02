@@ -47,7 +47,7 @@ export default function Soldiers() {
   const [showForm, setShowForm] = useState(false);
   const [editingSoldier, setEditingSoldier] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ status: "all", division: "all", team: "all", profession: "all" });
+  const [filters, setFilters] = useState({ statuses: [], divisions: [], teams: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -943,12 +943,11 @@ export default function Soldiers() {
         return searchWords.every(word => searchableString.includes(word));
       })();
 
-      const matchesStatus = filters.status === "all" || (soldier.enlistment_status || 'expected') === filters.status;
-      const matchesDivision = filters.division === "all" || soldier.division_name === filters.division;
-      const matchesTeam = filters.team === "all" || soldier.team_name === filters.team;
-      const matchesProfession = filters.profession === "all" || soldier.profession === filters.profession;
+      const matchesStatus = !filters.statuses || filters.statuses.length === 0 || filters.statuses.includes(soldier.enlistment_status || 'expected');
+      const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(soldier.division_name);
+      const matchesTeam = !filters.teams || filters.teams.length === 0 || filters.teams.includes(soldier.team_name);
 
-      return matchesSearch && matchesStatus && matchesDivision && matchesTeam && matchesProfession;
+      return matchesSearch && matchesStatus && matchesDivision && matchesTeam;
     });
 
     console.log('[DEBUG filteredSoldiers] Filtered count:', filtered.length);

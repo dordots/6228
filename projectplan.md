@@ -1,4 +1,148 @@
-# Update Maintenance Status Options by Equipment Type
+# Update Weapons Page Filter UI to Popover Dialog
+
+## Date: 2 November 2025
+
+## Problem
+The current weapons page filter UI displays all filters in a horizontal inline layout using ComboBox and Select components. This takes up significant space and can be cluttered. The desired UX is to have a single "Filter" button that opens a popover dialog containing all filter options in a clean vertical layout.
+
+## Solution
+Replace the inline filter layout with:
+1. A single "Filter" button with a badge showing active filter count
+2. A popover dialog that opens when the button is clicked
+3. Vertical layout of all filter options inside the popover
+4. "Clear all" button to reset all filters
+5. Multi-select capabilities for filters where applicable
+
+## Todo Items
+- [ ] Read current WeaponFilters component to understand structure
+- [ ] Create new popover-based filter UI with vertical layout
+- [ ] Add 'Clear all' functionality to reset filters
+- [ ] Add multi-select capability for filter options
+- [ ] Update Weapons.jsx to use new filter button
+- [ ] Test the new filter functionality
+
+## Implementation Details
+
+### Changes to [WeaponFilters.jsx](src/components/weapons/WeaponFilters.jsx)
+
+1. Replace horizontal inline layout with Popover component
+2. Add Filter button trigger with badge showing active filter count
+3. Create vertical layout inside popover with:
+   - Header with "Filter Weapons" title
+   - "Clear all" button
+   - Weapon Type (multi-select)
+   - Condition (multi-select)
+   - Division (multi-select)
+   - Armory Status (multi-select)
+   - Assigned Soldier (multi-select)
+   - Maintenance Check dropdown
+   - Last Checked Date Range (date pickers)
+
+4. Update filter state to support multiple selections per filter category
+
+### Changes to [Weapons.jsx](src/pages/Weapons.jsx)
+
+1. Update filter state structure to support arrays for multi-select filters
+2. Update filteredWeapons logic to handle array-based filters
+3. Adjust layout to accommodate new filter button positioning
+
+## Review
+
+**Changes Made:**
+
+### [WeaponFilters.jsx](src/components/weapons/WeaponFilters.jsx) - Complete Rewrite
+
+1. **Replaced inline horizontal layout with Popover UI**
+   - Changed from horizontal row of ComboBox/Select components
+   - Now uses a single "Filters" button that opens a popover dialog
+
+2. **Added MultiSelectButton component**
+   - Custom component for multi-select functionality
+   - Shows checkboxes for each option
+   - Displays count of selected items (e.g., "3 selected")
+   - Individual popover for each filter category
+
+3. **Implemented new filter structure**
+   - **Weapon Type**: Multi-select with checkboxes
+   - **Condition**: Multi-select (Functioning, Not Functioning)
+   - **Division**: Multi-select with all available divisions
+   - **Armory Status**: Multi-select (With Soldier, In Deposit)
+   - **Assigned Soldier**: Multi-select with soldier list + unassigned option
+   - **Maintenance Check**: Single select dropdown (All, Checked, Not Checked, Overdue)
+   - **Date Range**: Placeholder for future implementation
+
+4. **Added active filter count badge**
+   - Red badge on Filter button showing number of active filters
+   - Automatically calculates based on all filter selections
+
+5. **Added "Clear all" functionality**
+   - Button in popover header to reset all filters at once
+   - Returns filters to default empty state
+
+### [Weapons.jsx](src/pages/Weapons.jsx)
+
+1. **Updated filter state structure** (lines 41-50)
+   - Changed from single-value filters to array-based multi-select:
+     - `type` → `types: []`
+     - `condition` → `conditions: []`
+     - `division` → `divisions: []`
+     - `armory_status` → `armory_statuses: []`
+     - `assigned_to` → `assigned_soldiers: []`
+   - Added: `maintenance_check`, `date_from`, `date_to`
+
+2. **Updated URL parameter handling** (line 76)
+   - Changed from `type: typeFilter` to `types: [typeFilter]` to support new array structure
+
+3. **Rewrote filteredWeapons logic** (lines 596-633)
+   - Multi-select filters: Show all if array is empty, otherwise match if value is in array
+   - Added maintenance check filter logic
+   - Cleaner, more modular filter conditions
+
+4. **Updated debug logging** (lines 587-595)
+   - Changed to show count of selected items per filter category
+   - Removed old single-value filter debug code
+
+**Result:**
+- Clean, compact filter UI with single button instead of horizontal row
+- Multi-select capability for all major filter categories
+- Active filter count badge for quick visibility
+- "Clear all" functionality for easy filter reset
+- Vertical layout in popover for better UX and space efficiency
+- Maintains all original filtering functionality with enhanced multi-select capabilities
+
+### Additional Updates - Date Range Implementation and Scrolling
+
+**Changes Made:**
+
+1. **Added scrolling to filter dialog** ([WeaponFilters.jsx](src/components/weapons/WeaponFilters.jsx))
+   - Fixed header at top of popover with border
+   - Filter options section now scrollable with `max-h-96 overflow-y-auto`
+   - Prevents dialog from growing too large on smaller screens
+
+2. **Implemented Last Checked Date Range pickers** ([WeaponFilters.jsx](src/components/weapons/WeaponFilters.jsx))
+   - Added Calendar component import from ui/calendar
+   - Added date-fns format function for date display
+   - Two calendar popovers: "From" and "To" date pickers
+   - Shows formatted date when selected (e.g., "January 1, 2025")
+   - Calendar icon on buttons for visual clarity
+
+3. **Added date range filter logic** ([Weapons.jsx](src/pages/Weapons.jsx) lines 632-658)
+   - Filters weapons based on `last_checked_date` field
+   - **Both dates**: Shows weapons checked between from and to dates (inclusive)
+   - **From date only**: Shows weapons checked on or after from date
+   - **To date only**: Shows weapons checked on or before to date
+   - **No date filters**: Shows all weapons (default behavior)
+   - Excludes weapons without `last_checked_date` when date filters are active
+
+**Result:**
+- Full date range filtering functionality implemented
+- Scrollable filter dialog prevents overflow on small screens
+- Fixed header keeps "Clear all" button always visible
+- Flexible date filtering supports both single and range date selections
+
+---
+
+# Previous: Update Maintenance Status Options by Equipment Type
 
 ## Date: 2 November 2025
 

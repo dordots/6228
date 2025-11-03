@@ -446,8 +446,8 @@ export default function Layout({ children, currentPageName }) {
           <Sidebar className="border-r border-slate-200 bg-white">
             <SidebarHeader className="border-b border-slate-200 p-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-800 to-green-900 rounded-lg flex items-center justify-center">
-                  <Shield className="w-6 h-6 text-white" />
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+                  <img src="/logo.png" alt="Armory Logo" className="w-10 h-10 object-contain" />
                 </div>
                 <div>
                   <h2 className="font-bold text-slate-900 text-lg">ARMORY</h2>

@@ -95,10 +95,20 @@ export const User = {
         return { user: userCredential.user, requiresVerification: false };
       }
     } catch (error) {
+      // Handle Firebase rate limiting with better error messages
+      if (error.code === 'auth/too-many-requests') {
+        // Firebase doesn't provide exact retry time, so we estimate based on common patterns
+        // Typically 15-60 minutes for SMS rate limits
+        const estimatedWaitMinutes = 15;
+        const enhancedError = new Error(`Too many SMS requests. Please wait approximately ${estimatedWaitMinutes} minutes and try again.`);
+        enhancedError.code = error.code;
+        enhancedError.retryAfterMinutes = estimatedWaitMinutes;
+        throw enhancedError;
+      }
       throw error;
     }
   },
-  
+
   // Register with email/password or phone
   register: async ({ emailOrPhone, password, displayName, verificationCode }) => {
     try {

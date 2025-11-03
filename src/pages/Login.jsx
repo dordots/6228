@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Shield, Phone, Mail, ArrowLeft } from 'lucide-react';
+import { Loader2, Phone, ArrowLeft } from 'lucide-react';
 import { parsePhoneNumber, isValidPhoneNumber, AsYouType } from 'libphonenumber-js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -34,13 +34,10 @@ const getRedirectUrl = async () => {
 };
 
 export default function Login() {
-  const [loginMethod, setLoginMethod] = useState('phone'); // 'phone' or 'email'
   const [phoneNumber, setPhoneNumber] = useState('');
   const [countryCode, setCountryCode] = useState('IL');
   const [formattedPhone, setFormattedPhone] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [verificationStep, setVerificationStep] = useState(false);
@@ -123,7 +120,17 @@ export default function Login() {
           window.location.href = await getRedirectUrl();
         }
       } catch (err) {
-        setError(err.message || 'Failed to send verification code');
+        // Handle Firebase rate limiting errors
+        if (err.code === 'auth/too-many-requests') {
+          // Set rate limit timer if available
+          const waitMinutes = err.retryAfterMinutes || 15;
+          setRateLimitTimer(waitMinutes * 60); // Convert to seconds
+          setError(err.message || `Too many SMS requests. Please wait ${waitMinutes} minutes and try again.`);
+        } else if (err.message?.includes('too-many-requests') || err.message?.includes('Too many attempts')) {
+          setError(err.message);
+        } else {
+          setError(err.message || 'Failed to send verification code');
+        }
       }
     } else {
       // Step 2: Verify code
@@ -159,36 +166,6 @@ export default function Login() {
     setLoading(false);
   };
 
-  const handleEmailLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const result = await User.login({ emailOrPhone: email, password });
-      
-      if (result.requiresVerification) {
-        setError('Phone verification not implemented for email login');
-        setLoading(false);
-        return;
-      }
-
-      // Successful login
-      window.location.href = await getRedirectUrl();
-    } catch (err) {
-      // Check for rate limiting error
-      if (err.code === 'functions/resource-exhausted') {
-        const retrySeconds = parseRateLimitError(err.message);
-        setRateLimitTimer(retrySeconds);
-        setError(err.message);
-      } else {
-        setError(err.message || 'Invalid email or password');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const resendSMS = async () => {
     if (cooldownTimer > 0) return;
     
@@ -201,17 +178,19 @@ export default function Login() {
       setCooldownTimer(60);
       setError(''); // Clear any previous errors
     } catch (err) {
-      setError('Failed to resend code');
+      // Handle Firebase rate limiting errors
+      if (err.code === 'auth/too-many-requests') {
+        const waitMinutes = err.retryAfterMinutes || 15;
+        setRateLimitTimer(waitMinutes * 60); // Convert to seconds
+        setError(err.message || `Too many SMS requests. Please wait ${waitMinutes} minutes before trying again.`);
+      } else if (err.message?.includes('too-many-requests') || err.message?.includes('Too many attempts')) {
+        setError(err.message);
+      } else {
+        setError('Failed to resend code');
+      }
     } finally {
       setLoading(false);
     }
-  };
-
-  const switchLoginMethod = () => {
-    setLoginMethod(loginMethod === 'phone' ? 'email' : 'phone');
-    setError('');
-    setVerificationStep(false);
-    setVerificationCode('');
   };
 
   return (
@@ -219,24 +198,21 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-4">
-            <Shield className="h-12 w-12 text-blue-600" />
+            <img src="/logo.png" alt="Armory Logo" className="h-12 w-12 object-contain" />
           </div>
           <CardTitle className="text-2xl text-center">Armory System</CardTitle>
           <CardDescription className="text-center">
-            {loginMethod === 'phone' 
-              ? verificationStep 
-                ? 'Enter the code sent to your phone'
-                : 'Sign in with your phone number'
-              : 'Sign in with email and password'
+            {verificationStep
+              ? 'Enter the code sent to your phone'
+              : 'Sign in with your phone number'
             }
           </CardDescription>
         </CardHeader>
         <CardContent>
           {/* Add reCAPTCHA container for phone auth */}
           <div id="recaptcha-container"></div>
-          
-          {loginMethod === 'phone' ? (
-            <form onSubmit={handlePhoneLogin} className="space-y-4">
+
+          <form onSubmit={handlePhoneLogin} className="space-y-4">
               {!verificationStep ? (
                 <>
                   <div className="space-y-2">
@@ -325,7 +301,16 @@ export default function Login() {
 
               {error && (
                 <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>
+                    {error}
+                    {rateLimitTimer > 0 && (
+                      <div className="mt-2 font-semibold">
+                        Time remaining: {rateLimitTimer > 60
+                          ? `${Math.floor(rateLimitTimer / 60)}m ${rateLimitTimer % 60}s`
+                          : `${rateLimitTimer}s`}
+                      </div>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -350,90 +335,6 @@ export default function Login() {
                 )}
               </Button>
             </form>
-          ) : (
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@armory.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={loading}
-                  autoFocus
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={loading || rateLimitTimer > 0}
-              >
-                {rateLimitTimer > 0 ? (
-                  <>
-                    Blocked - Try again in {rateLimitTimer > 60 ? `${Math.ceil(rateLimitTimer / 60)}m` : `${rateLimitTimer}s`}
-                  </>
-                ) : loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </Button>
-            </form>
-          )}
-          
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or</span>
-              </div>
-            </div>
-            
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full mt-4"
-              onClick={switchLoginMethod}
-            >
-              {loginMethod === 'phone' ? (
-                <>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Sign in with Email
-                </>
-              ) : (
-                <>
-                  <Phone className="mr-2 h-4 w-4" />
-                  Sign in with Phone
-                </>
-              )}
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>

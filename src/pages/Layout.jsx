@@ -235,25 +235,13 @@ export default function Layout({ children, currentPageName }) {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        console.log('[Layout] STEP 1: Getting current user...');
         // Get user (no forced refresh on initial load - rely on cached token)
         const user = await UserEntity.me();
         setCurrentUser(user);
 
-        console.log('[Layout] STEP 2: Current user loaded:', {
-          uid: user?.uid,
-          role: user?.custom_role,
-          linked_soldier_id: user?.linked_soldier_id,
-          division: user?.division,
-          team: user?.team
-        });
-
         // Check if user has linked soldier by using linked_soldier_id
         if (user && user.linked_soldier_id) {
           try {
-            console.log('[Layout] STEP 3: Searching for soldier...');
-            console.log(`  Query: soldiers WHERE soldier_id == "${user.linked_soldier_id}" AND division_name == "${user.division}"`);
-
             const soldiers = await Soldier.filter({
               soldier_id: user.linked_soldier_id,
               division_name: user.division
@@ -261,24 +249,14 @@ export default function Layout({ children, currentPageName }) {
             const soldier = soldiers[0];
 
             if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
-              console.log('[Layout] STEP 4: Found soldier:', {
-                soldier_id: soldier.soldier_id,
-                name: `${soldier.first_name} ${soldier.last_name}`,
-                division: soldier.division_name,
-                team: soldier.team_name
-              });
-              console.log('[Layout] STEP 5: Setting soldier for display in bottom left');
               setLinkedSoldier(soldier);
             } else {
-              console.warn('[Layout] Soldier not found or invalid:', soldier);
               setLinkedSoldier(null);
             }
           } catch (error) {
-            console.error("[Layout] Error loading linked soldier:", error);
             setLinkedSoldier(null);
           }
         } else {
-          console.log('[Layout] No linked_soldier_id found for user');
           setLinkedSoldier(null);
         }
 
@@ -287,11 +265,9 @@ export default function Layout({ children, currentPageName }) {
           // This prevents client-side manipulation (localStorage bypass vulnerability)
           if (user.totp_verified_until && Date.now() < user.totp_verified_until) {
             // Device is verified and within 24-hour window
-            console.log('[Layout] Device verified until:', new Date(user.totp_verified_until).toISOString());
             setIsTotpVerified(true);
           } else {
             // Needs TOTP verification
-            console.log('[Layout] TOTP verification required');
             setIsTotpVerified(false);
           }
         } else {
@@ -323,7 +299,6 @@ export default function Layout({ children, currentPageName }) {
             setIsTotpVerified(false); // Expire the verification
           }
         } catch (error) {
-          console.error('[Layout] Error checking TOTP expiry:', error);
         }
       }
     }, checkInterval);
@@ -358,11 +333,9 @@ export default function Layout({ children, currentPageName }) {
             if (soldier && typeof soldier === 'object' && soldier.soldier_id) {
               setLinkedSoldier(soldier);
             } else {
-              console.warn("Invalid soldier object received after TOTP setup:", soldier);
               setLinkedSoldier(null);
             }
           } catch (error) {
-            console.error("Error loading linked soldier after TOTP setup:", error);
             setLinkedSoldier(null);
           }
       } else {
@@ -375,7 +348,6 @@ export default function Layout({ children, currentPageName }) {
 
       // No need to reload - the state update will trigger re-render
     } catch (error) {
-      console.error("Error refreshing user after TOTP setup:", error);
     }
   };
 
@@ -390,7 +362,6 @@ export default function Layout({ children, currentPageName }) {
 
       // No need for full page reload - state update handles re-render
     } catch (error) {
-      console.error("Error after soldier linking:", error);
     }
   };
   
@@ -400,7 +371,6 @@ export default function Layout({ children, currentPageName }) {
       // Server-side verification will be cleared on logout automatically
       window.location.href = '/login';
     } catch (error) {
-      console.error('Error logging out:', error);
       // Force redirect even if logout fails
       window.location.href = '/login';
     }

@@ -108,14 +108,7 @@ export default function SoldierManagement() {
       setAllDrones(Array.isArray(allDS) ? allDS : []);
       setAllEquipment(Array.isArray(allE) ? allE : []);
 
-      // Debug logging - you can remove this after fixing the issue
-      console.log("Debug - Total Equipment:", allE?.length || 0);
-      console.log("Debug - Unassigned Equipment:", availableE?.length || 0);
-      console.log("Debug - Equipment sample:", allE?.slice(0, 3));
-      console.log("Debug - Available Equipment sample:", availableE?.slice(0, 3));
-
     } catch (error) {
-      console.error("Error loading data:", error);
       setSoldiers([]);
       setUnassignedWeapons([]);
       setUnassignedGear([]);
@@ -134,11 +127,6 @@ export default function SoldierManagement() {
   }, [loadData]);
 
   const handleOpenAssignDialog = useCallback((soldier) => {
-    console.log("Debug - Opening assignment for soldier:", soldier?.division_name);
-    console.log("Debug - Available equipment for assignment:", availableEquipment?.length || 0);
-    console.log("Debug - Equipment in soldier's division:", 
-      allEquipment?.filter(e => e.division_name === soldier?.division_name && !e.assigned_to)?.length || 0
-    );
     setAssigningSoldier(soldier);
     setIsAssigning(true);
   }, [availableEquipment, allEquipment]);
@@ -175,7 +163,6 @@ export default function SoldierManagement() {
       window.open(url, '_blank');
       setTimeout(() => window.URL.revokeObjectURL(url), 100);
     } catch (error) {
-      console.error("Error generating form:", error);
       alert("Failed to generate form. " + (error.message || ""));
     } finally {
       setIsGeneratingForm(false);

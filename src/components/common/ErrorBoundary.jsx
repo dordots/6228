@@ -12,8 +12,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // Diagnostic log
-    console.error('ARMORY APP CODE: Application Error Boundary Caught an error. This means the app loaded but then crashed.', error, errorInfo);
+    // Error caught by boundary
   }
 
   render() {

@@ -27,8 +27,6 @@ exports.exportAllData = functions
     }
 
     try {
-      console.log("Starting data export...");
-      
       // Create a buffer to store the zip
       const chunks = [];
       const archive = archiver("zip", { zlib: { level: 9 } });
@@ -175,7 +173,6 @@ exports.exportAllData = functions
         size: buffer.length,
       };
     } catch (error) {
-      console.error("Error exporting data:", error);
       throw new functions.https.HttpsError(
         "internal",
         `Failed to export data: ${error.message}`
@@ -229,7 +226,6 @@ exports.deleteAllEquipment = functions
 
       return { success: true, deleted };
     } catch (error) {
-      console.error("Error deleting equipment:", error);
       throw new functions.https.HttpsError(
         "internal",
         `Failed to delete equipment: ${error.message}`
@@ -280,7 +276,6 @@ exports.deleteAllSoldiers = functions
 
       return { success: true, deleted };
     } catch (error) {
-      console.error("Error deleting soldiers:", error);
       throw new functions.https.HttpsError(
         "internal",
         `Failed to delete soldiers: ${error.message}`
@@ -331,7 +326,6 @@ exports.deleteAllWeapons = functions
 
       return { success: true, deleted };
     } catch (error) {
-      console.error("Error deleting weapons:", error);
       throw new functions.https.HttpsError(
         "internal",
         `Failed to delete weapons: ${error.message}`
@@ -382,7 +376,6 @@ exports.deleteAllSerializedGear = functions
 
       return { success: true, deleted };
     } catch (error) {
-      console.error("Error deleting serialized gear:", error);
       throw new functions.https.HttpsError(
         "internal",
         `Failed to delete serialized gear: ${error.message}`

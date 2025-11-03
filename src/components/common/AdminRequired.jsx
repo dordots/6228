@@ -13,7 +13,6 @@ export default function AdminRequired({ children, fallback = null, permission = 
         const user = await User.me();
         setCurrentUser(user);
       } catch (error) {
-        console.error("Error loading current user:", error);
         setCurrentUser(null);
       }
       setIsLoading(false);

@@ -75,11 +75,8 @@ export default function ImportPage() {
       // Auto-detect file type from filename
       const detectedType = detectFileType(file.name);
       if (detectedType !== 'unknown' && detectedType !== fileType) {
-        console.log(`File type mismatch: expected ${fileType}, detected ${detectedType}`);
       }
-      
-      console.log('Uploading file:', file.name, 'Type:', fileType);
-      
+
       // Read file content directly for CSV parsing
       const text = await file.text();
       const rawData = parseCSV(text);
@@ -144,7 +141,6 @@ export default function ImportPage() {
         }));
       }
     } catch (err) {
-      console.error('Upload error:', err); // Debug log
       setError(`Error processing ${fileType} file: ${err.message}`);
       if (fileType === 'equipment_assignments') {
         setEquipmentAssignmentStatus(prev => ({ ...prev, status: 'error', count: 0, data: [], processed: 0, errors: 0, processedItems: [] }));
@@ -257,9 +253,8 @@ export default function ImportPage() {
         await user.getIdToken(true); // Force refresh
       }
     } catch (error) {
-      console.error('Token refresh error:', error);
     }
-    
+
     // Calculate total items to process
     const totalItems = Object.values(importStatus).reduce((sum, status) => sum + status.data.length, 0);
     
@@ -293,8 +288,6 @@ export default function ImportPage() {
           try {
             // Validate soldier_id exists
             if (!soldier.soldier_id || String(soldier.soldier_id).trim() === '') {
-              console.error('[Import] ERROR: Soldier missing soldier_id, skipping:', soldier);
-
               results.push({
                 id: 'UNKNOWN',
                 success: false,
@@ -330,19 +323,14 @@ export default function ImportPage() {
 
             // Check if soldier already exists in database
             // Note: Using findById instead of filter because filter returns all soldiers
-            console.log('[Import] Checking if soldier exists:', soldier.soldier_id);
             let existingSoldier = null;
             try {
               existingSoldier = await Soldier.findById(soldier.soldier_id);
-              console.log('[Import] findById result for soldier_id', soldier.soldier_id, ':', existingSoldier);
             } catch (findError) {
               // Soldier doesn't exist - this is expected for new soldiers
-              console.log('[Import] Soldier does not exist (this is good for new imports)');
             }
 
             if (existingSoldier) {
-              console.warn('[Import] Soldier already exists, skipping:', soldier.soldier_id, soldier.first_name, soldier.last_name);
-              console.warn('[Import] Existing soldier data:', existingSoldier);
 
               results.push({
                 id: soldier.soldier_id,
@@ -378,8 +366,6 @@ export default function ImportPage() {
             }
 
             // Soldier doesn't exist - create it
-            console.log('[Import] Creating new soldier:', soldier.soldier_id, soldier.first_name, soldier.last_name);
-
             // Ensure soldier_id is trimmed before creating
             const soldierToCreate = {
               ...soldier,
@@ -405,7 +391,6 @@ export default function ImportPage() {
                 
                 await User.create(userData);
               } catch (userError) {
-                console.log('User account already exists or creation failed:', userError);
                 // Don't fail the soldier import if user creation fails
               }
             }
@@ -494,8 +479,6 @@ export default function ImportPage() {
           try {
             // Validate weapon_id exists
             if (!weapon.weapon_id || String(weapon.weapon_id).trim() === '') {
-              console.error('[Import] ERROR: Weapon missing weapon_id, skipping:', weapon);
-
               results.push({
                 id: 'UNKNOWN',
                 success: false,
@@ -530,19 +513,14 @@ export default function ImportPage() {
             }
 
             // Check if weapon already exists in database
-            console.log('[Import] Checking if weapon exists:', weapon.weapon_id);
             let existingWeapon = null;
             try {
               existingWeapon = await Weapon.findById(weapon.weapon_id);
-              console.log('[Import] findById result for weapon_id', weapon.weapon_id, ':', existingWeapon);
             } catch (findError) {
               // Weapon doesn't exist - this is expected for new weapons
-              console.log('[Import] Weapon does not exist (this is good for new imports)');
             }
 
             if (existingWeapon) {
-              console.warn('[Import] Weapon already exists, skipping:', weapon.weapon_id, weapon.weapon_type);
-              console.warn('[Import] Existing weapon data:', existingWeapon);
 
               results.push({
                 id: weapon.weapon_id,
@@ -578,7 +556,6 @@ export default function ImportPage() {
             }
 
             // Weapon doesn't exist - create it
-            console.log('[Import] Creating new weapon:', weapon.weapon_id, weapon.weapon_type);
             await Weapon.create(weapon);
 
             results.push({ id: weapon.weapon_id, success: true });
@@ -665,8 +642,6 @@ export default function ImportPage() {
           try {
             // Validate gear_id exists
             if (!gear.gear_id || String(gear.gear_id).trim() === '') {
-              console.error('[Import] ERROR: Gear missing gear_id, skipping:', gear);
-
               results.push({
                 id: 'UNKNOWN',
                 success: false,
@@ -701,19 +676,14 @@ export default function ImportPage() {
             }
 
             // Check if gear already exists in database
-            console.log('[Import] Checking if gear exists:', gear.gear_id);
             let existingGear = null;
             try {
               existingGear = await SerializedGear.findById(gear.gear_id);
-              console.log('[Import] findById result for gear_id', gear.gear_id, ':', existingGear);
             } catch (findError) {
               // Gear doesn't exist - this is expected for new gear
-              console.log('[Import] Gear does not exist (this is good for new imports)');
             }
 
             if (existingGear) {
-              console.warn('[Import] Gear already exists, skipping:', gear.gear_id, gear.gear_type);
-              console.warn('[Import] Existing gear data:', existingGear);
 
               results.push({
                 id: gear.gear_id,
@@ -749,7 +719,6 @@ export default function ImportPage() {
             }
 
             // Gear doesn't exist - create it
-            console.log('[Import] Creating new gear:', gear.gear_id, gear.gear_type);
             await SerializedGear.create(gear);
 
             results.push({ id: gear.gear_id, success: true });
@@ -968,8 +937,6 @@ export default function ImportPage() {
           try {
             // Validate component_id exists
             if (!component.component_id || String(component.component_id).trim() === '') {
-              console.error('[Import] ERROR: Component missing component_id, skipping:', component);
-
               results.push({
                 id: 'UNKNOWN',
                 success: false,
@@ -1005,22 +972,17 @@ export default function ImportPage() {
 
             // Check if component already exists in database
             // Duplicate = same component_type AND same component_id (serial number)
-            console.log('[Import] Checking if component exists:', component.component_id, component.component_type);
             let existingComponents = [];
             try {
               existingComponents = await DroneComponent.filter({
                 component_id: component.component_id,
                 component_type: component.component_type
               });
-              console.log('[Import] Filter result for component_id', component.component_id, 'and type', component.component_type, ':', existingComponents);
             } catch (findError) {
               // Component doesn't exist - this is expected for new components
-              console.log('[Import] Component does not exist (this is good for new imports)');
             }
 
             if (existingComponents && existingComponents.length > 0) {
-              console.warn('[Import] Component already exists, skipping:', component.component_id, component.component_type);
-              console.warn('[Import] Existing component data:', existingComponents[0]);
 
               results.push({
                 id: component.component_id,
@@ -1056,7 +1018,6 @@ export default function ImportPage() {
             }
 
             // Component doesn't exist - create it
-            console.log('[Import] Creating new component:', component.component_id, component.component_type);
             await DroneComponent.create(component);
 
             results.push({ id: component.component_id, success: true });
@@ -1108,11 +1069,6 @@ export default function ImportPage() {
             }));
           }
         }
-
-        // Debug: Log results array to see what's in it
-        console.log('[Import] Drone components results array:', results);
-        console.log('[Import] Success count:', results.filter(r => r.success).length);
-        console.log('[Import] Failed count:', results.filter(r => !r.success).length);
 
         importResults.push({ entity: 'drone_components', results });
         setImportStatus(prev => ({
@@ -1185,10 +1141,7 @@ export default function ImportPage() {
 
       // Calculate import summary
       const allResults = importResults.reduce((acc, item) => acc.concat(item.results), []);
-      console.log('[Import] importResults:', importResults);
-      console.log('[Import] allResults:', allResults);
       const summary = generateImportSummary(allResults);
-      console.log('[Import] Generated summary:', summary);
 
       // Calculate summary by entity
       const summaryByEntity = {};
@@ -1197,7 +1150,6 @@ export default function ImportPage() {
         const failed = results.filter(r => !r.success).length;
         summaryByEntity[entity] = { success, failed, total: results.length };
       });
-      console.log('[Import] Summary by entity:', summaryByEntity);
 
       // Log import activity (optional - don't fail import if logging fails)
       try {
@@ -1207,7 +1159,6 @@ export default function ImportPage() {
           context: summary
         });
       } catch (logError) {
-        console.warn('[Import] Failed to log activity, but import completed successfully:', logError);
       }
 
       // Update progress with final summary
@@ -1224,7 +1175,6 @@ export default function ImportPage() {
 
       setCurrentStep(3);
     } catch (err) {
-      console.error('Import error:', err);
       setError(`Import failed: ${err.message}`);
       
       // Show error in progress modal
@@ -1253,8 +1203,7 @@ export default function ImportPage() {
 
     try {
       const data = equipmentAssignmentStatus.data;
-      console.log('Processing equipment assignments:', data);
-      
+
       // Fetch all equipment and soldiers once to optimize lookups
       const allEquipment = await Equipment.list();
       const allSoldiers = await Soldier.list();
@@ -1344,7 +1293,6 @@ export default function ImportPage() {
               }
             }
           } catch (itemError) {
-            console.error(`Error processing ${equipment_type}:`, itemError);
             processedItems.push(`❌ Error processing ${equipment_type}: ${itemError.message}`);
             errorCount++;
           }
@@ -1360,14 +1308,7 @@ export default function ImportPage() {
         processedItems: processedItems
       }));
 
-      console.log('Equipment assignment import completed:', {
-        processed: processedCount,
-        errors: errorCount,
-        items: processedItems
-      });
-
     } catch (err) {
-      console.error("Equipment assignment import error:", err);
       setError(`Equipment assignment import failed: ${err.message}`);
       setEquipmentAssignmentStatus(prev => ({ 
         ...prev, 
@@ -1386,10 +1327,8 @@ export default function ImportPage() {
     setError('');
     
     try {
-      console.log('Starting file upload...', file.name);
       const { file_url } = await UploadFile({ file });
-      console.log('File uploaded to:', file_url);
-      
+
       // Simplified schema - just extract everything as strings
       const schema = {
         type: "array",
@@ -1411,18 +1350,14 @@ export default function ImportPage() {
         }
       };
 
-      console.log('Extracting data with schema:', schema);
       const result = await ExtractDataFromUploadedFile({
         file_url,
         json_schema: schema
       });
 
-      console.log('Extraction result:', result);
-
       if (result.status === 'success' && result.output) {
         const data = Array.isArray(result.output) ? result.output : [];
-        console.log('Parsed data:', data);
-        
+
         setUpdateStatus(prev => ({
           ...prev,
           soldiers: {
@@ -1437,7 +1372,6 @@ export default function ImportPage() {
         throw new Error(`Failed to extract data: ${result.details || 'Unknown error'}`);
       }
     } catch (err) {
-      console.error('Upload error:', err);
       setError(`Error processing update file: ${err.message}`);
       setUpdateStatus(prev => ({
         ...prev,
@@ -1467,63 +1401,46 @@ export default function ImportPage() {
     });
     
     try {
-      console.log('Starting update process...');
       const updateData = updateStatus.soldiers.data;
-      console.log('Update data to process:', updateData);
-      
+
       let updatedCount = 0;
       let notFoundCount = 0;
       let processedIndex = 0;
       
       for (const soldierUpdate of updateData) {
-        console.log(`Processing soldier:`, soldierUpdate);
-        
         if (!soldierUpdate.soldier_id) {
-          console.log('No soldier_id found, skipping...');
           notFoundCount++;
           continue;
         }
-        
+
         // Find existing soldier
-        console.log('Looking for soldier with ID:', soldierUpdate.soldier_id);
         const existingSoldiers = await Soldier.filter({ soldier_id: soldierUpdate.soldier_id });
-        console.log('Found existing soldiers:', existingSoldiers);
-        
+
         if (existingSoldiers.length > 0) {
           const existingSoldier = existingSoldiers[0];
-          console.log('Found existing soldier:', existingSoldier);
-          
+
           // Prepare update data
           const updateFields = {};
-          
+
           // Check each field and add to update if it has a value
           const fieldsToUpdate = ['first_name', 'last_name', 'email', 'street_address', 'city', 'phone_number', 'division_name', 'team_name', 'profession'];
-          
+
           fieldsToUpdate.forEach(field => {
             // Keep String() and trim() for robustness as per original code's intent
             if (soldierUpdate[field] && String(soldierUpdate[field]).trim() !== '') {
               updateFields[field] = String(soldierUpdate[field]).trim();
             }
           });
-          
-          console.log('Update fields:', updateFields);
-          
+
           if (Object.keys(updateFields).length > 0) {
             updateFields.enlistment_status = 'completed'; // Set status to completed on update
-            console.log('Updating soldier with ID:', existingSoldier.id);
             await Soldier.update(existingSoldier.id, updateFields);
             updatedCount++;
-            console.log('Successfully updated soldier');
-          } else {
-            console.log('No fields to update for this soldier.');
           }
         } else {
-          console.log('Soldier not found with provided soldier_id.');
           notFoundCount++;
         }
       }
-      
-      console.log('Update completed. Updated:', updatedCount, 'Not found:', notFoundCount);
       
       setUpdateStatus(prev => ({
         ...prev,
@@ -1534,9 +1451,8 @@ export default function ImportPage() {
           notFound: notFoundCount
         }
       }));
-      
+
     } catch (err) {
-      console.error('Update error:', err);
       setError(`Update failed: ${err.message}`);
       setUpdateStatus(prev => ({
         ...prev,
@@ -1582,9 +1498,8 @@ export default function ImportPage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url); // Clean up the object URL
-      
+
     } catch (error) {
-      console.error('Error generating template:', error);
       setError('Failed to generate template. Please try again.');
     } finally {
       setIsGeneratingTemplate(false);

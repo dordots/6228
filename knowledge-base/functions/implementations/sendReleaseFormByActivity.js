@@ -59,9 +59,6 @@ Deno.serve(async (req) => {
     // UNIFIED SENDING LOGIC: Always use direct SendGrid fetch for the soldier's email if it exists.
     if (soldier.email) {
       try {
-        console.log(
-          `[sendReleaseForm] Attempting to send email to soldier ${soldier.email} via SendGrid.`
-        );
         const sendGridApiKey = Deno.env.get("SENDGRID_API_KEY");
         const sendGridFromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
 
@@ -99,14 +96,7 @@ Deno.serve(async (req) => {
           method: "SendGrid (Direct)",
           error: null,
         };
-        console.log(
-          "[sendReleaseForm] SendGrid email to soldier sent successfully."
-        );
       } catch (error) {
-        console.error(
-          "[sendReleaseForm] Direct SendGrid email to soldier failed:",
-          error
-        );
         soldierEmailResult = {
           sent: false,
           method: "SendGrid (Direct)",
@@ -114,7 +104,6 @@ Deno.serve(async (req) => {
         };
       }
     } else {
-      console.log("[sendReleaseForm] No email address provided for soldier.");
       soldierEmailResult = {
         sent: false,
         method: null,
@@ -123,9 +112,6 @@ Deno.serve(async (req) => {
     }
 
     // Always send a copy to the user who performed the action
-    console.log(
-      `[sendReleaseForm] Sending copy of form to performing user: ${user.email}`
-    );
     await base44.integrations.Core.SendEmail({
       to: user.email,
       subject: `עותק: טופס שחרור ציוד עבור ${soldier.first_name} ${soldier.last_name}`,
@@ -158,7 +144,6 @@ Deno.serve(async (req) => {
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("[sendReleaseForm] Top-level error:", error);
     return new Response(
       JSON.stringify({ error: error.message, stack: error.stack }),
       { status: 500, headers: { "Content-Type": "application/json" } }

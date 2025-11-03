@@ -63,18 +63,10 @@ const adminPermissions = {
 
 async function setAdminPermissions(uid) {
   try {
-    console.log(`\nSetting admin permissions for user: ${uid}\n`);
-
     // Get user from Firebase Auth
     const user = await auth.getUser(uid);
-    console.log(`✓ Found user in Firebase Auth:`);
-    console.log(`  - UID: ${user.uid}`);
-    console.log(`  - Email: ${user.email || 'N/A'}`);
-    console.log(`  - Phone: ${user.phoneNumber || 'N/A'}`);
-    console.log(`  - Display Name: ${user.displayName || 'N/A'}`);
 
     // Set custom claims (for Firestore security rules)
-    console.log(`\n📝 Setting custom claims in Firebase Authentication...`);
     await auth.setCustomUserClaims(uid, {
       role: 'admin',
       custom_role: 'admin',
@@ -85,10 +77,8 @@ async function setAdminPermissions(uid) {
       linked_soldier_id: null,
       totp_enabled: true
     });
-    console.log(`✓ Custom claims set successfully`);
 
     // Create/update Firestore document (for app UI)
-    console.log(`\n📝 Creating/updating document in Firestore users collection...`);
     await db.collection('users').doc(uid).set({
       role: 'admin',
       custom_role: 'admin',
@@ -103,38 +93,9 @@ async function setAdminPermissions(uid) {
       displayName: user.displayName || 'Admin User',
       updated_at: FieldValue.serverTimestamp()
     }, { merge: true });
-    console.log(`✓ Firestore document created/updated successfully`);
-
-    // Verify the changes
-    console.log(`\n🔍 Verifying changes...`);
-    const updatedUser = await auth.getUser(uid);
-    const firestoreDoc = await db.collection('users').doc(uid).get();
-
-    console.log(`\n✅ Setup complete!`);
-    console.log(`\nCustom Claims (for security rules):`);
-    console.log(`  - role: ${updatedUser.customClaims?.role}`);
-    console.log(`  - custom_role: ${updatedUser.customClaims?.custom_role}`);
-    console.log(`  - scope: ${updatedUser.customClaims?.scope}`);
-    console.log(`  - Has permissions: ${!!updatedUser.customClaims?.permissions}`);
-
-    console.log(`\nFirestore Document (for app UI):`);
-    console.log(`  - Exists: ${firestoreDoc.exists}`);
-    if (firestoreDoc.exists) {
-      const data = firestoreDoc.data();
-      console.log(`  - role: ${data.role}`);
-      console.log(`  - custom_role: ${data.custom_role}`);
-      console.log(`  - Has permissions: ${!!data.permissions}`);
-    }
-
-    console.log(`\n📋 Next steps:`);
-    console.log(`  1. User needs to log out and log back in to refresh their token`);
-    console.log(`  2. After login, they should have full admin access`);
-    console.log(`  3. Check that they can see all navigation items`);
-    console.log(`  4. Verify they can access all Firestore collections\n`);
 
     process.exit(0);
   } catch (error) {
-    console.error(`\n❌ Error setting admin permissions:`, error.message);
     process.exit(1);
   }
 }
@@ -144,7 +105,6 @@ async function findUserByEmail(email) {
     const user = await auth.getUserByEmail(email);
     return user.uid;
   } catch (error) {
-    console.error(`❌ User not found with email: ${email}`);
     process.exit(1);
   }
 }
@@ -154,7 +114,6 @@ async function findUserByPhone(phone) {
     const user = await auth.getUserByPhoneNumber(phone);
     return user.uid;
   } catch (error) {
-    console.error(`❌ User not found with phone: ${phone}`);
     process.exit(1);
   }
 }
@@ -163,15 +122,6 @@ async function findUserByPhone(phone) {
 const args = process.argv.slice(2);
 
 if (args.length === 0) {
-  console.error(`❌ Please provide user identifier`);
-  console.log(`\nUsage:`);
-  console.log(`  node set-admin-permissions.mjs <user-uid>`);
-  console.log(`  node set-admin-permissions.mjs --email <email>`);
-  console.log(`  node set-admin-permissions.mjs --phone <phone>`);
-  console.log(`\nExamples:`);
-  console.log(`  node set-admin-permissions.mjs abc123xyz`);
-  console.log(`  node set-admin-permissions.mjs --email admin@example.com`);
-  console.log(`  node set-admin-permissions.mjs --phone +972501234567\n`);
   process.exit(1);
 }
 
@@ -179,13 +129,11 @@ let uid;
 
 if (args[0] === '--email') {
   if (!args[1]) {
-    console.error(`❌ Please provide email address`);
     process.exit(1);
   }
   uid = await findUserByEmail(args[1]);
 } else if (args[0] === '--phone') {
   if (!args[1]) {
-    console.error(`❌ Please provide phone number`);
     process.exit(1);
   }
   uid = await findUserByPhone(args[1]);

@@ -41,7 +41,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       const user = await User.me();
       setCurrentUser(user);
     } catch (error) {
-      console.error("Error loading current user:", error);
     }
   };
 
@@ -58,8 +57,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
       // Team leaders need special two-step filtering
       if (isTeamLeader && userDivision && userTeam) {
-        console.log('Team leader: Using two-step filtering approach for armory deposit');
-
         // Step 1: Get team soldiers
         const teamSoldiers = await Soldier.filter({
           division_name: userDivision,
@@ -67,7 +64,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         });
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
-        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
 
         // Step 2: Get all division items, then filter client-side
         const divisionFilter = { division_name: userDivision };
@@ -103,8 +99,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         const weaponsData = allWeapons.filter(w => w.assigned_to && soldierIdSet.has(w.assigned_to));
         const gearData = allGear.filter(g => g.assigned_to && soldierIdSet.has(g.assigned_to));
         const droneSetsData = allDrones.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
-
-        console.log(`Team leader: After filtering, ${weaponsData.length} weapons, ${gearData.length} gear, ${droneSetsData.length} drones assigned to team`);
 
         setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
         setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
@@ -175,7 +169,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         });
       }
     } catch (error) {
-      console.error("Error loading data:", error);
       setSoldiers([]);
       setWeapons([]);
       setGear([]);
@@ -274,7 +267,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       }
 
     } catch (error) {
-      console.error("Error processing deposit/release:", error);
     } finally {
       // Always close dialog and refresh, even if there was an error
       setShowDepositDialog(false);
@@ -335,7 +327,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           });
       }
     } catch (error) {
-        console.error("Error depositing unassigned items:", error);
     } finally {
       await loadData();
     }
@@ -391,7 +382,6 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           });
       }
     } catch (error) {
-        console.error("Error releasing unassigned items:", error);
     } finally {
       await loadData();
     }

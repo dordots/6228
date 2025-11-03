@@ -82,13 +82,6 @@ export default function UnifiedAssignmentDialog({
     setLocalUnassignedGear(unassignedGear || []);
     setLocalUnassignedDroneSets(unassignedDroneSets || []);
 
-    // Debug logging to see what we're getting
-    console.log("=== DEBUG: Items received ===");
-    console.log("Unassigned Weapons:", unassignedWeapons?.length || 0);
-    console.log("Unassigned Gear:", unassignedGear?.length || 0);
-    console.log("Unassigned Drone Sets:", unassignedDroneSets?.length || 0);
-    console.log("Equipment:", equipment?.length || 0);
-
     // Reset selections when soldier or unassigned lists change
     // This prevents selections from persisting if the dialog context (e.g., soldier) changes.
     setSelectedWeaponIds([]);
@@ -112,18 +105,6 @@ export default function UnifiedAssignmentDialog({
         return [];
     }
 
-    console.log('[DEBUG availableEquipment] Total equipment loaded:', equipment.length);
-
-    // Debug: Check assignment status
-    const assignmentStats = {
-      total: equipment.length,
-      null: equipment.filter(e => e.assigned_to === null).length,
-      empty: equipment.filter(e => e.assigned_to === '').length,
-      undefined: equipment.filter(e => e.assigned_to === undefined).length,
-      assigned: equipment.filter(e => e.assigned_to && e.assigned_to !== '').length
-    };
-    console.log('[DEBUG availableEquipment] Assignment stats:', assignmentStats);
-
     const filtered = equipment.filter(item => {
       // Fixed: Item must be unassigned (null, '', or undefined) and have stock
       // Changed from: if (item.assigned_to || ...)
@@ -136,8 +117,6 @@ export default function UnifiedAssignmentDialog({
       // Item is available if it has no division OR its division matches the soldier's
       return !item.division_name || item.division_name === soldier.division_name;
     });
-
-    console.log('[DEBUG availableEquipment] Available (unassigned) count:', filtered.length);
 
     return filtered;
   }, [equipment, soldier]);
@@ -373,7 +352,7 @@ export default function UnifiedAssignmentDialog({
                 const soldiers = await Soldier.filter({ soldier_id: currentUser.linked_soldier_id });
                 performingSoldier = soldiers[0] || null;
             } catch (error) {
-                console.error("Error loading linked soldier:", error);
+                // Error loading linked soldier
             }
         }
 
@@ -437,28 +416,17 @@ export default function UnifiedAssignmentDialog({
         // Use allSettled instead of all to handle cases where items don't exist in Firestore
         const results = await Promise.allSettled(promises);
 
-        // Log any failed updates but don't fail the whole operation
-        const failures = results.filter(r => r.status === 'rejected');
-        if (failures.length > 0) {
-            console.warn(`Some items failed to update (may not exist in Firestore):`, failures.map(f => f.reason?.message));
-        }
-
         // CRITICAL: Update soldier status to "arrived" if currently "expected"
         // Wrap in try-catch so failure here doesn't prevent dialog from closing
         try {
-            console.log(`Checking soldier status: ${soldier.enlistment_status}`);
             if (soldier.enlistment_status === 'expected') {
-                console.log(`Updating soldier ${soldier.soldier_id} from 'expected' to 'arrived'`);
                 await Soldier.update(soldier.soldier_id, {
                     enlistment_status: 'arrived',
                     arrival_date: soldier.arrival_date || new Date().toISOString().split('T')[0]
                 });
-                console.log(`Successfully updated soldier ${soldier.soldier_id} status to 'arrived'`);
-            } else {
-                console.log(`Soldier ${soldier.soldier_id} status is already '${soldier.enlistment_status}', no update needed`);
             }
         } catch (soldierUpdateError) {
-            console.warn("Failed to update soldier status, but assignment was successful:", soldierUpdateError);
+            // Failed to update soldier status, but assignment was successful
         }
 
         // Create activity log - wrap in try-catch
@@ -486,11 +454,11 @@ export default function UnifiedAssignmentDialog({
                         activityId: newActivityLog.id
                     });
                 } catch (emailError) {
-                    console.warn("Failed to send signing email, but assignment was successful:", emailError);
+                    // Failed to send signing email, but assignment was successful
                 }
             }
         } catch (activityLogError) {
-            console.warn("Failed to create activity log, but assignment was successful:", activityLogError);
+            // Failed to create activity log, but assignment was successful
         }
 
         // Always close dialog and refresh after successful assignment
@@ -503,7 +471,6 @@ export default function UnifiedAssignmentDialog({
         }, 1500);
 
     } catch (error) {
-        console.error("Error assigning equipment:", error);
         setIsLoading(false);
         showToast(`An error occurred during assignment: ${error.message}. Please check details and try again.`, "destructive");
     }
@@ -562,7 +529,6 @@ export default function UnifiedAssignmentDialog({
       setInitialWeaponData(null);
       showToast("New weapon created and selected!", "success");
     } catch (error) {
-      console.error('Error creating weapon:', error);
       showToast('Failed to create weapon. Please check if the ID is unique.', "destructive");
     }
   };
@@ -577,7 +543,6 @@ export default function UnifiedAssignmentDialog({
       setInitialGearData(null);
       showToast("New gear created and selected!", "success");
     } catch (error) {
-      console.error('Error creating gear:', error);
       showToast('Failed to create gear. Please check if the ID is unique.', "destructive");
     }
   };
@@ -592,7 +557,6 @@ export default function UnifiedAssignmentDialog({
       setInitialDroneSetData(null);
       showToast("New drone set created and selected!", "success");
     } catch (error) {
-      console.error('Error creating drone set:', error);
       showToast('Failed to create drone set. Please check if the ID is unique.', "destructive");
     }
   };

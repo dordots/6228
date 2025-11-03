@@ -415,8 +415,6 @@ export default function HistoryPage() {
 
                 if (isTeamLeader && userDivision && userTeam) {
                     // Team leaders need special filtering: only show activities related to their team
-                    console.log('Team leader loading history: Fetching team soldiers...', 'Division:', userDivision, 'Team:', userTeam);
-
                     // Step 1: Get team soldiers
                     const teamSoldiers = await Soldier.filter({
                         division_name: userDivision,
@@ -424,16 +422,12 @@ export default function HistoryPage() {
                     });
                     const soldierIds = new Set(teamSoldiers.map(s => s.soldier_id));
 
-                    console.log('Team leader history: Found', soldierIds.size, 'team soldiers');
-
                     // Step 2: Fetch all division activities
                     const divisionActivities = await ActivityLog.filter(
                         { division_name: userDivision },
                         '-created_at',
                         500
                     );
-
-                    console.log('Team leader history: Fetched', divisionActivities.length, 'division activities, filtering...');
 
                     // Step 3: Filter client-side to only team-related activities
                     activityData = divisionActivities.filter(activity => {
@@ -456,8 +450,6 @@ export default function HistoryPage() {
 
                         return false;
                     });
-
-                    console.log('Team leader history: Filtered to', activityData.length, 'team-related activities');
                 } else {
                     // Standard filtering for other roles
                     let filter = {};
@@ -469,8 +461,6 @@ export default function HistoryPage() {
                         filter = { division_name: userDivision }; // Fallback
                     }
 
-                    console.log('History filter applied:', filter, 'User:', currentUser?.full_name, 'Division:', userDivision, 'Role:', currentUser?.custom_role);
-
                     activityData = await ActivityLog.filter(filter, '-created_at', 500);
                 }
 
@@ -480,7 +470,6 @@ export default function HistoryPage() {
                 const userNames = [...new Set(activityData.map(a => a.user_full_name).filter(Boolean))];
                 setUsers(userNames);
             } catch (error) {
-                console.error("Error fetching history:", error);
                 setActivities([]);
                 setUsers([]);
             }

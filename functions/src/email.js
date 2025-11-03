@@ -71,7 +71,6 @@ exports.sendEmailViaSendGrid = functions
 
     return { success: true, message: "Email sent successfully" };
   } catch (error) {
-    console.error("Error sending email:", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to send email: ${error.message}`
@@ -133,7 +132,6 @@ exports.testSendGrid = functions
 
     return { success: true, message: `Test email sent to ${email}` };
   } catch (error) {
-    console.error("SendGrid test error:", error);
     throw new functions.https.HttpsError(
       "internal",
       `SendGrid test failed: ${error.message}`
@@ -268,7 +266,6 @@ exports.sendDailyReport = functions
       }
     };
   } catch (error) {
-    console.error("Error sending daily report:", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to send daily report: ${error.message}`

@@ -43,8 +43,6 @@ export default function EquipmentTransfer() {
             Equipment.list(),
             Soldier.list()
           ]);
-          console.log('Loaded equipment:', allEquipment);
-          console.log('Loaded soldiers for divisions:', allSoldiers);
           setEquipment(Array.isArray(allEquipment) ? allEquipment : []);
           setSoldiers(Array.isArray(allSoldiers) ? allSoldiers : []);
         } else {
@@ -54,7 +52,6 @@ export default function EquipmentTransfer() {
         }
       } catch (e) {
         setError("Failed to load user data.");
-        console.error(e);
       }
       setIsLoading(false);
     };
@@ -75,10 +72,8 @@ export default function EquipmentTransfer() {
   }, [equipment]);
 
   const aggregatedInventory = useMemo(() => {
-    console.log('Processing unassigned equipment:', unassignedEquipment);
     const result = unassignedEquipment.reduce((acc, item) => {
       if (!item.division_name || !item.equipment_type) {
-        console.log('Skipping item missing division or type:', item);
         return acc;
       }
       
@@ -92,13 +87,11 @@ export default function EquipmentTransfer() {
       acc[item.division_name][item.equipment_type].records.push(item);
       return acc;
     }, {});
-    console.log('Aggregated inventory:', result);
     return result;
   }, [unassignedEquipment]);
 
   const availableDivisions = useMemo(() => {
     const divisions = Object.keys(aggregatedInventory).sort();
-    console.log('Available divisions (source):', divisions);
     return divisions;
   }, [aggregatedInventory]);
   
@@ -106,7 +99,6 @@ export default function EquipmentTransfer() {
     const equipmentDivisions = equipment.map(item => item.division_name).filter(Boolean);
     const soldierDivisions = soldiers.map(soldier => soldier.division_name).filter(Boolean);
     const combined = [...new Set([...equipmentDivisions, ...soldierDivisions])].sort();
-    console.log('All possible divisions:', combined);
     return combined;
   }, [equipment, soldiers]);
 
@@ -246,7 +238,6 @@ export default function EquipmentTransfer() {
         });
 
     } catch (e) {
-      console.error("Equipment transfer error:", e);
       // Continue to reset form and reload data even if there's an error
     } finally {
       // Always reset form and reload data

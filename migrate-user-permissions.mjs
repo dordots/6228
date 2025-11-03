@@ -187,13 +187,6 @@ async function migrateUser(userDoc, dryRun = false) {
   const userId = userDoc.id;
   const userData = userDoc.data();
 
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`Processing user: ${userId}`);
-  console.log(`  Display Name: ${userData.displayName || 'N/A'}`);
-  console.log(`  Email: ${userData.email || 'N/A'}`);
-  console.log(`  Phone: ${userData.phoneNumber || 'N/A'}`);
-  console.log(`  Custom Role: ${userData.custom_role || 'N/A'}`);
-  console.log(`  Current Scope: ${userData.scope || 'N/A'}`);
 
   const updates = {};
   let hasChanges = false;
@@ -204,18 +197,12 @@ async function migrateUser(userDoc, dryRun = false) {
   if (!userData.permissions || JSON.stringify(userData.permissions) !== JSON.stringify(roleConfig.permissions)) {
     updates.permissions = roleConfig.permissions;
     hasChanges = true;
-    console.log(`\n  ✏️  Will update permissions for role: ${userData.custom_role || 'default'}`);
-  } else {
-    console.log(`\n  ✓ Permissions already correct`);
   }
 
   // 2. Check and update scope
   if (userData.scope !== roleConfig.scope) {
     updates.scope = roleConfig.scope;
     hasChanges = true;
-    console.log(`  ✏️  Will update scope: ${userData.scope} → ${roleConfig.scope}`);
-  } else {
-    console.log(`  ✓ Scope already correct`);
   }
 
   // 3. Ensure TOTP fields exist
@@ -228,27 +215,16 @@ async function migrateUser(userDoc, dryRun = false) {
     }
   }
 
-  if (missingTotpFields.length > 0) {
-    console.log(`  ✏️  Will add missing TOTP fields: ${missingTotpFields.join(', ')}`);
-  } else {
-    console.log(`  ✓ All TOTP fields exist`);
-  }
 
   // Apply updates
   if (hasChanges) {
-    if (dryRun) {
-      console.log(`\n  🔍 [DRY RUN] Would update with:`, JSON.stringify(updates, null, 2));
-    } else {
+    if (!dryRun) {
       try {
         await userDoc.ref.update(updates);
-        console.log(`\n  ✅ Successfully updated user`);
       } catch (error) {
-        console.error(`\n  ❌ Error updating user:`, error.message);
         return { success: false, error: error.message };
       }
     }
-  } else {
-    console.log(`\n  ✓ No changes needed`);
   }
 
   return { success: true, hasChanges };
@@ -258,22 +234,11 @@ async function migrateUser(userDoc, dryRun = false) {
  * Main migration function
  */
 async function migrateAllUsers(dryRun = false) {
-  console.log('\n' + '='.repeat(60));
-  console.log('🚀 USER PERMISSIONS & TOTP FIELDS MIGRATION');
-  console.log('='.repeat(60));
-
-  if (dryRun) {
-    console.log('\n⚠️  DRY RUN MODE - No changes will be applied\n');
-  }
-
   try {
     // Get all users from Firestore
-    console.log('📚 Fetching all users from Firestore...');
     const usersSnapshot = await db.collection('users').get();
-    console.log(`✓ Found ${usersSnapshot.size} user(s)\n`);
 
     if (usersSnapshot.empty) {
-      console.log('⚠️  No users found in Firestore');
       return;
     }
 
@@ -299,24 +264,7 @@ async function migrateAllUsers(dryRun = false) {
       }
     }
 
-    // Summary
-    console.log('\n' + '='.repeat(60));
-    console.log('📊 MIGRATION SUMMARY');
-    console.log('='.repeat(60));
-    console.log(`  Total users processed: ${totalProcessed}`);
-    console.log(`  Users updated: ${totalUpdated}`);
-    console.log(`  Users unchanged: ${totalNoChanges}`);
-    console.log(`  Errors: ${totalErrors}`);
-    console.log('='.repeat(60));
-
-    if (dryRun) {
-      console.log('\n💡 This was a dry run. Run without --dry-run to apply changes.\n');
-    } else {
-      console.log('\n✅ Migration complete!\n');
-    }
-
   } catch (error) {
-    console.error('\n❌ Migration failed:', error);
     throw error;
   }
 }
@@ -328,10 +276,8 @@ const dryRun = args.includes('--dry-run');
 // Run migration
 migrateAllUsers(dryRun)
   .then(() => {
-    console.log('✓ Script completed successfully');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('✗ Script failed:', error);
     process.exit(1);
   });

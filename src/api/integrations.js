@@ -9,7 +9,6 @@ let Core, InvokeLLM, SendEmail, UploadFile, GenerateImage,
 if (USE_FIREBASE) {
   // Firebase integration stubs - these will be implemented as needed
   const notImplemented = (name) => async () => {
-    console.warn(`Firebase integration '${name}' not implemented yet`);
     return { success: false, message: 'Integration not implemented in Firebase yet' };
   };
   
@@ -21,8 +20,6 @@ if (USE_FIREBASE) {
   ExtractDataFromUploadedFile = notImplemented('ExtractDataFromUploadedFile');
   CreateFileSignedUrl = notImplemented('CreateFileSignedUrl');
   UploadPrivateFile = notImplemented('UploadPrivateFile');
-  
-  console.log('Using Firebase integrations (stubs)');
 } else {
   // Use Base44 SDK
   if (base44 && base44.integrations) {
@@ -35,8 +32,6 @@ if (USE_FIREBASE) {
     CreateFileSignedUrl = base44.integrations.Core.CreateFileSignedUrl;
     UploadPrivateFile = base44.integrations.Core.UploadPrivateFile;
   }
-  
-  console.log('Using Base44 integrations');
 }
 
 // Export integrations

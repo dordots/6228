@@ -21,8 +21,6 @@ if (USE_FIREBASE) {
   DailyVerification = createBoundEntityAdapter('daily_verifications');
   UserProfile = createBoundEntityAdapter('users'); // For querying users collection by linked_soldier_id
   User = FirebaseUser;
-
-  console.log('Using Firebase backend');
 } else {
   // Use Base44 SDK
   if (base44) {
@@ -38,8 +36,6 @@ if (USE_FIREBASE) {
     UserProfile = null; // Not needed for Base44
     User = base44.auth;
   }
-
-  console.log('Using Base44 backend');
 }
 
 // Export entity models

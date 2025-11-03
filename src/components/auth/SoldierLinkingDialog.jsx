@@ -26,7 +26,6 @@ export default function SoldierLinkingDialog({ open, onOpenChange, onLinked }) {
       const soldiersData = await Soldier.list("-created_date");
       setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
     } catch (error) {
-      console.error("Error loading soldiers:", error);
       setSoldiers([]);
     } finally {
       setIsLoadingSoldiers(false);
@@ -47,7 +46,6 @@ export default function SoldierLinkingDialog({ open, onOpenChange, onLinked }) {
       
       onOpenChange(false);
     } catch (error) {
-      console.error("Error linking soldier:", error);
       alert("Failed to link soldier account. Please try again.");
     } finally {
       setIsLoading(false);

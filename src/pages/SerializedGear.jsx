@@ -59,7 +59,6 @@ export default function SerializedGearPage() {
         try {
             setCurrentUser(await User.me());
         } catch(e) {
-            console.error("Failed to fetch user", e);
         }
     };
     fetchUser();
@@ -85,8 +84,6 @@ export default function SerializedGearPage() {
 
       // Team leaders need special two-step filtering
       if (isTeamLeader && userDivision && userTeam) {
-        console.log('Team leader: Using two-step filtering approach for gear');
-
         // Step 1: Get team soldiers
         const teamSoldiers = await Soldier.filter({
           division_name: userDivision,
@@ -94,16 +91,12 @@ export default function SerializedGearPage() {
         }).catch(() => []);
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
-        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
 
         // Step 2: Get all division gear, then filter client-side
         const allGear = await SerializedGear.filter({ division_name: userDivision }, "-created_date").catch(() => []);
-        console.log(`Team leader: Fetched ${allGear.length} division gear, filtering client-side...`);
 
         const soldierIdSet = new Set(soldierIds);
         const gearData = allGear.filter(g => g.assigned_to && soldierIdSet.has(g.assigned_to));
-
-        console.log(`Team leader: After filtering, ${gearData.length} gear assigned to team members`);
 
         setGear(Array.isArray(gearData) ? gearData : []);
         setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
@@ -126,7 +119,6 @@ export default function SerializedGearPage() {
         setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
       }
     } catch (error) {
-      console.error("Error loading data:", error);
       setGear([]);
       setSoldiers([]);
     }
@@ -171,14 +163,12 @@ export default function SerializedGearPage() {
           division_name: 'N/A' // Or infer a common division if all updated gear belong to one, otherwise 'N/A'
         });
       } catch (logError) {
-        console.error("Failed to create activity log (gear rename succeeded):", logError);
       }
 
       alert("Gear types renamed successfully!");
       setShowRenameDialog(false);
       await loadData();
     } catch (error) {
-      console.error("Error renaming gear types:", error);
       alert("An error occurred during the renaming process.");
     }
   };
@@ -250,7 +240,6 @@ export default function SerializedGearPage() {
         division_name: gearData.division_name || 'N/A'
       });
     } catch (logError) {
-      console.error("Failed to create activity log (gear operation succeeded):", logError);
     }
 
     setShowForm(false);
@@ -292,12 +281,10 @@ export default function SerializedGearPage() {
           division_name: gearItem.division_name || 'N/A'
         });
       } catch (logError) {
-        console.error("Failed to create activity log (gear delete succeeded):", logError);
       }
 
       loadData();
     } catch (error) {
-      console.error("Error deleting gear:", error);
       if (error.message?.includes('Object not found') || error.response?.status === 404) {
         loadData();
       } else {
@@ -371,10 +358,8 @@ export default function SerializedGearPage() {
                 division_name: gearToDelete.division_name || 'N/A'
               });
             } catch (logError) {
-              console.error("Failed to create activity log (gear bulk delete succeeded):", logError);
             }
           } catch (deleteError) {
-            console.error(`Error deleting gear ${id}:`, deleteError);
             if (deleteError.message?.includes('Object not found') || deleteError.response?.status === 404) {
               successCount++;
             } else {
@@ -393,7 +378,6 @@ export default function SerializedGearPage() {
       
       loadData();
     } catch (error) {
-      console.error("Error deleting gear:", error);
       alert("An error occurred during bulk deletion. The data has been refreshed to show the current state.");
       setSelectedItems([]);
       setShowBulkDeleteConfirm(false);
@@ -454,7 +438,6 @@ export default function SerializedGearPage() {
       setReassigningGear(null);
       loadData();
     } catch (error) {
-      console.error("Error reassigning gear:", error);
       alert("An error occurred while reassigning gear.");
     }
   };

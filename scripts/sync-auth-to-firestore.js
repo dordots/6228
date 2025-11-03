@@ -18,17 +18,12 @@ for (const path of serviceAccountPaths) {
 }
 
 if (serviceAccountPath) {
-  console.log(`✅ Found service account file: ${serviceAccountPath}\n`);
   const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     projectId: 'project-1386902152066454120'
   });
 } else {
-  console.log('❌ Service account file not found.');
-  console.log('   Please download it from Firebase Console:');
-  console.log('   https://console.firebase.google.com/project/project-1386902152066454120/settings/serviceaccounts/adminsdk');
-  console.log('   And save it as: knowledge-base/project-1386902152066454120-firebase-adminsdk-fbsvc-93de658225.json\n');
   process.exit(1);
 }
 
@@ -58,7 +53,6 @@ const stats = {
  * Fetch all users from Firebase Authentication
  */
 async function getAllAuthUsers() {
-  console.log('📋 Fetching all authentication users...');
   const users = [];
   let nextPageToken;
 
@@ -69,10 +63,8 @@ async function getAllAuthUsers() {
       nextPageToken = result.pageToken;
     } while (nextPageToken);
 
-    console.log(`✅ Found ${users.length} authentication users\n`);
     return users;
   } catch (error) {
-    console.error('❌ Error fetching auth users:', error.message);
     throw error;
   }
 }
@@ -108,7 +100,6 @@ async function findMatchingSoldier(authUser) {
 
     return null;
   } catch (error) {
-    console.error(`❌ Error finding soldier for user ${authUser.uid}:`, error.message);
     throw error;
   }
 }
@@ -120,7 +111,6 @@ async function updateSoldierWithUid(soldierDoc, uid, dryRun) {
   const soldierData = soldierDoc.data();
 
   if (dryRun) {
-    console.log(`  [DRY-RUN] Would update soldier ${soldierData.soldier_id} with id: ${uid}`);
     return true;
   }
 
@@ -129,10 +119,8 @@ async function updateSoldierWithUid(soldierDoc, uid, dryRun) {
       id: uid,
       updated_at: admin.firestore.FieldValue.serverTimestamp()
     });
-    console.log(`  ✅ Updated soldier ${soldierData.soldier_id} with id: ${uid}`);
     return true;
   } catch (error) {
-    console.error(`  ❌ Error updating soldier ${soldierData.soldier_id}:`, error.message);
     throw error;
   }
 }
@@ -160,16 +148,13 @@ async function createUserDocument(authUser, soldierData, dryRun) {
   };
 
   if (dryRun) {
-    console.log(`  [DRY-RUN] Would create user document for ${authUser.uid}:`, JSON.stringify(userDoc, null, 2));
     return true;
   }
 
   try {
     await db.collection('users').doc(authUser.uid).set(userDoc, { merge: true });
-    console.log(`  ✅ Created/updated user document for ${authUser.uid}`);
     return true;
   } catch (error) {
-    console.error(`  ❌ Error creating user document for ${authUser.uid}:`, error.message);
     throw error;
   }
 }
@@ -198,7 +183,6 @@ async function getSampleSoldier() {
 
     return null;
   } catch (error) {
-    console.error('Error getting sample soldier:', error.message);
     return null;
   }
 }
@@ -216,16 +200,11 @@ async function processAuthUser(authUser, sampleSoldier, dryRun) {
     soldierMatch: null
   };
 
-  console.log(`\n🔍 Processing user: ${authUser.uid}`);
-  console.log(`   Email: ${authUser.email || 'N/A'}`);
-  console.log(`   Phone: ${authUser.phoneNumber || 'N/A'}`);
-
   try {
     // Check if user already has a Firestore document with linked_soldier_id
     const existingUserDoc = await db.collection('users').doc(authUser.uid).get();
 
     if (existingUserDoc.exists && existingUserDoc.data().linked_soldier_id) {
-      console.log(`  ⏭️  User already linked to soldier: ${existingUserDoc.data().linked_soldier_id} - skipping`);
       userInfo.status = 'skipped';
       userInfo.reason = 'Already synced';
       stats.skipped++;
@@ -236,10 +215,7 @@ async function processAuthUser(authUser, sampleSoldier, dryRun) {
     const soldierDoc = await findMatchingSoldier(authUser);
 
     if (!soldierDoc) {
-      console.log('  ⚠️  No matching soldier found - linking to sample soldier');
-
       if (!sampleSoldier) {
-        console.log('  ❌ No sample soldier available - skipping');
         userInfo.status = 'skipped';
         userInfo.reason = 'No matching soldier and no sample soldier available';
         stats.skipped++;
@@ -247,7 +223,6 @@ async function processAuthUser(authUser, sampleSoldier, dryRun) {
       }
 
       const sampleSoldierData = sampleSoldier.data();
-      console.log(`  📌 Linking to sample soldier: ${sampleSoldierData.soldier_id}`);
 
       // Create user document with sample soldier data
       await createUserDocument(authUser, sampleSoldierData, dryRun);
@@ -267,7 +242,6 @@ async function processAuthUser(authUser, sampleSoldier, dryRun) {
     }
 
     const soldierData = soldierDoc.data();
-    console.log(`  ✅ Found matching soldier: ${soldierData.soldier_id} (${soldierData.first_name} ${soldierData.last_name})`);
 
     userInfo.soldierMatch = {
       id: soldierData.soldier_id,
@@ -290,7 +264,6 @@ async function processAuthUser(authUser, sampleSoldier, dryRun) {
     return userInfo;
 
   } catch (error) {
-    console.error(`  ❌ Error processing user ${authUser.uid}:`, error.message);
     userInfo.status = 'error';
     userInfo.reason = error.message;
     stats.errors++;
@@ -302,25 +275,9 @@ async function processAuthUser(authUser, sampleSoldier, dryRun) {
  * Main sync function
  */
 async function syncAuthToFirestore(dryRun = true) {
-  console.log('\n🔄 Firebase Auth to Firestore Sync Script');
-  console.log('==========================================\n');
-
-  if (dryRun) {
-    console.log('🔍 DRY-RUN MODE: No changes will be made to the database\n');
-  } else {
-    console.log('⚠️  LIVE MODE: Changes will be written to the database\n');
-  }
-
   try {
     // Get sample soldier for unmatched users
-    console.log('📋 Getting sample soldier for unmatched users...');
     const sampleSoldier = await getSampleSoldier();
-    if (sampleSoldier) {
-      const sampleData = sampleSoldier.data();
-      console.log(`✅ Sample soldier: ${sampleData.soldier_id} (${sampleData.first_name} ${sampleData.last_name})\n`);
-    } else {
-      console.log('⚠️  No sample soldier found - unmatched users will be skipped\n');
-    }
 
     // Fetch all auth users
     const authUsers = await getAllAuthUsers();
@@ -336,7 +293,6 @@ async function syncAuthToFirestore(dryRun = true) {
     printSummary(dryRun);
 
   } catch (error) {
-    console.error('\n❌ Fatal error during sync:', error.message);
     process.exit(1);
   }
 }
@@ -345,82 +301,20 @@ async function syncAuthToFirestore(dryRun = true) {
  * Print summary report
  */
 function printSummary(dryRun) {
-  console.log('\n\n📊 SYNC SUMMARY');
-  console.log('================\n');
-
-  if (dryRun) {
-    console.log('Mode: DRY-RUN (no changes made)\n');
-  } else {
-    console.log('Mode: LIVE (changes applied)\n');
-  }
-
-  console.log(`Total Auth Users: ${stats.totalAuthUsers}`);
-  console.log(`Matched to Soldiers: ${stats.matchedBySoldier}`);
-  console.log(`Soldiers Updated: ${stats.updatedSoldiers}`);
-  console.log(`User Docs Created: ${stats.createdUserDocs}`);
-  console.log(`Skipped (no match): ${stats.skipped}`);
-  console.log(`Errors: ${stats.errors}\n`);
-
-  // Show breakdown by status
-  const successCount = stats.details.filter(d => d.status === 'success').length;
-  const skippedCount = stats.details.filter(d => d.status === 'skipped').length;
-  const errorCount = stats.details.filter(d => d.status === 'error').length;
-
-  console.log('Breakdown:');
-  console.log(`  ✅ Success: ${successCount}`);
-  console.log(`  ⚠️  Skipped: ${skippedCount}`);
-  console.log(`  ❌ Errors: ${errorCount}\n`);
-
-  // Show details of errors if any
-  if (errorCount > 0) {
-    console.log('Errors encountered:');
-    stats.details
-      .filter(d => d.status === 'error')
-      .forEach(d => {
-        console.log(`  - User ${d.uid} (${d.email || d.phone}): ${d.reason}`);
-      });
-    console.log();
-  }
-
-  // Show details of skipped users
-  if (skippedCount > 0 && skippedCount <= 10) {
-    console.log('Skipped users (no matching soldier):');
-    stats.details
-      .filter(d => d.status === 'skipped')
-      .forEach(d => {
-        console.log(`  - ${d.uid} (${d.email || d.phone || 'no email/phone'})`);
-      });
-    console.log();
-  } else if (skippedCount > 10) {
-    console.log(`${skippedCount} users skipped (no matching soldier)\n`);
-  }
-
-  if (dryRun) {
-    console.log('🔍 This was a dry-run. No changes were made.');
-    console.log('   Run with --live flag to apply changes.\n');
-  } else {
-    console.log('✅ Sync completed successfully!\n');
-  }
 }
 
 /**
  * Main entry point
  */
 async function main() {
-  console.log('\n🚀 Firebase Auth to Firestore Sync Tool\n');
-
   // Check for command line argument
   const args = process.argv.slice(2);
   const isLiveMode = args.includes('--live');
 
   if (isLiveMode) {
-    console.log('⚠️  WARNING: You are about to run this script in LIVE mode.');
-    console.log('   This will modify your Firebase database.\n');
-
     const confirm = await question('Type "yes" to continue: ');
 
     if (confirm.toLowerCase() !== 'yes') {
-      console.log('Cancelled by user.');
       rl.close();
       process.exit(0);
     }
@@ -434,7 +328,6 @@ async function main() {
 
 // Run the script
 main().catch(error => {
-  console.error('Fatal error:', error);
   rl.close();
   process.exit(1);
 });

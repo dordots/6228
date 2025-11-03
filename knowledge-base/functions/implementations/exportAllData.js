@@ -16,7 +16,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log("Starting ZIP generation for Base64 export...");
     const zip = new JSZip();
 
     const addCSVToZip = (data, filename, headers = null) => {
@@ -144,7 +143,6 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error creating ZIP file:", error);
     return new Response(
       JSON.stringify({ error: error.message, stack: error.stack }),
       {

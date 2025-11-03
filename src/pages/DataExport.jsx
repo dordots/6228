@@ -63,7 +63,6 @@ export default function DataExport() {
           }
         }
       } catch (error) {
-        console.error("Error fetching user and divisions:", error);
       }
       setIsLoading(false);
     };
@@ -174,7 +173,6 @@ export default function DataExport() {
         try {
           allComponents = await DroneComponent.list();
         } catch (error) {
-          console.error('Error fetching drone components for export:', error);
         }
       }
 
@@ -182,7 +180,6 @@ export default function DataExport() {
       downloadCSV(csvContent, config.name.replace(/\s+/g, '_'));
       setExportStatus(`${config.name} exported successfully!`);
     } catch (error) {
-      console.error(`Error exporting ${config.name}:`, error);
       setExportStatus(`Error exporting ${config.name}.`);
       throw error;
     }
@@ -232,7 +229,6 @@ export default function DataExport() {
       setExportStatus(`${filename.replace(/_/g, ' ')} exported!`);
 
     } catch (error) {
-      console.error(`Error exporting for ${divisionName}:`, error);
       setExportStatus(`Error exporting for ${divisionName}.`);
       throw error;
     }
@@ -276,7 +272,6 @@ export default function DataExport() {
         throw new Error(`Failed to generate ZIP file: ${errorDetails}`);
       }
     } catch (error) {
-      console.error("Error downloading ZIP:", error);
       setExportStatus(`Error creating ZIP file: ${error.message}`);
     }
 
@@ -296,7 +291,6 @@ export default function DataExport() {
       try {
         await handleCoreExport(config);
       } catch (error) {
-        console.error(`Error during ${config.name} export:`, error);
         setExportStatus(`Failed to export ${config.name}. Continuing with others...`);
       }
     }
@@ -307,7 +301,6 @@ export default function DataExport() {
         try {
           await handleDivisionExport(division, 'Serialized');
         } catch (error) {
-          console.error(`Error during serialized export for ${division}:`, error);
           setExportStatus(`Failed to export serialized items for ${division}. Continuing...`);
         }
 
@@ -316,7 +309,6 @@ export default function DataExport() {
         try {
           await handleDivisionExport(division, 'Equipment');
         } catch (error) {
-          console.error(`Error during equipment export for ${division}:`, error);
           setExportStatus(`Failed to export equipment for ${division}. Continuing...`);
         }
     }

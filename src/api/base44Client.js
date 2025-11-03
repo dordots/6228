@@ -13,17 +13,12 @@ const initBase44 = async () => {
       
       // Create a client with authentication required
       base44 = createClient({
-        appId: "68cf9fe0686c5871dd720958", 
+        appId: "68cf9fe0686c5871dd720958",
         requiresAuth: true // Ensure authentication is required for all operations
       });
-      
-      console.log('Base44 client initialized');
     } catch (e) {
       // Base44 SDK not available
-      console.log('Base44 SDK not available:', e);
     }
-  } else {
-    console.log('Firebase mode - Base44 client not initialized');
   }
 };
 

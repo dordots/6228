@@ -31,7 +31,8 @@
       "Bash(find:*)",
       "Grep",
       "Read",
-      "Glob"
+      "Glob",
+      "Edit"
     ],
     "deny": []
   }

@@ -64,7 +64,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         try {
             setCurrentUser(await User.me());
         } catch(e) {
-            console.error("Failed to fetch user", e);
         }
     };
     fetchUser();
@@ -83,8 +82,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
 
       // Team leaders need special two-step filtering
       if (isTeamLeader && userDivision && userTeam) {
-        console.log('Team leader: Using two-step filtering approach for drones');
-
         // Step 1: Get team soldiers
         const teamSoldiers = await Soldier.filter({
           division_name: userDivision,
@@ -92,30 +89,14 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         }).catch(() => []);
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
-        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
-        console.log('Team leader: Soldier IDs:', soldierIds);
 
         // Step 2: Get all division drones, then filter client-side
         const allDrones = await DroneSet.filter({ division_name: userDivision }, "-created_date").catch(() => []);
         // Components don't have division_name field, load all components
         const allComponents = await DroneComponent.list("-created_date").catch(() => []);
-        console.log(`Team leader: Fetched ${allDrones.length} division drones, filtering client-side...`);
-        console.log('Team leader: All drones data:', allDrones.map(d => ({
-          id: d.id,
-          set_serial_number: d.set_serial_number,
-          set_type: d.set_type,
-          assigned_to: d.assigned_to,
-          division_name: d.division_name
-        })));
 
         const soldierIdSet = new Set(soldierIds);
         const droneSetsData = allDrones.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
-
-        console.log(`Team leader: After filtering, ${droneSetsData.length} drones assigned to team members`);
-        console.log('Team leader: Filtered drones:', droneSetsData.map(d => ({
-          set_serial_number: d.set_serial_number,
-          assigned_to: d.assigned_to
-        })));
 
         setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
         setComponents(Array.isArray(allComponents) ? allComponents : []); // Components don't have assigned_to, keep all division components
@@ -142,7 +123,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
       }
     } catch (error) {
-      console.error("Error loading data:", error);
       setDroneSets([]);
       setComponents([]);
       setSoldiers([]);
@@ -236,7 +216,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       });
 
     } catch (error) {
-      console.error("Error in handleSubmit:", error);
       // Don't show alert - operation likely succeeded
     } finally {
       // Always close dialog and refresh data
@@ -268,7 +247,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       await DroneSet.delete(droneSet.id);
       loadData();
     } catch (error) {
-      console.error("Error deleting drone set:", error);
       alert("An error occurred while deleting the drone set.");
     }
   };
@@ -309,7 +287,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
             });
             await DroneSet.delete(id);
           } catch (deleteError) {
-            console.error(`Error deleting drone set ${id}:`, deleteError);
           }
         }
       }
@@ -317,7 +294,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       setShowBulkDeleteConfirm(false);
       loadData();
     } catch (error) {
-      console.error("Error during bulk deletion process:", error);
       alert("An error occurred during bulk deletion. Some items may not have been deleted.");
     }
   };
@@ -357,7 +333,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
       setShowReassignDialog(false);
       loadData();
     } catch (error) {
-      console.error("Error reassigning drone set:", error);
       alert("An error occurred during reassignment.");
     }
   };
@@ -408,7 +383,6 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
 
       alert("Drone Set types renamed successfully!");
     } catch (error) {
-      console.error("Error renaming drone set types:", error);
       // Don't show alert - operation likely succeeded
     } finally {
       // Always close dialog and refresh data

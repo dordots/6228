@@ -76,14 +76,12 @@ export default function Soldiers() {
         try {
             setCurrentUser(await User.me());
         } catch (e) {
-            console.error("Failed to fetch user", e);
         }
     };
     fetchUser();
   }, []);
 
   const loadAllData = async () => {
-    console.log('[DEBUG loadAllData] Function called');
     setIsLoading(true);
     try {
       const currentUser = await User.me();
@@ -123,9 +121,6 @@ export default function Soldiers() {
 
       // Get raw soldier data from Firestore
       let soldierData = results[0].status === 'fulfilled' && Array.isArray(results[0].value) ? results[0].value : [];
-      console.log('[DEBUG loadAllData] Raw soldiers from Firestore:', soldierData.length);
-      console.log('[DEBUG loadAllData] First soldier:', soldierData[0]);
-      console.log('[DEBUG loadAllData] All soldier IDs:', soldierData.map(s => ({ id: s.id, soldier_id: s.soldier_id })));
 
       // Deduplicate by document ID only
       const uniqueById = new Map();
@@ -136,13 +131,6 @@ export default function Soldiers() {
       });
       const finalSoldiers = Array.from(uniqueById.values());
 
-      if (soldierData.length !== finalSoldiers.length) {
-        console.warn('[DEBUG loadAllData] Found duplicates by document ID! Before:', soldierData.length, 'After:', finalSoldiers.length);
-      }
-
-      console.log('[DEBUG loadAllData] Final soldiers after deduplication:', finalSoldiers.length);
-      console.log('[DEBUG loadAllData] Setting soldiers state with:', finalSoldiers.length, 'soldiers');
-
       setSoldiers(finalSoldiers);
       setWeapons(results[1].status === 'fulfilled' && Array.isArray(results[1].value) ? results[1].value : []);
       setSerializedGear(results[2].status === 'fulfilled' && Array.isArray(results[2].value) ? results[2].value : []);
@@ -150,7 +138,6 @@ export default function Soldiers() {
       // UPDATED: Set all equipment data
       setAllEquipment(results[4].status === 'fulfilled' && Array.isArray(results[4].value) ? results[4].value : []);
     } catch (error) {
-      console.error("Error loading data:", error);
       setSoldiers([]);
       setWeapons([]);
       setSerializedGear([]);
@@ -186,7 +173,6 @@ export default function Soldiers() {
       const data = await Soldier.filter(filter, "-created_date"); 
       setSoldiers(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error("Error loading soldiers:", error);
       setSoldiers([]);
     }
     setIsLoading(false);
@@ -195,13 +181,12 @@ export default function Soldiers() {
   const handleSubmit = async (soldierData) => {
     try {
       const currentUser = await User.me();
-      
+
       let performingSoldier = null;
       try {
           const soldiers = await Soldier.filter({ email: currentUser.email });
           performingSoldier = soldiers[0] || null;
       } catch (error) {
-          console.error("Error fetching performing soldier:", error);
       }
       
       const getAdjustedTimestamp = () => {
@@ -227,7 +212,6 @@ export default function Soldiers() {
           // Try to find by soldier_id if direct lookup failed
           const soldierBySoldierId = await Soldier.findById(editingSoldier.soldier_id);
           if (soldierBySoldierId) {
-            console.warn(`Soldier found by soldier_id instead of document ID. Using soldier_id: ${editingSoldier.soldier_id}`);
             await Soldier.update(editingSoldier.soldier_id, soldierData);
           } else {
             alert(`Error: Soldier document not found. The soldier may have been deleted or the ID is invalid. Please refresh and try again.`);
@@ -258,15 +242,13 @@ export default function Soldiers() {
         // Since soldier_id is used as the document ID, we need to check by ID directly
         try {
           const existingSoldier = await Soldier.findById(soldierData.soldier_id);
-          console.log('Checking for existing soldier:', soldierData.soldier_id, 'Result:', existingSoldier);
-          
+
           if (existingSoldier) {
             alert(`Error: Soldier ID "${soldierData.soldier_id}" already exists.`);
             return;
           }
         } catch (error) {
           // If findById throws an error, the document doesn't exist, which is what we want
-          console.log('Soldier does not exist, proceeding with creation');
         }
         
         await Soldier.create(soldierData);
@@ -289,9 +271,7 @@ export default function Soldiers() {
               displayName: `${soldierData.first_name} ${soldierData.last_name}`,
               email: soldierData.email || null
             });
-            console.log(`User account created for soldier ${soldierData.soldier_id}`);
           } catch (error) {
-            console.error('Failed to create user account:', error);
             // Don't fail the soldier creation if user account creation fails
             // Admin can manually create the account later
           }
@@ -314,7 +294,6 @@ export default function Soldiers() {
       setEditingSoldier(null);
       await loadAllData();
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
       // Fallback logic
       if (editingSoldier) {
         // Attempt to update even if activity log failed (original logic)
@@ -342,13 +321,12 @@ export default function Soldiers() {
     }
     try {
       const currentUser = await User.me();
-      
+
       let performingSoldier = null;
       try {
           const soldiers = await Soldier.filter({ email: currentUser.email });
           performingSoldier = soldiers[0] || null;
       } catch (error) {
-          console.error("Error fetching performing soldier:", error);
       }
 
       const getAdjustedTimestamp = () => {
@@ -373,7 +351,6 @@ export default function Soldiers() {
       await ActivityLog.create(activityData);
       await loadAllData();
     } catch (error) {
-      console.error("Error deleting soldier:", error);
       if (error.message?.includes('Object not found') || error.response?.status === 404) {
         await loadAllData();
       } else {
@@ -405,28 +382,8 @@ export default function Soldiers() {
   const unassignedWeapons = React.useMemo(() => {
     const safeWeapons = Array.isArray(weapons) ? weapons : [];
 
-    // Debug logging to diagnose assignment issues
-    console.log('[DEBUG unassignedWeapons] Total weapons loaded:', safeWeapons.length);
-    const assignmentStats = {
-      total: safeWeapons.length,
-      null: safeWeapons.filter(w => w.assigned_to === null).length,
-      empty: safeWeapons.filter(w => w.assigned_to === '').length,
-      undefined: safeWeapons.filter(w => w.assigned_to === undefined).length,
-      assigned: safeWeapons.filter(w => w.assigned_to && w.assigned_to !== '').length
-    };
-    console.log('[DEBUG unassignedWeapons] Assignment stats:', assignmentStats);
-
-    // Sample some assigned_to values
-    const sampleValues = safeWeapons.slice(0, 5).map(w => ({
-      weapon_id: w.weapon_id,
-      assigned_to: w.assigned_to,
-      type: typeof w.assigned_to
-    }));
-    console.log('[DEBUG unassignedWeapons] Sample assigned_to values:', sampleValues);
-
     // Fixed filter: checks for null, empty string, AND undefined
     const unassigned = safeWeapons.filter(w => w && !w.assigned_to);
-    console.log('[DEBUG unassignedWeapons] Unassigned count:', unassigned.length);
 
     return unassigned;
   }, [weapons]);
@@ -434,20 +391,8 @@ export default function Soldiers() {
   const unassignedGear = React.useMemo(() => {
     const safeGear = Array.isArray(serializedGear) ? serializedGear : [];
 
-    // Debug logging
-    console.log('[DEBUG unassignedGear] Total gear loaded:', safeGear.length);
-    const assignmentStats = {
-      total: safeGear.length,
-      null: safeGear.filter(g => g.assigned_to === null).length,
-      empty: safeGear.filter(g => g.assigned_to === '').length,
-      undefined: safeGear.filter(g => g.assigned_to === undefined).length,
-      assigned: safeGear.filter(g => g.assigned_to && g.assigned_to !== '').length
-    };
-    console.log('[DEBUG unassignedGear] Assignment stats:', assignmentStats);
-
     // Fixed filter: checks for null, empty string, AND undefined
     const unassigned = safeGear.filter(g => g && !g.assigned_to);
-    console.log('[DEBUG unassignedGear] Unassigned count:', unassigned.length);
 
     return unassigned;
   }, [serializedGear]);
@@ -455,20 +400,8 @@ export default function Soldiers() {
   const unassignedDroneSets = React.useMemo(() => {
     const safeDroneSets = Array.isArray(droneSets) ? droneSets : [];
 
-    // Debug logging
-    console.log('[DEBUG unassignedDroneSets] Total drone sets loaded:', safeDroneSets.length);
-    const assignmentStats = {
-      total: safeDroneSets.length,
-      null: safeDroneSets.filter(ds => ds.assigned_to === null).length,
-      empty: safeDroneSets.filter(ds => ds.assigned_to === '').length,
-      undefined: safeDroneSets.filter(ds => ds.assigned_to === undefined).length,
-      assigned: safeDroneSets.filter(ds => ds.assigned_to && ds.assigned_to !== '').length
-    };
-    console.log('[DEBUG unassignedDroneSets] Assignment stats:', assignmentStats);
-
     // Fixed filter: checks for null, empty string, AND undefined
     const unassigned = safeDroneSets.filter(ds => ds && !ds.assigned_to);
-    console.log('[DEBUG unassignedDroneSets] Unassigned count:', unassigned.length);
 
     return unassigned;
   }, [droneSets]);
@@ -615,8 +548,6 @@ export default function Soldiers() {
             division_name: updatingSoldier.division_name
           });
         } catch (logError) {
-          // Log the error but don't prevent UI refresh
-          console.error("Failed to create activity log (soldier update still succeeded):", logError);
         }
 
         // Always cleanup UI and refresh data after soldier update succeeds
@@ -625,7 +556,6 @@ export default function Soldiers() {
         await loadAllData();
       }
     } catch (error) {
-      console.error("Error updating soldier details:", error);
       alert("Error updating soldier details: " + error.message);
     }
   };
@@ -710,7 +640,6 @@ export default function Soldiers() {
             });
             successCount++;
           } catch (deleteError) {
-            console.error(`Error deleting soldier ${id}:`, deleteError);
             if (deleteError.message?.includes('Object not found') || deleteError.response?.status === 404) {
               successCount++;
             } else {
@@ -731,7 +660,6 @@ export default function Soldiers() {
       
       await loadAllData();
     } catch (error) {
-      console.error("Error in bulk delete operation:", error);
       alert("An unexpected error occurred during bulk deletion. The data has been refreshed to show the current state.");
       setSelectedItems([]);
       setShowBulkDeleteConfirm(false);
@@ -751,7 +679,6 @@ export default function Soldiers() {
         alert('Bulk email failed: ' + (result.error || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error sending bulk equipment emails:', error);
       alert('Failed to send bulk emails: ' + error.message);
     } finally {
       setIsSendingBulk(false);
@@ -842,7 +769,6 @@ export default function Soldiers() {
 
       alert(`Successfully generated ${soldiersWithEquipment.length} equipment forms!`);
     } catch (error) {
-      console.error('Error generating ZIP:', error);
       alert('Failed to generate ZIP file: ' + error.message);
     } finally {
       setIsGeneratingZip(false);
@@ -874,7 +800,6 @@ export default function Soldiers() {
       setShowEmailsDialog(true);
 
     } catch (error) {
-      console.error("Error getting emails:", error);
       alert("Failed to get emails. Please try again.");
     } finally {
       setIsCopyingEmails(false);
@@ -886,7 +811,6 @@ export default function Soldiers() {
       await navigator.clipboard.writeText(email);
       alert(`Copied: ${email}`);
     } catch (error) {
-      console.error("Failed to copy email:", error);
       alert("Failed to copy email.");
     }
   };
@@ -913,15 +837,12 @@ export default function Soldiers() {
       alert(message + "The newline-separated version has been copied to clipboard.");
       
     } catch (error) {
-      console.error("Failed to copy emails:", error);
       alert("Failed to copy emails. Please copy them individually.");
     }
   };
 
   const filteredSoldiers = React.useMemo(() => {
-    console.log('[DEBUG filteredSoldiers] Input soldiers count:', soldiers?.length);
     const safeSoldiers = Array.isArray(soldiers) ? soldiers : [];
-    console.log('[DEBUG filteredSoldiers] Safe soldiers count:', safeSoldiers.length);
 
     const filtered = safeSoldiers.filter(soldier => {
       if (!soldier) return false;
@@ -950,18 +871,13 @@ export default function Soldiers() {
       return matchesSearch && matchesStatus && matchesDivision && matchesTeam;
     });
 
-    console.log('[DEBUG filteredSoldiers] Filtered count:', filtered.length);
-    console.log('[DEBUG filteredSoldiers] Filtered IDs:', filtered.map(s => s.id));
     return filtered;
   }, [soldiers, searchTerm, filters]);
 
   const sortedSoldiers = React.useMemo(() => {
-    console.log('[DEBUG sortedSoldiers] Input filteredSoldiers count:', filteredSoldiers?.length);
     if (!Array.isArray(filteredSoldiers)) return [];
 
     let sortableItems = [...filteredSoldiers];
-    console.log('[DEBUG sortedSoldiers] sortableItems after spread:', sortableItems.length);
-    console.log('[DEBUG sortedSoldiers] sortableItems IDs:', sortableItems.map(s => s.id));
     if (sortConfig.key) {
       sortableItems.sort((a, b) => {
         let aValue = a ? a[sortConfig.key] : undefined;

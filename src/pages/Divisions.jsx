@@ -73,7 +73,6 @@ export default function DivisionsPage() {
       setEquipment(results[4].status === 'fulfilled' && Array.isArray(results[4].value) ? results[4].value : []);
 
     } catch (error) {
-      console.error("Error loading data:", error);
     }
     setIsLoading(false);
   };

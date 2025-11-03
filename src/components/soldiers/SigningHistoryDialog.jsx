@@ -36,11 +36,8 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
             const fetchHistory = async () => {
                 setIsLoading(true);
                 try {
-                    console.log(`Searching for history for soldier ${soldier.soldier_id}`);
-
                     // Get current user to check their division and scope
                     const currentUser = await User.me();
-                    console.log(`Current user division: ${currentUser.division}, scope: ${currentUser.scope}`);
 
                     // Filter activity logs by division if user is not admin
                     // We need to fetch from server with division filter to satisfy Firestore rules
@@ -57,10 +54,8 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
                             200
                         );
                     } else {
-                        console.warn('User has no division assigned, cannot fetch activity logs');
                         allLogs = [];
                     }
-                    console.log(`Found ${allLogs.length} total activity logs from division`);
                     
                     // Filter locally to find any mention of this soldier
                     const relevantLogs = allLogs.filter(log => {
@@ -68,21 +63,18 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
                         
                         // Method 1: Direct soldier_id field match
                         if (log.soldier_id === soldier.soldier_id) {
-                            console.log(`Found direct match for soldier_id: ${log.id}`);
                             return true;
                         }
-                        
+
                         // Method 2: Check context.soldierId
                         if (log.context && log.context.soldierId === soldier.soldier_id) {
-                            console.log(`Found context match for soldier_id: ${log.id}`);
                             return true;
                         }
-                        
+
                         // Method 3: Check if soldier ID appears in details text
                         if (log.details) {
                             const detailsStr = typeof log.details === 'string' ? log.details : JSON.stringify(log.details);
                             if (detailsStr.includes(soldier.soldier_id)) {
-                                console.log(`Found details match for soldier_id: ${log.id}`);
                                 return true;
                             }
                         }
@@ -91,27 +83,21 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
                         if (log.details) {
                             const detailsStr = typeof log.details === 'string' ? log.details : JSON.stringify(log.details);
                             if (detailsStr.includes(soldier.first_name) && detailsStr.includes(soldier.last_name)) {
-                                console.log(`Found name match in details: ${log.id}`);
                                 return true;
                             }
                         }
                         
                         return false;
                     });
-                    
-                    console.log(`Found ${relevantLogs.length} relevant logs for soldier ${soldier.soldier_id}`);
-                    
+
                     // Filter for equipment-related activities only
                     const equipmentLogs = relevantLogs.filter(log => 
                         ['ASSIGN', 'UNASSIGN', 'RELEASE', 'CREATE', 'UPDATE'].includes(log.activity_type) &&
                         (log.entity_type === 'Soldier' || log.entity_type === 'Equipment' || log.entity_type === 'Weapon' || log.entity_type === 'SerializedGear' || log.entity_type === 'DroneSet')
                     );
-                    
-                    console.log(`Filtered to ${equipmentLogs.length} equipment-related logs`);
-                    
+
                     setHistory(equipmentLogs || []);
                 } catch (error) {
-                    console.error("Error fetching signing history:", error);
                     setHistory([]);
                 }
                 setIsLoading(false);
@@ -138,7 +124,6 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
             setTimeout(() => window.URL.revokeObjectURL(url), 100);
 
         } catch (error) {
-            console.error("Error generating form:", error);
             alert("Failed to generate form.");
         }
         setViewingForm(null);

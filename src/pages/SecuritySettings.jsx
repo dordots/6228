@@ -57,7 +57,6 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                 setError(response.error || "Failed to generate a new secret. Please try again.");
             }
         } catch (err) {
-            console.error("Error generating TOTP:", err);
             setError("Failed to generate a new secret. Please try again.");
         } finally {
             setIsLoading(false);
@@ -74,8 +73,7 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
         setIsLoading(true);
         try {
             const response = await verifyTotp({ token: token, isSetup: true });
-            console.log('SecuritySettings TOTP verification response:', response); // Debug log
-            
+
             // Handle Firebase wrapper response structure
             if (response.success && response.data?.success) {
                 const message = isRequired ?
@@ -92,7 +90,6 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                     const updatedUser = await User.me(true); // Force refresh token
                     setUser(updatedUser);
                 } catch (err) {
-                    console.error("Error reloading user data:", err);
                 }
                 
                 // For required setup, call onSetupComplete after a short delay to allow UI update
@@ -107,7 +104,6 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
                 setError(errorMessage);
             }
         } catch (err) {
-            console.error("Error during TOTP verification:", err);
             setError("An error occurred during verification. Please try again.");
         } finally {
             setIsLoading(false);
@@ -120,7 +116,6 @@ export default function SecuritySettings({ onSetupComplete, isRequired = false }
             // Server-side verification will be cleared on logout automatically
             navigate('/login');
         } catch (error) {
-            console.error('Error logging out:', error);
             setError('Failed to logout. Please try again.');
         }
     };

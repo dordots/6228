@@ -17,16 +17,8 @@ Deno.serve(async (req) => {
             return Response.json({ error: 'Please provide a testEmail to send to' }, { status: 400 });
         }
 
-        console.log('Testing SendGrid with email:', testEmail);
-
         const sendGridApiKey = Deno.env.get("SENDGRID_API_KEY");
         const sendGridFromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
-
-        // Enhanced debugging
-        console.log('SendGrid API Key exists:', !!sendGridApiKey);
-        console.log('SendGrid From Email raw value:', JSON.stringify(sendGridFromEmail));
-        console.log('SendGrid From Email type:', typeof sendGridFromEmail);
-        console.log('SendGrid From Email length:', sendGridFromEmail?.length);
 
         if (!sendGridApiKey) {
             return Response.json({ error: 'SendGrid API key not configured' }, { status: 500 });
@@ -46,8 +38,6 @@ Deno.serve(async (req) => {
                 rawValue: JSON.stringify(sendGridFromEmail)
             }, { status: 500 });
         }
-
-        console.log(`Using cleaned 'from' email: ${cleanFromEmail}`);
 
         const emailData = {
             personalizations: [{
@@ -69,9 +59,6 @@ Deno.serve(async (req) => {
             }]
         };
 
-        console.log('Email payload:', JSON.stringify(emailData, null, 2));
-        console.log('Sending email to SendGrid API...');
-
         const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
             method: 'POST',
             headers: {
@@ -82,9 +69,6 @@ Deno.serve(async (req) => {
         });
 
         const responseText = await response.text();
-        
-        console.log('SendGrid response status:', response.status);
-        console.log('SendGrid response text:', responseText);
 
         if (response.ok) {
             return Response.json({ 
@@ -105,8 +89,7 @@ Deno.serve(async (req) => {
         }
 
     } catch (error) {
-        console.error('Test SendGrid error:', error);
-        return Response.json({ 
+        return Response.json({
             error: 'Function error',
             details: error.message,
             stack: error.stack

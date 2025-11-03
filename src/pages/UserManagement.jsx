@@ -68,7 +68,6 @@ export default function UserManagement() {
       const user = await User.me();
       setCurrentUser(user);
     } catch (error) {
-      console.error("Error loading current user:", error);
     }
   };
 
@@ -102,7 +101,6 @@ export default function UserManagement() {
       }
 
     } catch (error) {
-      console.error("Error loading data:", error);
       setError("Failed to load users or soldiers");
       setUsers([]);
       setSoldiers([]);
@@ -121,7 +119,6 @@ export default function UserManagement() {
       await loadData();
       setError("");
     } catch (error) {
-      console.error("Error updating user role:", error);
       setError("Failed to update user role. " + (error.response?.data?.detail || error.message));
     }
   };
@@ -148,7 +145,6 @@ export default function UserManagement() {
         setError(`Failed to delete user: ${result.error || result.data?.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error("Error deleting user:", error);
       setError(`Failed to delete user: ${error.message}`);
     } finally {
       setShowDeleteConfirm(false);
@@ -181,7 +177,6 @@ export default function UserManagement() {
       });
       await loadData();
     } catch (error) {
-      console.error("Error creating user:", error);
       setError("Failed to create user: " + (error.message || "Unknown error"));
     }
   };

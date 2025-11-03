@@ -54,8 +54,6 @@ export default function Dashboard() {
 
       // Team leaders need special handling - fetch division data, then filter client-side
       if (isTeamLeader && userDivisionName && userTeamName) {
-        console.log('Team leader loading: First fetching team soldiers...', 'Division:', userDivisionName, 'Team:', userTeamName);
-
         // Step 1: Get all soldiers in the team
         const teamSoldiers = await Soldier.filter({
           division_name: userDivisionName,
@@ -63,7 +61,6 @@ export default function Dashboard() {
         });
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
-        console.log('Team leader loading: Found', soldierIds.length, 'team soldiers:', soldierIds);
 
         // Step 2: Fetch ALL division equipment/weapons/gear/drones (allowed by division scope)
         // Then filter client-side by assigned_to matching team soldier IDs
@@ -75,8 +72,6 @@ export default function Dashboard() {
           division_name: userDivisionName,
           team_name: userTeamName
         };
-
-        console.log('Team leader loading: Fetching all division equipment/weapons/gear/drones, will filter client-side...');
 
         // Fetch all division equipment/weapons/gear/drones
         const [
@@ -119,16 +114,6 @@ export default function Dashboard() {
         setDrones(dronesData);
         setActivities(activitiesData);
         setDailyVerifications(verificationsData);
-
-        console.log('Team leader data loaded (after client-side filtering):', {
-          soldiers: teamSoldiers.length,
-          equipment: `${equipmentData.length} of ${allEquipment.length}`,
-          weapons: `${weaponsData.length} of ${allWeapons.length}`,
-          gear: `${gearData.length} of ${allGear.length}`,
-          drones: `${dronesData.length} of ${allDrones.length}`,
-          activities: activitiesData.length,
-          verifications: verificationsData.length,
-        });
       } else {
         // Non-team-leader roles: use standard filtering
         let filter = {};
@@ -148,8 +133,6 @@ export default function Dashboard() {
 
         const today = new Date().toISOString().split('T')[0];
         const verificationFilter = { verification_date: today, ...filter };
-
-        console.log('Dashboard filter applied:', filter, 'User:', user?.full_name, 'Division:', userDivisionName, 'Team:', userTeamName, 'Role:', user?.custom_role, 'Selected Division Filter:', selectedDivisionFilter);
 
         const [
           soldiersResult,
@@ -184,20 +167,9 @@ export default function Dashboard() {
         setDrones(dronesData);
         setActivities(activitiesData);
         setDailyVerifications(verificationsData);
-
-        console.log('Dashboard data loaded:', {
-          soldiers: soldiersData.length,
-          equipment: equipmentData.length,
-          weapons: weaponsData.length,
-          gear: gearData.length,
-          drones: dronesData.length,
-          activities: activitiesData.length,
-          verifications: verificationsData.length,
-        });
       }
 
     } catch (error) {
-      console.error("Error loading dashboard data:", error);
       setSoldiers([]);
       setEquipment([]);
       setWeapons([]);

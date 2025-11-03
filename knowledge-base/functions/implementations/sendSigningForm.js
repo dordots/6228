@@ -31,9 +31,6 @@ Deno.serve(async (req) => {
     // UNIFIED SENDING LOGIC: Always use direct SendGrid fetch for the soldier's email if it exists.
     if (soldier.email) {
       try {
-        console.log(
-          `[sendSigningForm] Attempting to send email to soldier ${soldier.email} via SendGrid.`
-        );
         const sendGridApiKey = Deno.env.get("SENDGRID_API_KEY");
         const sendGridFromEmail = Deno.env.get("SENDGRID_FROM_EMAIL");
 
@@ -71,14 +68,7 @@ Deno.serve(async (req) => {
           method: "SendGrid (Direct)",
           error: null,
         };
-        console.log(
-          "[sendSigningForm] SendGrid email to soldier sent successfully."
-        );
       } catch (error) {
-        console.error(
-          "[sendSigningForm] Direct SendGrid email to soldier failed:",
-          error
-        );
         soldierEmailResult = {
           sent: false,
           method: "SendGrid (Direct)",
@@ -86,7 +76,6 @@ Deno.serve(async (req) => {
         };
       }
     } else {
-      console.log("[sendSigningForm] No email address provided for soldier.");
       soldierEmailResult = {
         sent: false,
         method: null,
@@ -95,9 +84,6 @@ Deno.serve(async (req) => {
     }
 
     // Always send a copy to the user who performed the action
-    console.log(
-      `[sendSigningForm] Sending copy of form to performing user: ${user.email}`
-    );
     await base44.integrations.Core.SendEmail({
       to: user.email,
       subject: `${
@@ -162,7 +148,6 @@ Deno.serve(async (req) => {
         : "Form sent to you only - soldier email delivery failed",
     });
   } catch (error) {
-    console.error("[sendSigningForm] Top-level error:", error);
     return Response.json(
       { error: "Failed to send signing form", details: error.message },
       { status: 500 }

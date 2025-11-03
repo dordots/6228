@@ -19,8 +19,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 async function initializeCollections() {
-  console.log('Initializing Firestore collections...');
-
   // Define collection schemas with sample documents
   const collections = {
     soldiers: {
@@ -153,18 +151,10 @@ async function initializeCollections() {
   for (const [collectionName, { id, data }] of Object.entries(collections)) {
     try {
       await setDoc(doc(db, collectionName, id), data);
-      console.log(`✅ Created ${collectionName} collection with sample document`);
     } catch (error) {
-      console.error(`❌ Error creating ${collectionName}:`, error);
     }
   }
-
-  console.log('\n🎉 All collections initialized successfully!');
-  console.log('\nNext steps:');
-  console.log('1. Delete the sample documents from Firebase Console');
-  console.log('2. Or keep them for testing purposes');
-  console.log('3. Run the data migration script when ready');
 }
 
 // Run the initialization
-initializeCollections().catch(console.error);
+initializeCollections().catch(err => {});

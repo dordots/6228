@@ -10,7 +10,6 @@ export default function AccessDenied() {
       await User.logout();
       window.location.href = '/login';
     } catch (error) {
-      console.error('Logout error:', error);
     }
   };
 

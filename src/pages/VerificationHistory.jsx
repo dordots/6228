@@ -62,7 +62,6 @@ export default function VerificationHistoryPage() {
       setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
 
     } catch (error) {
-      console.error("Error loading verification history:", error);
       setVerifications([]);
       setSoldiers([]);
     }

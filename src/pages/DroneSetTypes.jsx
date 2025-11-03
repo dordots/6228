@@ -43,7 +43,6 @@ export default function DroneSetTypesPage() {
       try {
         setCurrentUser(await User.me());
       } catch(e) {
-        console.error("Failed to fetch user", e);
       }
     };
     fetchUser();
@@ -55,7 +54,6 @@ export default function DroneSetTypesPage() {
       const data = await DroneSetType.list("-created_date");
       setDroneSetTypes(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error("Error loading drone set types:", error);
       setDroneSetTypes([]);
     }
     setIsLoading(false);
@@ -104,7 +102,6 @@ export default function DroneSetTypesPage() {
       });
 
     } catch (error) {
-      console.error("Error in handleSubmit:", error);
     } finally {
       setShowForm(false);
       setEditingType(null);
@@ -138,12 +135,10 @@ export default function DroneSetTypesPage() {
           division_name: user.division || "N/A"
         });
       } catch (logError) {
-        console.warn("Failed to log delete activity:", logError);
       }
 
       loadData();
     } catch (error) {
-      console.error("Error deleting drone set type:", error);
       alert("An error occurred while deleting the drone set type.");
     }
   };
@@ -188,10 +183,8 @@ export default function DroneSetTypesPage() {
                 division_name: user.division || "N/A"
               });
             } catch (logError) {
-              console.warn("Failed to log delete activity:", logError);
             }
           } catch (deleteError) {
-            console.error(`Error deleting drone set type ${id}:`, deleteError);
           }
         }
       }
@@ -199,7 +192,6 @@ export default function DroneSetTypesPage() {
       setShowBulkDeleteConfirm(false);
       loadData();
     } catch (error) {
-      console.error("Error during bulk deletion process:", error);
       alert("An error occurred during bulk deletion. Some items may not have been deleted.");
     }
   };

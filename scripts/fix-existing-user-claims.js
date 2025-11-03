@@ -17,24 +17,15 @@ admin.initializeApp({
 const db = admin.firestore();
 
 async function fixUserClaims() {
-  console.log('Starting to fix existing user claims...\n');
-
   try {
     // Get all users from Firebase Auth
     const listUsersResult = await admin.auth().listUsers();
     const authUsers = listUsersResult.users;
 
-    console.log(`Found ${authUsers.length} users in Firebase Auth\n`);
-
     let successCount = 0;
     let errorCount = 0;
 
     for (const authUser of authUsers) {
-      console.log(`\n========================================`);
-      console.log(`Processing user: ${authUser.uid}`);
-      console.log(`  Email: ${authUser.email || 'N/A'}`);
-      console.log(`  Phone: ${authUser.phoneNumber || 'N/A'}`);
-
       try {
         // Find user in users table by email or phone
         let userData = null;
@@ -49,7 +40,6 @@ async function fixUserClaims() {
           if (!usersByEmail.empty) {
             userData = usersByEmail.docs[0].data();
             userDocId = usersByEmail.docs[0].id;
-            console.log(`  ✅ Found user by email: ${userDocId}`);
           }
         }
 
@@ -62,12 +52,10 @@ async function fixUserClaims() {
           if (!usersByPhone.empty) {
             userData = usersByPhone.docs[0].data();
             userDocId = usersByPhone.docs[0].id;
-            console.log(`  ✅ Found user by phone: ${userDocId}`);
           }
         }
 
         if (!userData) {
-          console.log(`  ⚠️  No user document found in users table - skipping`);
           errorCount++;
           continue;
         }
@@ -82,7 +70,6 @@ async function fixUserClaims() {
 
           if (!soldierQuery.empty) {
             soldierData = soldierQuery.docs[0].data();
-            console.log(`  ✅ Found linked soldier: ${soldierData.soldier_id}`);
           }
         }
 
@@ -109,28 +96,15 @@ async function fixUserClaims() {
 
         // Update custom claims
         await admin.auth().setCustomUserClaims(authUser.uid, customClaims);
-        console.log(`  ✅ Updated custom claims for ${authUser.uid}`);
-        console.log(`     Role: ${customClaims.custom_role}`);
-        console.log(`     Display Name: ${displayName}`);
-        console.log(`     Division: ${customClaims.division || 'N/A'}`);
-        console.log(`     Team: ${customClaims.team || 'N/A'}`);
 
         successCount++;
 
       } catch (error) {
-        console.error(`  ❌ Error processing user ${authUser.uid}:`, error.message);
         errorCount++;
       }
     }
 
-    console.log(`\n========================================`);
-    console.log(`\nComplete!`);
-    console.log(`  Success: ${successCount}`);
-    console.log(`  Errors: ${errorCount}`);
-    console.log(`  Total: ${authUsers.length}`);
-
   } catch (error) {
-    console.error('Fatal error:', error);
   }
 
   process.exit(0);

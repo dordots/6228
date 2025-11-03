@@ -28,7 +28,6 @@ const getRedirectUrl = async () => {
     // All other roles go to main dashboard
     return '/';
   } catch (error) {
-    console.error('Error getting user for redirect:', error);
     // Default to dashboard on error
     return '/';
   }
@@ -124,7 +123,6 @@ export default function Login() {
           window.location.href = await getRedirectUrl();
         }
       } catch (err) {
-        console.error('Phone login error:', err);
         setError(err.message || 'Failed to send verification code');
       }
     } else {
@@ -147,8 +145,6 @@ export default function Login() {
           window.location.href = await getRedirectUrl();
         }
       } catch (err) {
-        console.error('Verification error:', err);
-
         // Check for rate limiting error
         if (err.code === 'functions/resource-exhausted') {
           const retrySeconds = parseRateLimitError(err.message);
@@ -180,8 +176,6 @@ export default function Login() {
       // Successful login
       window.location.href = await getRedirectUrl();
     } catch (err) {
-      console.error('Login error:', err);
-
       // Check for rate limiting error
       if (err.code === 'functions/resource-exhausted') {
         const retrySeconds = parseRateLimitError(err.message);

@@ -166,10 +166,6 @@ Deno.serve(async (req) => {
     let signatureDataUrl = null;
     if (context.signature) {
       signatureDataUrl = context.signature;
-      console.log(
-        "Found signature in context, length:",
-        signatureDataUrl.length
-      );
     }
 
     const activityDate = new Date(activity.created_date);
@@ -285,7 +281,6 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   } catch (error) {
-    console.error("Release Form Generation Error:", error);
     return new Response(
       JSON.stringify({ error: error.message, stack: error.stack }),
       { status: 500, headers: { "Content-Type": "application/json" } }

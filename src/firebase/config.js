@@ -36,12 +36,9 @@ if (typeof window !== 'undefined' && !import.meta.env.DEV) {
         provider: new ReCaptchaV3Provider(recaptchaSiteKey),
         isTokenAutoRefreshEnabled: true
       });
-      console.log('✅ App Check initialized successfully');
     } catch (error) {
-      console.error('❌ Failed to initialize App Check:', error);
+      // App Check initialization failed
     }
-  } else {
-    console.warn('⚠️  VITE_RECAPTCHA_SITE_KEY not found. App Check not initialized.');
   }
 }
 
@@ -58,7 +55,6 @@ export const isDevelopment = import.meta.env.DEV;
 if (isDevelopment && typeof window !== 'undefined') {
   // @ts-ignore
   self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-  console.log('🔧 App Check debug mode enabled for development');
 }
 
 // Import emulator connectors
@@ -69,24 +65,17 @@ import { connectStorageEmulator } from 'firebase/storage';
 
 // Connect to emulators in development
 if (isDevelopment && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-  console.log('🔧 Connecting to Firebase emulators...');
-  
   // Only connect if not already connected
   if (!auth.config.emulator) {
     connectAuthEmulator(auth, 'http://localhost:9099');
-    console.log('✅ Connected to Auth emulator');
   }
-  
+
   if (!db._settings?.host?.includes('localhost:8080')) {
     connectFirestoreEmulator(db, 'localhost', 8080);
-    console.log('✅ Connected to Firestore emulator');
   }
-  
+
   connectFunctionsEmulator(functions, 'localhost', 5001);
-  console.log('✅ Connected to Functions emulator');
-  
   connectStorageEmulator(storage, 'localhost', 9199);
-  console.log('✅ Connected to Storage emulator');
 }
 
 export default app;

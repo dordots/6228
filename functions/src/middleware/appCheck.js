@@ -8,7 +8,6 @@ const admin = require('firebase-admin');
 function verifyAppCheck(req, res, next) {
   // Skip App Check verification in emulator/development mode
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
-    console.log('⚠️  App Check: Skipping in emulator mode');
     return next();
   }
 
@@ -16,7 +15,6 @@ function verifyAppCheck(req, res, next) {
   const appCheckToken = req.header('X-Firebase-AppCheck');
 
   if (!appCheckToken) {
-    console.error('❌ App Check: Missing token');
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing App Check token'
@@ -28,15 +26,10 @@ function verifyAppCheck(req, res, next) {
     .verifyToken(appCheckToken)
     .then((appCheckClaims) => {
       // Token is valid
-      console.log('✅ App Check: Token verified', {
-        appId: appCheckClaims.app_id,
-        alreadyConsumed: appCheckClaims.already_consumed
-      });
       return next();
     })
     .catch((error) => {
       // Token is invalid
-      console.error('❌ App Check: Token verification failed', error);
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid App Check token'
@@ -51,14 +44,12 @@ function verifyAppCheck(req, res, next) {
 function verifyAndConsumeAppCheck(req, res, next) {
   // Skip App Check verification in emulator/development mode
   if (process.env.FUNCTIONS_EMULATOR === 'true') {
-    console.log('⚠️  App Check: Skipping in emulator mode');
     return next();
   }
 
   const appCheckToken = req.header('X-Firebase-AppCheck');
 
   if (!appCheckToken) {
-    console.error('❌ App Check: Missing token');
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing App Check token'
@@ -70,20 +61,15 @@ function verifyAndConsumeAppCheck(req, res, next) {
     .verifyToken(appCheckToken, { consume: true })
     .then((appCheckClaims) => {
       if (appCheckClaims.already_consumed) {
-        console.error('❌ App Check: Token already consumed');
         return res.status(401).json({
           error: 'Unauthorized',
           message: 'App Check token already used'
         });
       }
 
-      console.log('✅ App Check: Token verified and consumed', {
-        appId: appCheckClaims.app_id
-      });
       return next();
     })
     .catch((error) => {
-      console.error('❌ App Check: Token verification failed', error);
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid App Check token'

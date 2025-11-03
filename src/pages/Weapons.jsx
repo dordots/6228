@@ -65,7 +65,6 @@ export default function Weapons() {
         try {
             setCurrentUser(await User.me());
         } catch(e) {
-            console.error("Failed to fetch user", e);
         }
     };
     fetchUser();
@@ -99,20 +98,8 @@ export default function Weapons() {
        const userDivision = user?.division;
        const userTeam = user?.team;
 
-       // DEBUG: Log user details
-       console.log('=== WEAPON LOAD DEBUG ===');
-       console.log('Current User:', {
-         role: user?.role,
-         custom_role: user?.custom_role,
-         division: user?.division,
-         team: user?.team,
-         full_name: user?.full_name
-       });
-
        // Team leaders need special two-step filtering
        if (isTeamLeader && userDivision && userTeam) {
-         console.log('Team leader: Using two-step filtering approach');
-
          // Step 1: Get team soldiers
          const teamSoldiers = await Soldier.filter({
            division_name: userDivision,
@@ -120,16 +107,12 @@ export default function Weapons() {
          }).catch(() => []);
 
          const soldierIds = teamSoldiers.map(s => s.soldier_id);
-         console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
 
          // Step 2: Get all division weapons, then filter client-side
          const allWeapons = await Weapon.filter({ division_name: userDivision }, "-created_date").catch(() => []);
-         console.log(`Team leader: Fetched ${allWeapons.length} division weapons, filtering client-side...`);
 
          const soldierIdSet = new Set(soldierIds);
          const weaponsData = allWeapons.filter(w => w.assigned_to && soldierIdSet.has(w.assigned_to));
-
-         console.log(`Team leader: After filtering, ${weaponsData.length} weapons assigned to team members`);
 
          setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
          setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
@@ -144,55 +127,16 @@ export default function Weapons() {
            filter = { division_name: userDivision }; // Fallback
          }
 
-         // DEBUG: Log the filter being applied
-         console.log('Database Filter Applied:', filter);
-         console.log('Filter explanation:', Object.keys(filter).length === 0
-           ? 'No filter - fetching ALL weapons (admin/manager)'
-           : `Filtering by division_name: "${filter.division_name}"`);
-
         const [weaponsData, soldiersData] = await Promise.all([
           Weapon.filter(filter, "-created_date").catch(() => []),
           Soldier.filter(filter).catch(() => [])
         ]);
 
-        // DEBUG: Log fetched data
-        console.log('Total weapons fetched from DB:', weaponsData?.length || 0);
-        console.log('Total soldiers fetched from DB:', soldiersData?.length || 0);
-
-        if (weaponsData && weaponsData.length > 0) {
-          // Sample first 5 weapons
-          console.log('Sample of first 5 weapons:', weaponsData.slice(0, 5).map(w => ({
-            id: w.id,
-            weapon_id: w.weapon_id,
-            weapon_type: w.weapon_type,
-            division_name: w.division_name,
-            assigned_to: w.assigned_to
-          })));
-
-          // Check for weapons with missing division_name
-          const weaponsWithoutDivision = weaponsData.filter(w => !w.division_name);
-          if (weaponsWithoutDivision.length > 0) {
-            console.warn('⚠️ Weapons with missing division_name:', weaponsWithoutDivision.length);
-            console.warn('Sample:', weaponsWithoutDivision.slice(0, 3).map(w => ({
-              id: w.id,
-              weapon_id: w.weapon_id,
-              weapon_type: w.weapon_type,
-              division_name: w.division_name
-            })));
-          }
-
-          // Show unique division names in fetched data
-          const uniqueDivisions = [...new Set(weaponsData.map(w => w.division_name).filter(Boolean))];
-          console.log('Unique divisions in fetched weapons:', uniqueDivisions);
-        }
-
-        console.log('=== END WEAPON LOAD DEBUG ===\n');
 
         setWeapons(Array.isArray(weaponsData) ? weaponsData : []);
         setSoldiers(Array.isArray(soldiersData) ? soldiersData : []);
        }
     } catch (error) {
-      console.error("Error loading data:", error);
       setWeapons([]);
       setSoldiers([]);
     }
@@ -225,14 +169,12 @@ export default function Weapons() {
           division_name: 'N/A' // This is a cross-division action
         });
       } catch (logError) {
-        console.error("Failed to create activity log (weapon rename succeeded):", logError);
       }
 
       alert("Weapon types renamed successfully!");
       setShowRenameDialog(false);
       await loadData();
     } catch (error) {
-      console.error("Error renaming weapon types:", error);
       alert("An error occurred during the renaming process.");
     }
   };
@@ -303,7 +245,6 @@ export default function Weapons() {
             division_name: weaponData.division_name || 'N/A'
           });
         } catch (logError) {
-          console.error("Failed to create activity log (weapon update succeeded):", logError);
         }
       } else {
         if (!user?.permissions?.['equipment.create'] && user?.role !== 'admin') {
@@ -364,7 +305,6 @@ export default function Weapons() {
             division_name: enrichedWeaponData.division_name || 'N/A'
           });
         } catch (logError) {
-          console.error("Failed to create activity log (weapon creation succeeded):", logError);
         }
       }
 
@@ -373,7 +313,6 @@ export default function Weapons() {
       setEditingWeapon(null);
       loadData();
     } catch(e) {
-      console.error(e);
       alert("An error occurred. Please try again.");
     }
   };
@@ -408,7 +347,6 @@ export default function Weapons() {
       await Weapon.delete(weapon.id);
       loadData();
     } catch (error) {
-      console.error("Error deleting weapon:", error);
       if (error.message?.includes('Object not found') || error.response?.status === 404) {
         loadData();
       } else {
@@ -478,7 +416,6 @@ export default function Weapons() {
             await Weapon.delete(id);
             successCount++;
           } catch (deleteError) {
-            console.error(`Error deleting weapon ${id}:`, deleteError);
             if (deleteError.message?.includes('Object not found') || deleteError.response?.status === 404) {
               successCount++;
             } else {
@@ -499,7 +436,6 @@ export default function Weapons() {
       
       loadData();
     } catch (error) {
-      console.error("Error during bulk deletion process:", error);
       alert("An unexpected error occurred during bulk deletion. The data has been refreshed to show the current state.");
       setSelectedItems([]);
       setShowBulkDeleteConfirm(false);
@@ -560,7 +496,6 @@ export default function Weapons() {
           division_name: newDivisionName // Use the derived new division name
         });
       } catch (logError) {
-        console.error("Failed to create activity log (weapon reassignment succeeded):", logError);
       }
 
       // Close dialog and refresh data
@@ -569,7 +504,6 @@ export default function Weapons() {
       loadData();
 
     } catch (error) {
-      console.error("Error reassigning weapon:", error);
       alert("An error occurred while reassigning the weapon.");
     }
   };
@@ -580,19 +514,6 @@ export default function Weapons() {
 
   const filteredWeapons = useMemo(() => {
     if (!Array.isArray(weapons)) return [];
-
-    // DEBUG: Log filtering process
-    console.log('=== CLIENT-SIDE FILTERING DEBUG ===');
-    console.log('Total weapons to filter:', weapons.length);
-    console.log('Active filters:', {
-      searchTerm: searchTerm || '(none)',
-      types: filters.types?.length || 0,
-      conditions: filters.conditions?.length || 0,
-      divisions: filters.divisions?.length || 0,
-      armory_statuses: filters.armory_statuses?.length || 0,
-      assigned_soldiers: filters.assigned_soldiers?.length || 0,
-      maintenance_check: filters.maintenance_check
-    });
 
     const filtered = weapons.filter(weapon => {
       if (!weapon) return false;
@@ -660,11 +581,6 @@ export default function Weapons() {
       return matchesSearch && matchesType && matchesCondition && matchesDivision &&
              matchesArmory && matchesAssignedSoldier && matchesMaintenance && matchesDateRange;
     });
-
-    // DEBUG: Show filtering results
-    console.log('Weapons after client-side filtering:', filtered.length);
-    console.log('Filtered out:', weapons.length - filtered.length, 'weapons');
-    console.log('=== END CLIENT-SIDE FILTERING DEBUG ===\n');
 
     return filtered;
   }, [weapons, soldiers, searchTerm, filters]);

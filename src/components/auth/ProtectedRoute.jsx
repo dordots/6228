@@ -21,7 +21,6 @@ export default function ProtectedRoute({ children }) {
         navigate('/login');
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
       navigate('/login');
     } finally {
       setLoading(false);

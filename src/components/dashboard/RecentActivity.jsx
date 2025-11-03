@@ -32,7 +32,6 @@ const formatUtcToIsraelTime = (utcDateString) => {
     // Format to a clear, absolute time string
     return format(date, "dd MMM yyyy, HH:mm:ss 'IST'");
   } catch (error) {
-    console.error("Error formatting date:", error);
     return 'Invalid Date';
   }
 };

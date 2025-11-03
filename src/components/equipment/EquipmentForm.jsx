@@ -44,7 +44,6 @@ export default function EquipmentForm({ equipment, soldiers, allEquipment, onSub
         const types = [...new Set(allEquipment.map(e => e.equipment_type).filter(Boolean))].sort();
         setExistingEquipmentTypes(types);
       } catch (error) {
-        console.error('Error loading equipment types:', error);
         setExistingEquipmentTypes([]);
       }
     };

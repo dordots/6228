@@ -74,8 +74,6 @@ export default function EquipmentPage() {
 
       // Team leaders need special two-step filtering
       if (isTeamLeader && userDivision && userTeam) {
-        console.log('Team leader: Using two-step filtering approach for equipment');
-
         // Step 1: Get team soldiers
         const teamSoldiers = await Soldier.filter({
           division_name: userDivision,
@@ -83,16 +81,12 @@ export default function EquipmentPage() {
         }).catch(() => []);
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
-        console.log(`Team leader: Found ${soldierIds.length} team soldiers`);
 
         // Step 2: Get all division equipment, then filter client-side
         const allEquipment = await Equipment.filter({ division_name: userDivision }, "-created_date").catch(() => []);
-        console.log(`Team leader: Fetched ${allEquipment.length} division equipment, filtering client-side...`);
 
         const soldierIdSet = new Set(soldierIds);
         const equipmentData = allEquipment.filter(e => e.assigned_to && soldierIdSet.has(e.assigned_to));
-
-        console.log(`Team leader: After filtering, ${equipmentData.length} equipment assigned to team members`);
 
         setEquipment(Array.isArray(equipmentData) ? equipmentData : []);
         setSoldiers(Array.isArray(teamSoldiers) ? teamSoldiers : []);
@@ -117,7 +111,6 @@ export default function EquipmentPage() {
       }
 
     } catch (error) {
-      console.error("Error loading data:", error);
       setEquipment([]);
       setSoldiers([]);
     }
@@ -155,7 +148,6 @@ export default function EquipmentPage() {
         // Ignore ActivityLog errors
       });
     } catch (error) {
-      console.error("Error renaming equipment types:", error);
       // Continue to close dialog and refresh even if there's an error
     } finally {
       setShowRenameDialog(false);
@@ -236,7 +228,6 @@ export default function EquipmentPage() {
         // Ignore ActivityLog errors
       });
     } catch (error) {
-      console.error("Error in handleSubmit:", error);
       // Continue to close dialog and refresh even if there's an error
     } finally {
       setShowForm(false);
@@ -267,7 +258,6 @@ export default function EquipmentPage() {
       await Equipment.delete(equipmentItem.id);
       loadData();
     } catch (error) {
-      console.error("Error deleting equipment:", error);
       alert("An error occurred while deleting the equipment item.");
     }
   };
@@ -339,7 +329,6 @@ export default function EquipmentPage() {
       setShowBulkDeleteConfirm(false); // Make sure this line exists
       loadData();
     } catch (error) {
-      console.error("Error deleting equipment:", error);
       alert("An error occurred during bulk deletion. Some items may not have been deleted.");
     }
   };

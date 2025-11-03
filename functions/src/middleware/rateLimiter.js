@@ -91,7 +91,6 @@ async function rewardSuccess(limiter, key) {
     await limiter.reward(key, 1);
   } catch (error) {
     // Ignore errors in reward (non-critical)
-    console.warn('Failed to reward rate limit point:', error.message);
   }
 }
 

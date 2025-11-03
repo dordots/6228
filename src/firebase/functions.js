@@ -15,8 +15,6 @@ const createFunction = (name) => {
         status: 200
       };
     } catch (error) {
-      console.error(`Error calling ${name}:`, error);
-      
       // Return error in a format similar to Base44
       return {
         success: false,
@@ -48,8 +46,6 @@ const verifyTotpWithFingerprint = async (data = {}) => {
       status: 200
     };
   } catch (error) {
-    console.error('Error calling verifyTotp:', error);
-
     return {
       success: false,
       error: error.message,

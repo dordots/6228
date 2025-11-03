@@ -79,8 +79,7 @@ Deno.serve(async (req) => {
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('SendGrid API error:', errorText);
-            return Response.json({ 
+            return Response.json({
                 error: 'Failed to send email', 
                 details: errorText,
                 status: response.status 
@@ -94,8 +93,7 @@ Deno.serve(async (req) => {
         });
 
     } catch (error) {
-        console.error('Error sending email:', error);
-        return Response.json({ 
+        return Response.json({
             error: 'Internal server error', 
             details: error.message 
         }, { status: 500 });

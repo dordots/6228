@@ -221,7 +221,6 @@ Deno.serve(async (req) => {
 
     if (!sendGridResponse.ok) {
       const errorText = await sendGridResponse.text();
-      console.error("SendGrid API Error:", sendGridResponse.status, errorText);
       return jsonResponse(
         {
           error: "Failed to send email via SendGrid",
@@ -245,7 +244,6 @@ Deno.serve(async (req) => {
       200
     );
   } catch (error) {
-    console.error("Error in sendDailyReport:", error);
     return jsonResponse(
       {
         error: "Failed to send daily report",

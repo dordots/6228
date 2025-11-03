@@ -27,8 +27,6 @@ if (USE_FIREBASE) {
   sendBulkEquipmentForms = firebaseFunctions.sendBulkEquipmentForms;
   sendEmailViaSendGrid = firebaseFunctions.sendEmailViaSendGrid;
   testSendGrid = firebaseFunctions.testSendGrid;
-  
-  console.log('Using Firebase functions');
 } else {
   // Use Base44 SDK
   if (base44 && base44.functions) {
@@ -49,8 +47,6 @@ if (USE_FIREBASE) {
     sendEmailViaSendGrid = base44.functions.sendEmailViaSendGrid;
     testSendGrid = base44.functions.testSendGrid;
   }
-  
-  console.log('Using Base44 functions');
 }
 
 // Export functions

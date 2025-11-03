@@ -50,7 +50,6 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error generating TOTP:", error);
     return new Response(
       JSON.stringify({
         error: "Failed to generate TOTP secret",

@@ -69,7 +69,6 @@ export default function MaintenancePage() {
       setSerializedGear(Array.isArray(gearData) ? gearData : []);
       setDroneSets(Array.isArray(dronesData) ? dronesData : []);
     } catch (error) {
-      console.error("Error loading data:", error);
       setSoldiers([]);
       setWeapons([]);
       setSerializedGear([]);
@@ -188,7 +187,6 @@ export default function MaintenancePage() {
       await Promise.all(updatePromises);
       setShowSuccessDialog(true);
     } catch(error) {
-      console.error("Failed to submit inspection:", error);
       alert("An error occurred during submission. Please try again.");
     }
   };

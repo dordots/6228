@@ -30,7 +30,6 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
     try {
       // Pass rememberDevice to server for server-side verification storage
       const response = await verifyTotp({ token, isSetup, rememberDevice });
-      console.log('TOTP verification response:', response); // Debug log
 
       // Check if the response indicates success
       // The Firebase wrapper returns {success: true, data: {success: true, message: "..."}}
@@ -40,8 +39,7 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
         onSuccess();
       } else if (response.success === false) {
         // Handle error from Firebase wrapper
-        console.error('TOTP verification failed:', response);
-        
+
         // Check if the error is about missing TOTP secret
         if (response.error && response.error.includes('No TOTP secret found')) {
           setNeedsSetup(true);
@@ -54,7 +52,6 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
         setErrorMessage(response.data?.message || 'Invalid verification code. Please try again.');
       }
     } catch (error) {
-      console.error("Error during TOTP verification:", error);
       // Handle any unexpected errors
       const errorMessage = error.details?.message || error.message || 'An unknown error occurred. Please try again.';
       
@@ -82,7 +79,6 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
       // Reload the page to trigger the setup flow
       window.location.reload();
     } catch (error) {
-      console.error('Error resetting TOTP setup:', error);
       setErrorMessage('Failed to reset 2FA setup. Please try again.');
     }
   };
@@ -93,7 +89,6 @@ export default function TotpVerificationPrompt({ onSuccess, isSetup = false }) {
       // Server-side verification will be cleared on logout automatically
       navigate('/login');
     } catch (error) {
-      console.error('Error logging out:', error);
       setErrorMessage('Failed to logout. Please try again.');
     }
   };

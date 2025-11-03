@@ -64,8 +64,6 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error verifying TOTP:", error);
-
     if (error.message && error.message.includes("Rate limit exceeded")) {
       return new Response(
         JSON.stringify({

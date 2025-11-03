@@ -97,7 +97,6 @@ export default function DailyVerificationPage() {
       }
 
     } catch (error) {
-      console.error("Error loading verification data:", error);
       setAllSoldiers([]);
       setAllWeapons([]);
       setAllGear([]);
@@ -160,7 +159,6 @@ export default function DailyVerificationPage() {
         signature: null,
       });
     } catch (error) {
-      console.error("Error creating verification:", error);
       // Silently ignore error and just refresh
     } finally {
       // Refresh all data to ensure UI is up-to-date
@@ -174,7 +172,6 @@ export default function DailyVerificationPage() {
     try {
       await DailyVerification.delete(verificationId);
     } catch (error) {
-      console.error("Error undoing verification:", error);
       // Silently ignore error and just refresh
     } finally {
       // Refresh all data to ensure UI is up-to-date
@@ -241,7 +238,6 @@ export default function DailyVerificationPage() {
         });
       }));
     } catch (error) {
-      console.error("Error bulk verifying:", error);
       // Silently ignore error and just refresh
     } finally {
       setSelectedSoldiers(new Set()); // Clear selection after refresh
@@ -260,7 +256,6 @@ export default function DailyVerificationPage() {
 
       await Promise.all(verificationsToDelete.map(v => DailyVerification.delete(v.id)));
     } catch (error) {
-      console.error("Error bulk unverifying:", error);
       // Silently ignore error and just refresh
     } finally {
       setSelectedSoldiers(new Set()); // Clear selection after refresh

@@ -44,7 +44,6 @@ Deno.serve(async (req) => {
         await base44.asServiceRole.entities.Soldier.delete(soldier.id);
         deletedCount++;
       } catch (deleteError) {
-        console.error(`Error deleting soldier ${soldier.id}:`, deleteError);
         // Continue with other deletions even if one fails
       }
     }
@@ -68,7 +67,6 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error deleting soldiers:", error);
     return new Response(
       JSON.stringify({
         error: "Failed to delete soldier records",

@@ -14,8 +14,6 @@ admin.initializeApp({
 const db = admin.firestore();
 
 async function initializeCollections() {
-  console.log('Initializing Firestore collections with Admin SDK...');
-
   // Define collection schemas with sample documents
   const collections = {
     soldiers: {
@@ -148,21 +146,13 @@ async function initializeCollections() {
   for (const [collectionName, { id, data }] of Object.entries(collections)) {
     try {
       await db.collection(collectionName).doc(id).set(data);
-      console.log(`✅ Created ${collectionName} collection with sample document`);
     } catch (error) {
-      console.error(`❌ Error creating ${collectionName}:`, error);
     }
   }
 
-  console.log('\n🎉 All collections initialized successfully!');
-  console.log('\nNext steps:');
-  console.log('1. Delete the sample documents from Firebase Console if not needed');
-  console.log('2. Or keep them for testing purposes');
-  console.log('3. Run the data migration script when ready');
-  
   // Gracefully exit
   process.exit(0);
 }
 
 // Run the initialization
-initializeCollections().catch(console.error);
+initializeCollections().catch(err => {});

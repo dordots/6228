@@ -23,7 +23,6 @@ export const initializeRecaptcha = (buttonId) => {
     'size': 'invisible',
     'callback': (response) => {
       // reCAPTCHA solved, allow signInWithPhoneNumber.
-      console.log('reCAPTCHA verified');
     }
   }, auth);
 };

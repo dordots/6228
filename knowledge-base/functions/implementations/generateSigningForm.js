@@ -194,7 +194,6 @@ Deno.serve(async (req) => {
         return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 
     } catch (error) {
-        console.error('Signing Form Generation Error:', error);
         return new Response(JSON.stringify({ error: error.message, stack: error.stack }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 });

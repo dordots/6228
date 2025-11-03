@@ -95,7 +95,7 @@ const buildQuery = (collectionRef, options = {}) => {
               q = query(q, where(field, 'not-in', value));
               break;
             default:
-              console.warn(`Unknown operator: ${operator}`);
+              break;
           }
         });
       } else {
@@ -161,16 +161,14 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         const snapshot = await getDocs(q);
         
         const results = snapshot.docs.map(convertDoc);
-        
+
         // Handle includes (denormalized data should already be present)
         if (options.include) {
           // In Firebase, we rely on denormalized data
-          console.log('Include option used - denormalized data should be present');
         }
-        
+
         return results;
       } catch (error) {
-        console.error(`Error in findMany for ${collectionName}:`, error);
         throw error;
       }
     },
@@ -188,7 +186,6 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         const docSnap = await getDoc(docRef);
         return convertDoc(docSnap);
       } catch (error) {
-        console.error(`Error finding document by ID:`, error);
         return null;
       }
     },
@@ -223,7 +220,6 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         const updatedDoc = await getDoc(docRef);
         return convertDoc(updatedDoc);
       } catch (error) {
-        console.error(`Error updating document:`, error);
         throw error;
       }
     },
@@ -249,7 +245,6 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         await deleteDoc(doc(db, collectionName, docId));
         return true;
       } catch (error) {
-        console.error(`Error deleting document:`, error);
         throw error;
       }
     },
@@ -267,7 +262,6 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         await batch.commit();
         return { count: docs.length };
       } catch (error) {
-        console.error(`Error in deleteMany:`, error);
         throw error;
       }
     },
@@ -297,7 +291,6 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         await batch.commit();
         return { count: docs.length };
       } catch (error) {
-        console.error(`Error in updateMany:`, error);
         throw error;
       }
     }

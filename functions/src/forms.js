@@ -135,7 +135,6 @@ exports.generateSigningForm = functions
       filename: `signing_form_${soldierID}_${Date.now()}.pdf`,
     };
   } catch (error) {
-    console.error("Error generating signing form:", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to generate signing form: ${error.message}`
@@ -260,7 +259,6 @@ exports.generateReleaseForm = functions
       filename: result.filename,
     };
   } catch (error) {
-    console.error("Error generating release form:", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to generate release form: ${error.message}`
@@ -347,7 +345,6 @@ exports.sendSigningForm = functions
 
     return { success: true, message: `Signing form sent to ${email}` };
   } catch (error) {
-    console.error("Error sending signing form:", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to send signing form: ${error.message}`
@@ -486,8 +483,6 @@ exports.sendSigningFormByActivity = functions
     const timeStr = now.toLocaleTimeString('he-IL');
 
     // Generate PDF from HTML using Puppeteer
-    console.log('[PDF Generation] Starting HTML-to-PDF generation for soldier:', soldierID);
-
     // Embed signature directly as base64 data URI
     const signatureHtml = signatureData
       ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;object-fit:contain;" />`
@@ -631,7 +626,6 @@ exports.sendSigningFormByActivity = functions
     await browser.close();
 
     const pdfBase64 = pdfBuffer.toString('base64');
-    console.log('[PDF Generation] PDF generated successfully. Size:', pdfBuffer.length, 'bytes');
 
     // Send email with PDF attachment
     const msg = {
@@ -657,13 +651,10 @@ exports.sendSigningFormByActivity = functions
       ],
     };
 
-    console.log('[Email] Sending email with PDF attachment to:', soldier.email);
     await sgMail.send(msg);
-    console.log('[Email] Email sent successfully');
 
     return { success: true, message: `Signing form sent to ${soldier.email}` };
   } catch (error) {
-    console.error("Error sending signing form:", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to send signing form: ${error.message}`
@@ -801,8 +792,6 @@ exports.sendReleaseFormByActivity = functions
     const timeStr = now.toLocaleTimeString('he-IL');
 
     // Generate PDF from HTML using Puppeteer
-    console.log('[PDF Generation] Starting HTML-to-PDF generation for release form, soldier:', soldierID);
-
     // Get signature from activity if available - embed directly as base64 data URI
     const signatureData = activity.context?.signature || '';
     const signatureHtml = signatureData
@@ -950,7 +939,6 @@ exports.sendReleaseFormByActivity = functions
     await browser.close();
 
     const pdfBase64 = pdfBuffer.toString('base64');
-    console.log('[PDF Generation] Release form PDF generated successfully. Size:', pdfBuffer.length, 'bytes');
 
     // Send email with PDF attachment
     const msg = {
@@ -976,13 +964,10 @@ exports.sendReleaseFormByActivity = functions
       ],
     };
 
-    console.log('[Email] Sending release form email with PDF attachment to:', soldier.email);
     await sgMail.send(msg);
-    console.log('[Email] Release form email sent successfully');
 
     return { success: true, message: `Release form sent to ${soldier.email}` };
   } catch (error) {
-    console.error("Error sending release form:", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to send release form: ${error.message}`

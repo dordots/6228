@@ -41,7 +41,6 @@ export default function DroneComponents() {
         try {
             setCurrentUser(await User.me());
         } catch(e) {
-            console.error("Failed to fetch user", e);
         }
     };
     fetchUser();
@@ -70,8 +69,6 @@ export default function DroneComponents() {
 
       // Team leaders need special two-step filtering
       if (isTeamLeader && userDivision && userTeam) {
-        console.log('Team leader: Using two-step filtering for drone components');
-
         // Step 1: Get team soldiers
         const teamSoldiers = await Soldier.filter({
           division_name: userDivision,
@@ -79,23 +76,12 @@ export default function DroneComponents() {
         }).catch(() => []);
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
-        console.log(`Team leader (DroneComponents): Found ${soldierIds.length} team soldiers`);
-        console.log('Team leader (DroneComponents): Soldier IDs:', soldierIds);
 
         // Step 2: Get all division drone sets, then filter by team
         const allDroneSets = await DroneSet.filter({ division_name: userDivision }).catch(() => []);
 
-        console.log(`Team leader (DroneComponents): Fetched ${allDroneSets.length} division drone sets, filtering...`);
-
         const soldierIdSet = new Set(soldierIds);
         const droneSetsData = allDroneSets.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
-
-        console.log(`Team leader (DroneComponents): After filtering, ${droneSetsData.length} drone sets assigned to team members`);
-        console.log('Team leader (DroneComponents): Filtered drone sets:', droneSetsData.map(d => ({
-          set_serial_number: d.set_serial_number,
-          assigned_to: d.assigned_to,
-          components: d.components
-        })));
 
         // Step 3: Extract component IDs from team drone sets
         const teamComponentIds = new Set();
@@ -110,9 +96,6 @@ export default function DroneComponents() {
           }
         });
 
-        console.log(`Team leader (DroneComponents): Found ${teamComponentIds.size} unique component IDs in team drone sets`);
-        console.log('Team leader (DroneComponents): Component IDs:', Array.from(teamComponentIds));
-
         // Step 4: Fetch only the specific components that are in team drone sets
         // Fetch all components from the system and filter to only team components
         // Note: We can't filter by division since components are shared resources
@@ -124,8 +107,6 @@ export default function DroneComponents() {
             // This might fail due to permissions, so we'll catch and handle
             const allSystemComponents = await DroneComponent.list("-created_date").catch(() => []);
 
-            console.log(`Team leader (DroneComponents): Fetched ${allSystemComponents.length} total system components`);
-
             // Filter to only components that are in team drone sets
             allSystemComponents.forEach(component => {
               // Check if component.id or component.component_id matches any team component ID
@@ -134,8 +115,6 @@ export default function DroneComponents() {
               }
             });
           } catch (error) {
-            console.error('Failed to fetch components list:', error);
-
             // Fallback: try to fetch components one by one using filter
             for (const componentId of teamComponentIds) {
               try {
@@ -144,19 +123,15 @@ export default function DroneComponents() {
                   componentsData.push(...foundComponents);
                 }
               } catch (err) {
-                console.error(`Failed to fetch component ${componentId}:`, err);
               }
             }
           }
         }
 
-        console.log(`Team leader (DroneComponents): Successfully loaded ${componentsData.length} components for team drone sets`);
-
         setComponents(Array.isArray(componentsData) ? componentsData : []);
         setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
       } else if (isDivisionManager && userDivision) {
         // Division manager: Use three-step filtering like team leaders
-        console.log('Division manager: Using three-step filtering for drone components');
 
         // Step 1: Get all division soldiers
         const divisionSoldiers = await Soldier.filter({
@@ -164,23 +139,14 @@ export default function DroneComponents() {
         }).catch(() => []);
 
         const soldierIds = divisionSoldiers.map(s => s.soldier_id);
-        console.log(`Division manager (DroneComponents): Found ${soldierIds.length} division soldiers`);
-        console.log('Division manager (DroneComponents): Soldier IDs:', soldierIds);
 
         // Step 2: Get all division drone sets, then filter by division soldiers
         const allDroneSets = await DroneSet.filter({ division_name: userDivision }).catch(() => []);
 
-        console.log(`Division manager (DroneComponents): Fetched ${allDroneSets.length} division drone sets, filtering...`);
 
         const soldierIdSet = new Set(soldierIds);
         const droneSetsData = allDroneSets.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
 
-        console.log(`Division manager (DroneComponents): After filtering, ${droneSetsData.length} drone sets assigned to division soldiers`);
-        console.log('Division manager (DroneComponents): Filtered drone sets:', droneSetsData.map(d => ({
-          set_serial_number: d.set_serial_number,
-          assigned_to: d.assigned_to,
-          components: d.components
-        })));
 
         // Step 3: Extract component IDs from division drone sets
         const divisionComponentIds = new Set();
@@ -348,7 +314,6 @@ export default function DroneComponents() {
       await DroneComponent.delete(component.id);
       loadData();
     } catch (error) {
-      console.error("Error deleting drone component:", error);
       alert("An error occurred while deleting the drone component.");
     }
   };
@@ -490,7 +455,6 @@ export default function DroneComponents() {
       setShowBulkDeleteConfirm(false);
       loadData();
     } catch (error) {
-      console.error("Error during bulk deletion process:", error);
       alert("An error occurred during bulk deletion. Some items may not have been deleted.");
     }
   };

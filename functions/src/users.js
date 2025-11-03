@@ -20,7 +20,7 @@ async function isUserAdmin(context) {
       return userData.role === 'admin';
     }
   } catch (error) {
-    console.error('Error checking admin status from Firestore:', error);
+    // Error checking admin status
   }
 
   return false;
@@ -50,7 +50,7 @@ async function hasUserPermission(context, permission) {
       return userData.permissions?.[permission] === true;
     }
   } catch (error) {
-    console.error('Error checking permission from Firestore:', error);
+    // Error checking permission
   }
 
   return false;
@@ -103,7 +103,6 @@ exports.createPhoneUser = functions
 
       // Try to match by phone number first
       if (phoneNumber) {
-        console.log(`  Searching for soldier by phone: ${phoneNumber}`);
         const soldiersByPhone = await db.collection('soldiers')
           .where('phone_number', '==', phoneNumber)
           .limit(1)
@@ -112,13 +111,11 @@ exports.createPhoneUser = functions
         if (!soldiersByPhone.empty) {
           soldierDoc = soldiersByPhone.docs[0];
           soldierData = soldierDoc.data();
-          console.log(`  ✅ Found soldier by phone: ${soldierData.soldier_id}`);
         }
       }
 
       // Try to match by email if phone didn't match
       if (!soldierDoc && email) {
-        console.log(`  Searching for soldier by email: ${email}`);
         const soldiersByEmail = await db.collection('soldiers')
           .where('email', '==', email)
           .limit(1)
@@ -127,7 +124,6 @@ exports.createPhoneUser = functions
         if (!soldiersByEmail.empty) {
           soldierDoc = soldiersByEmail.docs[0];
           soldierData = soldierDoc.data();
-          console.log(`  ✅ Found soldier by email: ${soldierData.soldier_id}`);
         }
       }
 
@@ -156,7 +152,6 @@ exports.createPhoneUser = functions
       // Save to Firestore users collection
       const userDocRef = db.collection('users').doc(userRecord.uid);
       await userDocRef.set(userDocData);
-      console.log(`  ✅ Created user document in Firestore for ${userRecord.uid}`);
 
       // If soldier found, update soldier document with user UID
       if (soldierDoc) {
@@ -164,7 +159,6 @@ exports.createPhoneUser = functions
           id: userRecord.uid,
           updated_at: admin.firestore.FieldValue.serverTimestamp()
         });
-        console.log(`  ✅ Updated soldier ${soldierData.soldier_id} with user UID`);
       }
 
       // Set custom claims with new RBAC structure
@@ -197,7 +191,6 @@ exports.createPhoneUser = functions
         } : null
       };
     } catch (error) {
-      console.error('Error creating user:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to create user: ${error.message}`
@@ -235,7 +228,7 @@ exports.listUsers = functions
           isDivisionManager = userData.custom_role === 'division_manager';
         }
       } catch (error) {
-        console.error('Error reading user permissions from Firestore:', error);
+        // Error reading user permissions from Firestore
       }
     }
 
@@ -282,7 +275,6 @@ exports.listUsers = functions
         pageToken: null // No pagination needed for Firestore query
       };
     } catch (error) {
-      console.error('Error listing users:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to list users: ${error.message}`
@@ -362,7 +354,7 @@ exports.updateUserRole = functions
 
         await admin.auth().setCustomUserClaims(uid, updatedClaims);
       } catch (authError) {
-        console.warn('Could not update auth custom claims (user may not exist in auth):', authError.message);
+        // Could not update auth custom claims (user may not exist in auth)
         // Continue anyway since Firestore is the source of truth
       }
 
@@ -375,7 +367,6 @@ exports.updateUserRole = functions
         team
       };
     } catch (error) {
-      console.error('Error updating user role:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to update user role: ${error.message}`
@@ -400,7 +391,7 @@ exports.updateUserPermissions = functions
           isDivisionManager = userDoc.data().custom_role === 'division_manager';
         }
       } catch (error) {
-        console.error('Error checking division manager status:', error);
+        // Error checking division manager status
       }
     }
 
@@ -453,7 +444,7 @@ exports.updateUserPermissions = functions
 
         await admin.auth().setCustomUserClaims(uid, updatedClaims);
       } catch (authError) {
-        console.warn('Could not update auth custom claims:', authError.message);
+        // Could not update auth custom claims
         // Continue anyway since Firestore is the source of truth
       }
 
@@ -463,7 +454,6 @@ exports.updateUserPermissions = functions
         team
       };
     } catch (error) {
-      console.error('Error updating user assignment:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to update user assignment: ${error.message}`
@@ -495,22 +485,14 @@ exports.deleteUser = functions
     try {
       const db = admin.firestore();
 
-      console.log(`\n========================================`);
-      console.log(`[deleteUser] STEP 1: Starting delete for UID: ${uid}`);
-
       // Get user from Authentication to get their email/phone
       let authUser;
       try {
         authUser = await admin.auth().getUser(uid);
-        console.log(`[deleteUser] STEP 2: Found user in Authentication`);
-        console.log(`  Email: ${authUser.email || 'N/A'}`);
-        console.log(`  Phone: ${authUser.phoneNumber || 'N/A'}`);
-        console.log(`  UID: ${authUser.uid}`);
       } catch (error) {
         if (error.code === 'auth/user-not-found') {
-          console.log(`[deleteUser] ⚠️  User ${uid} not found in Authentication`);
+          // User not found in Authentication
         } else {
-          console.log(`[deleteUser] ❌ Error getting user from Auth:`, error);
           throw error;
         }
       }
@@ -518,13 +500,10 @@ exports.deleteUser = functions
       // Delete user from Authentication
       let authDeleted = false;
       if (authUser) {
-        console.log(`[deleteUser] STEP 3: Deleting from Firebase Authentication...`);
         try {
           await admin.auth().deleteUser(uid);
           authDeleted = true;
-          console.log(`[deleteUser] ✅ Deleted user from Firebase Authentication`);
         } catch (error) {
-          console.log(`[deleteUser] ❌ Error deleting from Auth:`, error);
           throw error;
         }
       }
@@ -532,78 +511,41 @@ exports.deleteUser = functions
       // Delete user document from Firestore by searching with phone or email
       let firestoreDeleted = false;
 
-      console.log(`[deleteUser] STEP 4: Searching for user document in Firestore...`);
-
       // Try to find and delete by phone number
       if (authUser?.phoneNumber) {
-        console.log(`[deleteUser] STEP 4a: Searching by phoneNumber field`);
-        console.log(`  Query: users.where('phoneNumber', '==', '${authUser.phoneNumber}')`);
-
         try {
           const usersByPhone = await db.collection('users')
             .where('phoneNumber', '==', authUser.phoneNumber)
             .get();
 
-          console.log(`  Result: Found ${usersByPhone.size} document(s)`);
-
           if (!usersByPhone.empty) {
             for (const doc of usersByPhone.docs) {
-              const docData = doc.data();
-              console.log(`  Document ID: ${doc.id}`);
-              console.log(`  Document data:`, JSON.stringify(docData, null, 2));
-
-              console.log(`  Attempting to delete document ${doc.id}...`);
               await doc.ref.delete();
               firestoreDeleted = true;
-              console.log(`  ✅ Successfully deleted document ${doc.id}`);
             }
           }
         } catch (error) {
-          console.log(`  ❌ Error searching/deleting by phone:`, error);
+          // Error searching/deleting by phone
         }
-      } else {
-        console.log(`[deleteUser] STEP 4a: No phone number available, skipping phone search`);
       }
 
       // Try to find and delete by email if not deleted yet
       if (!firestoreDeleted && authUser?.email) {
-        console.log(`[deleteUser] STEP 4b: Searching by email field`);
-        console.log(`  Query: users.where('email', '==', '${authUser.email}')`);
-
         try {
           const usersByEmail = await db.collection('users')
             .where('email', '==', authUser.email)
             .get();
 
-          console.log(`  Result: Found ${usersByEmail.size} document(s)`);
-
           if (!usersByEmail.empty) {
             for (const doc of usersByEmail.docs) {
-              const docData = doc.data();
-              console.log(`  Document ID: ${doc.id}`);
-              console.log(`  Document data:`, JSON.stringify(docData, null, 2));
-
-              console.log(`  Attempting to delete document ${doc.id}...`);
               await doc.ref.delete();
               firestoreDeleted = true;
-              console.log(`  ✅ Successfully deleted document ${doc.id}`);
             }
           }
         } catch (error) {
-          console.log(`  ❌ Error searching/deleting by email:`, error);
+          // Error searching/deleting by email
         }
-      } else if (!firestoreDeleted) {
-        console.log(`[deleteUser] STEP 4b: No email available or already deleted, skipping email search`);
       }
-
-      if (!firestoreDeleted) {
-        console.log(`[deleteUser] ⚠️  WARNING: No user document found/deleted in Firestore`);
-      }
-
-      console.log(`[deleteUser] STEP 5: Delete operation complete`);
-      console.log(`  Deleted from Auth: ${authDeleted}`);
-      console.log(`  Deleted from Firestore: ${firestoreDeleted}`);
-      console.log(`========================================\n`);
 
       return {
         success: true,
@@ -612,8 +554,6 @@ exports.deleteUser = functions
         deletedFromFirestore: firestoreDeleted
       };
     } catch (error) {
-      console.error('[deleteUser] ❌ FATAL ERROR:', error);
-      console.log(`========================================\n`);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to delete user: ${error.message}`
@@ -678,7 +618,6 @@ exports.getUserByPhone = functions
       if (error.code === 'auth/user-not-found') {
         return null;
       }
-      console.error('Error getting user by phone:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to get user: ${error.message}`
@@ -757,7 +696,6 @@ exports.setAdminByPhone = functions
         message: 'Admin role assigned successfully'
       };
     } catch (error) {
-      console.error('Error setting admin:', error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to set admin: ${error.message}`
@@ -938,102 +876,63 @@ exports.syncUserOnSignIn = functions
       }
 
       // STEP 4: Find and link soldier on sign-in
-      console.log(`[syncUserOnSignIn] STEP 5: Finding soldier to link...`);
       let soldierData = null;
       let shouldUpdateUserDoc = false;
       let newLinkedSoldierId = userData.linked_soldier_id; // Start with existing value
 
       // Try to find soldier by phone number
       if (authUser.phoneNumber) {
-        console.log(`[syncUserOnSignIn] STEP 5a: Searching for soldier by phone number...`);
-        console.log(`  Query: soldiers WHERE phone_number == "${authUser.phoneNumber}"`);
-
         try {
           const soldiersByPhone = await db.collection('soldiers')
             .where('phone_number', '==', authUser.phoneNumber)
             .limit(1)
             .get();
 
-          console.log(`  Result: Found ${soldiersByPhone.size} soldier(s)`);
-
           if (!soldiersByPhone.empty) {
             soldierData = soldiersByPhone.docs[0].data();
-            console.log(`  ✅ FOUND: Soldier ${soldierData.soldier_id} by phone`);
-            console.log(`    Name: ${soldierData.first_name} ${soldierData.last_name}`);
-            console.log(`    Division: ${soldierData.division_name || 'N/A'}`);
-            console.log(`    Team: ${soldierData.team_name || 'N/A'}`);
 
             // Update linked soldier ID if it changed
             if (newLinkedSoldierId !== soldierData.soldier_id) {
-              console.log(`  📝 Updating linked_soldier_id from "${newLinkedSoldierId || 'null'}" to "${soldierData.soldier_id}"`);
               newLinkedSoldierId = soldierData.soldier_id;
               shouldUpdateUserDoc = true;
             }
-          } else {
-            console.log(`  ❌ NOT FOUND by phone`);
           }
         } catch (error) {
-          console.error(`  ❌ Error searching by phone:`, error);
+          // Error searching by phone
         }
-      } else {
-        console.log(`[syncUserOnSignIn] STEP 5a: Skipping phone search (no phone number)`);
       }
 
       // Try to find soldier by email if not found by phone
       if (!soldierData && authUser.email) {
-        console.log(`[syncUserOnSignIn] STEP 5b: Searching for soldier by email...`);
-        console.log(`  Query: soldiers WHERE email == "${authUser.email}"`);
-
         try {
           const soldiersByEmail = await db.collection('soldiers')
             .where('email', '==', authUser.email)
             .limit(1)
             .get();
 
-          console.log(`  Result: Found ${soldiersByEmail.size} soldier(s)`);
-
           if (!soldiersByEmail.empty) {
             soldierData = soldiersByEmail.docs[0].data();
-            console.log(`  ✅ FOUND: Soldier ${soldierData.soldier_id} by email`);
-            console.log(`    Name: ${soldierData.first_name} ${soldierData.last_name}`);
-            console.log(`    Division: ${soldierData.division_name || 'N/A'}`);
-            console.log(`    Team: ${soldierData.team_name || 'N/A'}`);
 
             // Update linked soldier ID if it changed
             if (newLinkedSoldierId !== soldierData.soldier_id) {
-              console.log(`  📝 Updating linked_soldier_id from "${newLinkedSoldierId || 'null'}" to "${soldierData.soldier_id}"`);
               newLinkedSoldierId = soldierData.soldier_id;
               shouldUpdateUserDoc = true;
             }
-          } else {
-            console.log(`  ❌ NOT FOUND by email`);
           }
         } catch (error) {
-          console.error(`  ❌ Error searching by email:`, error);
+          // Error searching by email
         }
-      } else if (!soldierData) {
-        console.log(`[syncUserOnSignIn] STEP 5b: Skipping email search (no email or already found)`);
       }
 
       // If no soldier found, use "SAMPLE_SOLDIER" as the ID and set division/team to null
       if (!soldierData) {
-        console.log(`[syncUserOnSignIn] STEP 5c: No soldier found, using SAMPLE_SOLDIER ID...`);
-
         // Update linked soldier ID to "SAMPLE_SOLDIER" and clear division/team
         const needsUpdate = newLinkedSoldierId !== 'SAMPLE_SOLDIER' || userData.division !== null || userData.team !== null;
 
         if (needsUpdate) {
-          console.log(`  📝 Updating user:`);
-          console.log(`    - linked_soldier_id: "${newLinkedSoldierId || 'null'}" → "SAMPLE_SOLDIER"`);
-          console.log(`    - division: "${userData.division || 'null'}" → null`);
-          console.log(`    - team: "${userData.team || 'null'}" → null`);
           newLinkedSoldierId = 'SAMPLE_SOLDIER';
           shouldUpdateUserDoc = true;
-        } else {
-          console.log(`  ℹ️  Already set: linked_soldier_id="SAMPLE_SOLDIER", division=null, team=null`);
         }
-      } else {
-        console.log(`[syncUserOnSignIn] STEP 5c: Soldier found, skipping SAMPLE_SOLDIER fallback`);
       }
 
       // Calculate display name from soldier data
@@ -1042,14 +941,8 @@ exports.syncUserOnSignIn = functions
         ? `${soldierData.first_name || ''} ${soldierData.last_name || ''}`.trim()
         : 'Sample Soldier';
 
-      console.log(`[syncUserOnSignIn] STEP 5d: Display name will be: "${displayName}"`);
-
       // ALWAYS update user document with latest soldier data (division, team, displayName, linked_soldier_id)
       if (userDoc) {
-        console.log(`[syncUserOnSignIn] STEP 5e: Updating user document with soldier data...`);
-        console.log(`  User Doc ID: ${userDocId}`);
-        console.log(`  Linked soldier ID: ${newLinkedSoldierId}`);
-
         try {
           // Set division and team from soldier if they exist, otherwise null
           const newDivision = soldierData?.division_name || null;
@@ -1063,22 +956,7 @@ exports.syncUserOnSignIn = functions
             updated_at: admin.firestore.FieldValue.serverTimestamp()
           };
 
-          console.log(`  Update data:`, {
-            linked_soldier_id: updateData.linked_soldier_id,
-            division: updateData.division,
-            team: updateData.team,
-            displayName: updateData.displayName
-          });
-
-          if (soldierData) {
-            console.log(`  ℹ️  Division from soldier: ${soldierData.division_name ? `"${soldierData.division_name}"` : 'null (soldier has no division)'}`);
-            console.log(`  ℹ️  Team from soldier: ${soldierData.team_name ? `"${soldierData.team_name}"` : 'null (soldier has no team)'}`);
-          } else {
-            console.log(`  ℹ️  No soldier found - division and team set to null`);
-          }
-
           await userDoc.ref.update(updateData);
-          console.log(`  ✅ Successfully updated user document`);
 
           // Update userData object for use below
           userData.linked_soldier_id = newLinkedSoldierId;
@@ -1086,7 +964,7 @@ exports.syncUserOnSignIn = functions
           userData.team = newTeam;
           userData.displayName = displayName;
         } catch (updateError) {
-          console.error(`  ❌ Error updating user document:`, updateError);
+          // Error updating user document
         }
       }
 
@@ -1110,7 +988,7 @@ exports.syncUserOnSignIn = functions
 
         await admin.auth().setCustomUserClaims(authUid, customClaims);
       } catch (claimsError) {
-        console.warn(`[syncUserOnSignIn] Could not update custom claims:`, claimsError.message);
+        // Could not update custom claims
       }
 
       // Return the user's complete data
@@ -1146,7 +1024,6 @@ exports.syncUserOnSignIn = functions
         throw error;
       }
 
-      console.error(`[syncUserOnSignIn] ERROR:`, error);
       throw new functions.https.HttpsError(
         'internal',
         `Failed to sync user data: ${error.message}`
@@ -1159,10 +1036,6 @@ exports.syncUserOnSignIn = functions
  * Triggered by Firebase Authentication onCreate event
  */
 exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
-  console.log(`[onUserCreate] New user created: ${user.uid}`);
-  console.log(`  Email: ${user.email || 'N/A'}`);
-  console.log(`  Phone: ${user.phoneNumber || 'N/A'}`);
-
   const db = admin.firestore();
 
   try {
@@ -1171,7 +1044,6 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
     const existingUserDoc = await userDocRef.get();
 
     if (existingUserDoc.exists) {
-      console.log(`  User document already exists, skipping creation`);
       return null;
     }
 
@@ -1181,7 +1053,6 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
 
     // Try to match by email first
     if (user.email) {
-      console.log(`  Searching for soldier by email: ${user.email}`);
       const soldiersByEmail = await db.collection('soldiers')
         .where('email', '==', user.email)
         .limit(1)
@@ -1190,13 +1061,11 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       if (!soldiersByEmail.empty) {
         soldierDoc = soldiersByEmail.docs[0];
         soldierData = soldierDoc.data();
-        console.log(`  ✅ Found soldier by email: ${soldierData.soldier_id}`);
       }
     }
 
     // Try to match by phone number if email didn't match
     if (!soldierDoc && user.phoneNumber) {
-      console.log(`  Searching for soldier by phone: ${user.phoneNumber}`);
       const soldiersByPhone = await db.collection('soldiers')
         .where('phone_number', '==', user.phoneNumber)
         .limit(1)
@@ -1205,7 +1074,6 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       if (!soldiersByPhone.empty) {
         soldierDoc = soldiersByPhone.docs[0];
         soldierData = soldierDoc.data();
-        console.log(`  ✅ Found soldier by phone: ${soldierData.soldier_id}`);
       }
     }
 
@@ -1232,7 +1100,6 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
 
     // If soldier found, populate additional fields
     if (soldierData) {
-      console.log(`  Linking user to soldier: ${soldierData.soldier_id}`);
       userDocData.displayName = userDocData.displayName || `${soldierData.first_name || ''} ${soldierData.last_name || ''}`.trim();
       userDocData.division = soldierData.division_name || null;
       userDocData.team = soldierData.team_name || null;
@@ -1243,14 +1110,10 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
         id: user.uid,
         updated_at: admin.firestore.FieldValue.serverTimestamp()
       });
-      console.log(`  ✅ Updated soldier ${soldierData.soldier_id} with user UID`);
-    } else {
-      console.log(`  ⚠️  No matching soldier found - creating user with default soldier role`);
     }
 
     // Create user document in Firestore
     await userDocRef.set(userDocData);
-    console.log(`  ✅ Created user document for ${user.uid} with role: ${defaultRole}`);
 
     // Also set custom claims for backward compatibility
     try {
@@ -1268,18 +1131,15 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
       };
 
       await admin.auth().setCustomUserClaims(user.uid, customClaims);
-      console.log(`  ✅ Set custom claims for ${user.uid}`);
     } catch (claimsError) {
-      console.warn(`  ⚠️  Could not set custom claims:`, claimsError.message);
+      // Could not set custom claims
       // Don't fail - Firestore is the source of truth
     }
 
-    console.log(`[onUserCreate] Successfully processed user ${user.uid}`);
     return null;
 
   } catch (error) {
-    console.error(`[onUserCreate] Error processing user ${user.uid}:`, error);
-    // Don't throw - we don't want to block user creation
+    // Error processing user - don't throw, we don't want to block user creation
     return null;
   }
 });

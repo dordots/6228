@@ -149,7 +149,6 @@ export default function DroneSetForm({
           setFormData(prev => ({ ...prev, set_type: types[0].type_name }));
         }
       } catch (error) {
-        console.error("Error loading drone set types:", error);
         setDroneSetTypes([]);
       }
     };
@@ -283,11 +282,8 @@ export default function DroneSetForm({
         }
       }
 
-      console.log(`Available ${formData.set_type} components for slot ${currentSlotKey}:`, available);
-
       return available;
     } catch (error) {
-      console.error("Error getting available components:", error);
       return [];
     }
   };
@@ -310,7 +306,7 @@ export default function DroneSetForm({
 
       onSubmit(finalData);
     } catch (error) {
-      console.error("Error submitting form:", error);
+      // Error handling
     }
   };
 

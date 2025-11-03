@@ -202,10 +202,6 @@ Deno.serve(async (req) => {
           status: "error",
           error: error.message,
         });
-        console.error(
-          `Error processing ${soldier.first_name} ${soldier.last_name}:`,
-          error
-        );
       }
     }
 
@@ -220,7 +216,6 @@ Deno.serve(async (req) => {
       results: results,
     });
   } catch (error) {
-    console.error("Error in sendBulkEquipmentForms:", error);
     return Response.json(
       { error: "Internal server error", details: error.message },
       { status: 500 }

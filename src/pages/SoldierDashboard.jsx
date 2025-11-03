@@ -26,7 +26,6 @@ export default function SoldierDashboard() {
       setCurrentUser(user);
 
       if (user.custom_role !== 'soldier') {
-        console.log('User is not a soldier');
         setIsLoading(false);
         return;
       }
@@ -50,7 +49,6 @@ export default function SoldierDashboard() {
       }
 
       if (!soldierId) {
-        console.log('No soldier ID found');
         setIsLoading(false);
         return;
       }
@@ -75,7 +73,6 @@ export default function SoldierDashboard() {
       setDroneSets(Array.isArray(myDroneSets) ? myDroneSets : []);
 
     } catch (error) {
-      console.error("Error loading soldier data:", error);
     }
     setIsLoading(false);
   };

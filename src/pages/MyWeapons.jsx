@@ -17,19 +17,11 @@ export default function MyWeaponsPage() {
 
   const loadMyWeapons = async () => {
     setIsLoading(true);
-    console.log('[MyWeapons] STEP 1: Loading weapons...');
     try {
       const user = await User.me();
       setCurrentUser(user);
-      console.log('[MyWeapons] STEP 2: Current user loaded:', {
-        custom_role: user.custom_role,
-        linked_soldier_id: user.linked_soldier_id,
-        email: user.email,
-        phoneNumber: user.phoneNumber
-      });
 
       if (user.custom_role !== 'soldier') {
-        console.log('[MyWeapons] User is not a soldier, exiting');
         setWeapons([]);
         setIsLoading(false);
         return;
@@ -40,41 +32,30 @@ export default function MyWeaponsPage() {
 
       // Fallback to email/phone lookup only if no linked_soldier_id
       if (!soldierId && user.email) {
-        console.log('[MyWeapons] No linked_soldier_id, trying email lookup...');
         const soldiersByEmail = await Soldier.filter({ email: user.email });
         if (soldiersByEmail && soldiersByEmail.length > 0) {
           soldierId = soldiersByEmail[0].soldier_id;
-          console.log('[MyWeapons] Found soldier by email:', soldierId);
         }
       }
 
       if (!soldierId && user.phoneNumber) {
-        console.log('[MyWeapons] No soldier found by email, trying phone lookup...');
         const soldiersByPhone = await Soldier.filter({ phone_number: user.phoneNumber });
         if (soldiersByPhone && soldiersByPhone.length > 0) {
           soldierId = soldiersByPhone[0].soldier_id;
-          console.log('[MyWeapons] Found soldier by phone:', soldierId);
         }
       }
 
-      console.log('[MyWeapons] STEP 3: Resolved soldier ID:', soldierId);
-
       if (!soldierId) {
-        console.log('[MyWeapons] ❌ No soldier ID found - cannot load weapons');
         setWeapons([]);
         setIsLoading(false);
         return;
       }
 
       // Load weapons assigned to this soldier
-      console.log('[MyWeapons] STEP 4: Querying weapons...');
-      console.log('  Query: Weapon.filter({ assigned_to:', soldierId, '})');
       const myWeapons = await Weapon.filter({ assigned_to: soldierId });
-      console.log('[MyWeapons] STEP 5: Found weapons:', myWeapons?.length || 0, 'items');
       setWeapons(Array.isArray(myWeapons) ? myWeapons : []);
 
     } catch (error) {
-      console.error("Error loading my weapons:", error);
       setWeapons([]);
     }
     setIsLoading(false);

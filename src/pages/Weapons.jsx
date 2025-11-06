@@ -483,7 +483,7 @@ export default function Weapons() {
       };
 
       // Perform the update first
-      await Weapon.update(weapon.id, updatePayload);
+      await Weapon.update(weapon.weapon_id, updatePayload);
 
       // Try to log the reassignment activity, but don't fail reassignment if it errors
       try {

@@ -242,8 +242,8 @@ export default function DepositReleaseDialog({
                   >
                     <div className="flex items-center gap-3">
                       <Checkbox
-                        checked={selectedWeaponIds.includes(weapon.id)}
-                        onCheckedChange={() => handleWeaponSelect(weapon.id)}
+                        checked={selectedWeaponIds.includes(weapon.weapon_id)}
+                        onCheckedChange={() => handleWeaponSelect(weapon.weapon_id)}
                       />
                       <div>
                         <p className="font-medium">{weapon.weapon_type}</p>
@@ -274,8 +274,8 @@ export default function DepositReleaseDialog({
                   >
                     <div className="flex items-center gap-3">
                       <Checkbox
-                        checked={selectedGearIds.includes(gearItem.id)}
-                        onCheckedChange={() => handleGearSelect(gearItem.id)}
+                        checked={selectedGearIds.includes(gearItem.gear_id)}
+                        onCheckedChange={() => handleGearSelect(gearItem.gear_id)}
                       />
                       <div>
                         <p className="font-medium">{gearItem.gear_type}</p>

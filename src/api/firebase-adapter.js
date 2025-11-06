@@ -354,28 +354,15 @@ export const createBoundEntityAdapter = (collectionName, options) => {
   boundAdapter.create = boundAdapter.create;
   boundAdapter.update = async (id, data) => {
     // Handle Base44 style update(id, data) calls
-    console.log('[FIREBASE_ADAPTER] update called:', {
-      id,
-      idField: options.idField,
-      hasIdField: !!options.idField,
-      idType: typeof id
-    });
-
     if (typeof id === 'string') {
       // If we have an idField defined, search by that field instead of document ID
       if (options.idField) {
-        console.log('[FIREBASE_ADAPTER] Using idField search:', {
-          field: options.idField,
-          value: id
-        });
         return adapter.update({ where: { [options.idField]: id } }, data);
       }
       // Otherwise use id as document ID directly
-      console.log('[FIREBASE_ADAPTER] Using direct document ID:', id);
       return adapter.update(id, data);
     }
     // Handle update with filter
-    console.log('[FIREBASE_ADAPTER] Using filter object:', id);
     return adapter.update(id, data);
   };
 

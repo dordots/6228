@@ -414,7 +414,7 @@ export default function SerializedGearPage() {
         // updatePayload.division_name = gearItem.division_name; 
       }
 
-      await SerializedGear.update(gearItem.id, updatePayload);
+      await SerializedGear.update(gearItem.gear_id, updatePayload);
 
       // Log activity for reassign
       const user = await User.me();
@@ -424,19 +424,23 @@ export default function SerializedGearPage() {
       const oldAssignedSoldier = soldiers.find(s => s && s.soldier_id === gearItem.assigned_to);
       const oldAssignedSoldierName = oldAssignedSoldier ? `${oldAssignedSoldier.first_name} ${oldAssignedSoldier.last_name}` : "unassigned";
       const newAssignedSoldierName = newSoldier ? `${newSoldier.first_name} ${newSoldier.last_name}` : "unassigned";
-      
-      await ActivityLog.create({
-        activity_type: "UPDATE", // Reassign is an update
-        entity_type: "SerializedGear",
-        details: `Reassigned gear: ${gearType} (${gearId}) from ${oldAssignedSoldierName} to ${newAssignedSoldierName}.`,
-        user_full_name: user.full_name,
-        client_timestamp: adjustedTimestamp,
-        division_name: newSoldier ? newSoldier.division_name : gearItem.division_name // Use new soldier's division or retain original
-      });
+
+      try {
+        await ActivityLog.create({
+          activity_type: "UPDATE", // Reassign is an update
+          entity_type: "SerializedGear",
+          details: `Reassigned gear: ${gearType} (${gearId}) from ${oldAssignedSoldierName} to ${newAssignedSoldierName}.`,
+          user_full_name: user.full_name,
+          client_timestamp: adjustedTimestamp,
+          division_name: newSoldier ? newSoldier.division_name : gearItem.division_name // Use new soldier's division or retain original
+        });
+      } catch (logError) {
+        // Activity log failed but reassignment succeeded
+      }
 
       setShowReassignDialog(false);
       setReassigningGear(null);
-      loadData();
+      await loadData();
     } catch (error) {
       alert("An error occurred while reassigning gear.");
     }

@@ -298,7 +298,7 @@ export default function SoldierReleasePage() {
 
         // Try to send email notification
         try {
-          const emailResponse = await sendReleaseFormByActivity({ activityID: newActivityLog.id, activityId: newActivityLog.id });
+          const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
 
           const soldierReceived = emailResponse?.data?.soldierReceived || emailResponse?.soldierReceived || false;
 
@@ -531,7 +531,7 @@ export default function SoldierReleasePage() {
 
         // Try to send email notification
         try {
-          const emailResponse = await sendReleaseFormByActivity({ activityID: newActivityLog.id, activityId: newActivityLog.id });
+          const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
 
           const soldierReceived = emailResponse?.data?.soldierReceived || emailResponse?.soldierReceived || false;
 
@@ -784,7 +784,7 @@ export default function SoldierReleasePage() {
 
             // Try to send email notification
             try {
-                const emailResponse = await sendReleaseFormByActivity({ activityID: newActivityLog.id, activityId: newActivityLog.id });
+                const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
 
                 // Show success dialog with detailed feedback
                 const soldierReceived = emailResponse?.data?.soldierReceived || emailResponse?.soldierReceived || false;

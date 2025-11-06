@@ -152,14 +152,14 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
   };
 
   const renderWeaponItem = (weapon) => {
-    const key = `weapon-${weapon.id}`;
+    const key = `weapon-${weapon.weapon_id}`;
     const isSelected = selectedItems.has(key);
 
     return (
-      <div key={weapon.id} className={`p-4 border rounded-lg flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50'}`} onClick={() => toggleItemSelection('weapon', weapon.id)}>
+      <div key={weapon.weapon_id} className={`p-4 border rounded-lg flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50'}`} onClick={() => toggleItemSelection('weapon', weapon.weapon_id)}>
         <Checkbox
           checked={isSelected}
-          onCheckedChange={() => toggleItemSelection('weapon', weapon.id)}
+          onCheckedChange={() => toggleItemSelection('weapon', weapon.weapon_id)}
         />
         <Target className="w-5 h-5 text-red-500 flex-shrink-0" />
         <div className="flex-1">
@@ -175,14 +175,14 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
   };
 
   const renderGearItem = (gear) => {
-    const key = `gear-${gear.id}`;
+    const key = `gear-${gear.gear_id}`;
     const isSelected = selectedItems.has(key);
 
     return (
-      <div key={gear.id} className={`p-4 border rounded-lg flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50'}`} onClick={() => toggleItemSelection('gear', gear.id)}>
+      <div key={gear.gear_id} className={`p-4 border rounded-lg flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50'}`} onClick={() => toggleItemSelection('gear', gear.gear_id)}>
         <Checkbox
           checked={isSelected}
-          onCheckedChange={() => toggleItemSelection('gear', gear.id)}
+          onCheckedChange={() => toggleItemSelection('gear', gear.gear_id)}
         />
         <Binoculars className="w-5 h-5 text-blue-500 flex-shrink-0" />
         <div className="flex-1">
@@ -230,7 +230,7 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
       const id = key.substring(firstHyphenIndex + 1);
 
       if (type === 'weapon') {
-        const weapon = nonSampleWeapons.find(w => w.id === id);
+        const weapon = nonSampleWeapons.find(w => w.weapon_id === id);
         if (weapon) {
           details.push({
             key,
@@ -242,7 +242,7 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
           });
         }
       } else if (type === 'gear') {
-        const gear = nonSampleGear.find(g => g.id === id);
+        const gear = nonSampleGear.find(g => g.gear_id === id);
         if (gear) {
           details.push({
             key,

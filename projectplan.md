@@ -1,159 +1,164 @@
-# Add Debug Logs for Weapon/Gear/Drone Signing
+# Project Plan: Fix Update Calls to Use Field IDs (EXCLUDING DRONES)
 
-## Date: 6 November 2025
+## Date: 7 November 2025
 
-## Objective
-Add comprehensive debug logs when signing (assigning) weapons, gear, and drones to soldiers in the signing screen.
+## Problem
+The `.update()` methods on Weapon and SerializedGear entities are using Firestore document IDs (`item.id`) instead of the proper field IDs. This causes issues because:
 
-## Current State
-- Main signing functionality is in `src/components/soldiers/UnifiedAssignmentDialog.jsx`
-- The `handleAssign()` function (lines 274-477) handles all assignment logic
-- Current codebase has NO console.log statements (very clean production code)
-- Assignments include: weapons, serialized gear, drone sets, and equipment
-- Activity logs are created to track assignments
-- Emails are sent to soldiers after assignment
+1. The adapters are configured with `idField` options:
+   - Weapon: `weapon_id`
+   - SerializedGear: `gear_id`
 
-## Changes Required
+2. When `update()` is called with an ID string and the adapter has an `idField`, it searches by that field, not by document ID
 
-### Todo Items
+3. Using `item.id` (Firestore document ID) with these adapters will fail to find the correct document
 
-- [ ] Add debug log at start of handleAssign function with selected items summary
-- [ ] Add debug logs for each weapon assignment with full weapon data
-- [ ] Add debug logs for each gear assignment with full gear data
-- [ ] Add debug logs for each drone assignment with full drone data
-- [ ] Add debug log for equipment assignments with quantities
-- [ ] Add debug log for soldier status update (expected → arrived)
-- [ ] Add debug log for activity log creation with full context
-- [ ] Add debug log for email sending attempt and result
-- [ ] Add debug log on successful completion with assignment summary
+## Solution
+Replace all incorrect ID references in update calls with the appropriate field ID.
 
-## Implementation Notes
-- Keep logs structured and easy to read
-- Include as much data as possible for debugging
-- Log both success and error paths
-- Use clear labels for each log type (e.g., "[SIGNING]", "[WEAPON]", "[EMAIL]")
-- Include timestamps in key logs
+**IMPORTANT**: Per user instructions, EXCLUDE all DroneSet.update() calls from this fix.
 
-## Files to Modify
+## Analysis Summary
 
-1. `src/components/soldiers/UnifiedAssignmentDialog.jsx` - Add debug logs to handleAssign function
+### Total Calls Found:
+- **Weapon.update()**: 16 total calls
+- **SerializedGear.update()**: 16 total calls
+
+### Files Requiring Changes:
+
+#### 1. src/pages/SoldierRelease.jsx - 4 CHANGES NEEDED
+**Context**: Items come from `assignedSerialized` which spreads weapon/gear objects with their field IDs
+- Line 267: `Weapon.update(item.id, ...)` → `Weapon.update(item.weapon_id, ...)`
+- Line 270: `SerializedGear.update(item.id, ...)` → `SerializedGear.update(item.gear_id, ...)`
+- Line 741: `Weapon.update(item.id, ...)` → `Weapon.update(item.weapon_id, ...)`
+- Line 744: `SerializedGear.update(item.id, ...)` → `SerializedGear.update(item.gear_id, ...)`
+
+#### 2. src/pages/SerializedGear.jsx - 2 CHANGES NEEDED
+**Context**: `g` is gear object from filtered list, `editingGear` is gear being edited
+- Line 151: `SerializedGear.update(g.id, ...)` → `SerializedGear.update(g.gear_id, ...)`
+- Line 192: `SerializedGear.update(editingGear.id, ...)` → `SerializedGear.update(editingGear.gear_id, ...)`
+- Line 417: Already correct ✓ - uses `gearItem.gear_id`
+
+#### 3. src/pages/Weapons.jsx - 2 CHANGES NEEDED
+**Context**: `w` is weapon from filtered list, `editingWeapon` is weapon being edited
+- Line 159: `Weapon.update(w.id, ...)` → `Weapon.update(w.weapon_id, ...)`
+- Line 235: `Weapon.update(editingWeapon.id, ...)` → `Weapon.update(editingWeapon.weapon_id, ...)`
+- Line 486: Already correct ✓ - uses `weapon.weapon_id`
+
+#### 4. src/pages/Import.jsx - 2 CHANGES NEEDED
+**Context**: `weapon` and `gear` fetched from database with findById
+- Line 1120: `Weapon.update(weapon.id, ...)` → `Weapon.update(weapon.weapon_id, ...)`
+- Line 1128: `SerializedGear.update(gear.id, ...)` → `SerializedGear.update(gear.gear_id, ...)`
+
+### Files Already Correct (NO CHANGES):
+
+#### 5. src/pages/Soldiers.jsx - ALREADY CORRECT ✓
+**Context**: Loop variables `weaponId` and `gearId` are already the field IDs
+- Line 445: `Weapon.update(weaponId, ...)` - weaponId is already correct
+- Line 455: `SerializedGear.update(gearId, ...)` - gearId is already correct
+
+#### 6. src/pages/Maintenance.jsx - ALREADY CORRECT ✓
+**Context**: Loop keys `weaponId` and `gearId` come from `inspectionResults` object keys which are field IDs
+- Line 152: `Weapon.update(weaponId, ...)` - weaponId is already correct
+- Line 167: `SerializedGear.update(gearId, ...)` - gearId is already correct
+
+#### 7. src/pages/ArmoryDeposit.jsx - ALREADY CORRECT ✓
+**Context**: All loops iterate over `weaponIds` and `gearIds` arrays which contain field IDs
+- Line 219: `Weapon.update(weaponId, ...)` - weaponId is already correct
+- Line 230: `SerializedGear.update(gearId, ...)` - gearId is already correct
+- Line 291: `Weapon.update(weaponId, ...)` - weaponId is already correct
+- Line 301: `SerializedGear.update(gearId, ...)` - gearId is already correct
+- Line 348: `Weapon.update(weaponId, ...)` - weaponId is already correct
+- Line 358: `SerializedGear.update(gearId, ...)` - gearId is already correct
+
+#### 8. src/components/soldiers/UnifiedAssignmentDialog.jsx - ALREADY CORRECT ✓
+**Context**: Already fixed per user instructions
+- Line 364: `Weapon.update(item.weapon_id, ...)` - already correct
+- Line 368: `SerializedGear.update(item.gear_id, ...)` - already correct
+
+## Todo List
+
+- [ ] 1. Fix src/pages/SoldierRelease.jsx (4 changes: lines 267, 270, 741, 744)
+- [ ] 2. Fix src/pages/SerializedGear.jsx (2 changes: lines 151, 192)
+- [ ] 3. Fix src/pages/Weapons.jsx (2 changes: lines 159, 235)
+- [ ] 4. Fix src/pages/Import.jsx (2 changes: lines 1120, 1128)
+- [ ] 5. Verify no other files need changes
+- [ ] 6. Update review section with summary
 
 ## Simplicity Notes
-- Only add console.log statements, no functional changes
-- Keep existing code structure intact
-- Add logs at strategic points without disrupting flow
-- Make logs descriptive and comprehensive
+
+- This is a simple find-and-replace task
+- Change only the ID parameter in update calls
+- No other logic changes
+- Each change is a one-line edit
+- Total of 10 lines to change across 4 files
+
+## Review
+**Status**: Previous task completed successfully
 
 ---
 
-## Review Section
+# NEW TASK: Fix Remaining Firestore Document ID Usage in Display/Search Operations
 
-### ✅ Implementation Complete
+## Date: 7 November 2025
 
-**Date:** 6 November 2025
+## Problem
+While the previous task fixed `.update()` calls to use field IDs, there are still places where Firestore document IDs are used in display, search, and key generation operations. These should also use field IDs for consistency.
 
-**Summary:** Successfully added comprehensive debug logs to the weapon/gear/drone signing functionality. All assignment operations now have detailed logging for debugging purposes.
+## Files Already Fixed (verified, no changes needed):
+- ✅ src/components/soldiers/UnifiedAssignmentDialog.jsx
+- ✅ src/pages/Weapons.jsx
+- ✅ src/pages/SerializedGear.jsx
 
-### Changes Made
+## Analysis Summary
 
-#### Updated `src/components/soldiers/UnifiedAssignmentDialog.jsx`
+### 1. src/components/armory/DepositReleaseDialog.jsx
+**Status:** ALREADY CORRECT - No changes needed
+- Line 240: `key={weapon.id}` - Document ID for React key (acceptable)
+- Line 245-246: Uses `weapon.weapon_id` correctly ✅
+- Line 272: `key={gearItem.id}` - Document ID for React key (acceptable)
+- Line 277-278: Uses `gearItem.gear_id` correctly ✅
 
-Added extensive console.log statements throughout the `handleAssign()` function:
+### 2. src/components/maintenance/MaintenanceInspectionForm.jsx
+**Status:** NEEDS FIXING - 10 changes required
 
-1. **Initial Assignment Log** (Lines 293-310)
-   - Logs timestamp and soldier details (ID, name, email, division, team, enlistment status)
-   - Logs selected items summary (counts for weapons, gear, drones, equipment)
-   - Logs signature status
+**Weapon Issues:**
+- Line 155: `weapon-${weapon.id}` → `weapon-${weapon.weapon_id}`
+- Line 159: `key={weapon.id}` → `key={weapon.weapon_id}`
+- Line 159: `toggleItemSelection('weapon', weapon.id)` → use `weapon.weapon_id`
+- Line 162: `toggleItemSelection('weapon', weapon.id)` → use `weapon.weapon_id`
+- Line 233: `nonSampleWeapons.find(w => w.id === id)` → `w.weapon_id === id`
 
-2. **Weapon Assignment Logs** (Lines 381-396)
-   - Logs count of weapons being assigned
-   - For each weapon: ID, weapon_id, weapon_type, status, current/new assigned_to, division, armory_status, condition, last_maintained
+**Gear Issues:**
+- Line 178: `gear-${gear.id}` → `gear-${gear.gear_id}`
+- Line 182: `key={gear.id}` → `key={gear.gear_id}`
+- Line 182: `toggleItemSelection('gear', gear.id)` → use `gear.gear_id`
+- Line 185: `toggleItemSelection('gear', gear.id)` → use `gear.gear_id`
+- Line 245: `nonSampleGear.find(g => g.id === id)` → `g.gear_id === id`
 
-3. **Gear Assignment Logs** (Lines 398-413)
-   - Logs count of gear items being assigned
-   - For each gear: ID, gear_id, gear_type, status, current/new assigned_to, division, armory_status, condition, last_maintained
+### 3. src/pages/Maintenance.jsx
+**Status:** NEEDS FIXING - 2 changes required
+- Line 143: `weapons.find(w => w.id === weaponId)` → `w.weapon_id === weaponId`
+- Line 158: `serializedGear.find(g => g.id === gearId)` → `g.gear_id === gearId`
 
-4. **Drone Assignment Logs** (Lines 415-431)
-   - Logs count of drone sets being assigned
-   - For each drone: ID, drone_set_id, set_type, set_serial_number, status, current/new assigned_to, division, armory_status, last_maintained, components
+### 4. src/pages/Soldiers.jsx
+**Status:** ALREADY CORRECT - No changes needed
+- Receives field IDs from UnifiedAssignmentDialog which was already fixed ✅
 
-5. **Equipment Assignment Logs** (Lines 434-512)
-   - Logs count of equipment items being assigned
-   - For each equipment: type, requested quantity, stock ID, available quantity, condition, division
-   - Logs stock updates: old/new quantities, whether deleting stock
-   - Logs soldier equipment updates: existing quantities, new totals, or new record creation
-   - Includes error logs for insufficient stock scenarios
+## Todo List
 
-6. **Promise Completion Log** (Lines 516-520)
-   - Logs total promises, fulfilled count, rejected count
+- [ ] 1. Fix MaintenanceInspectionForm.jsx - Update renderWeaponItem function (4 changes)
+- [ ] 2. Fix MaintenanceInspectionForm.jsx - Update renderGearItem function (4 changes)
+- [ ] 3. Fix MaintenanceInspectionForm.jsx - Update getSelectedItemsDetails weapon search (1 change)
+- [ ] 4. Fix MaintenanceInspectionForm.jsx - Update getSelectedItemsDetails gear search (1 change)
+- [ ] 5. Fix Maintenance.jsx - Update weapon find operation (1 change)
+- [ ] 6. Fix Maintenance.jsx - Update gear find operation (1 change)
+- [ ] 7. Verify DepositReleaseDialog.jsx (no changes needed)
+- [ ] 8. Verify Soldiers.jsx (no changes needed)
+- [ ] 9. Update review section with summary
 
-7. **Soldier Status Update Logs** (Lines 525-543)
-   - Logs when updating soldier from "expected" to "arrived" status
-   - Includes soldier_id, current/new status, arrival date
-   - Logs success or skips if no update needed
-   - Error log if update fails
-
-8. **Activity Log Creation Logs** (Lines 562-611)
-   - Logs full activity data being created
-   - Includes: activity type, details, user info, soldier info, assigned items list
-   - Logs signature presence and length
-   - Logs successful creation with activity ID and timestamp
-   - Error log if creation fails
-
-9. **Email Sending Logs** (Lines 583-607)
-   - Logs email attempt with soldier email, activity ID, soldier ID
-   - Logs success when email sent
-   - Logs skip reason if not sending (no email or no items)
-   - Error log with details if email fails
-
-10. **Final Success Summary Log** (Lines 617-637)
-    - Complete summary of entire operation
-    - Soldier details
-    - Counts for each item type
-    - Full lists of assigned items with IDs/serials
-    - Signature capture status
-    - Final timestamp
-
-11. **Error Handling Log** (Lines 645-651)
-    - Comprehensive error log on any failure
-    - Includes error message, stack trace, soldier ID, timestamp
-
-### Log Prefix Categories
-
-All logs use clear prefixes for easy filtering:
-- `[SIGNING]` - Overall signing process events
-- `[WEAPON]` - Weapon-specific operations
-- `[GEAR]` - Gear-specific operations
-- `[DRONE]` - Drone-specific operations
-- `[EQUIPMENT]` - Equipment-specific operations
-- `[SOLDIER]` - Soldier status updates
-- `[ACTIVITY_LOG]` - Activity log creation
-- `[EMAIL]` - Email sending operations
-
-### Key Features
-
-1. **Comprehensive Data Capture** - Every field is logged with full context
-2. **Clear Labels** - Prefixed categories make filtering easy
-3. **Both Paths Covered** - Success and error scenarios both logged
-4. **Structured Output** - Object-based logging for readability
-5. **Timestamps** - Key operations include ISO timestamps
-6. **Non-Intrusive** - Only logging added, no functional changes
-7. **Error Details** - Errors logged with full stack traces
-
-### Benefits
-
-- **Easy Debugging** - Can trace entire assignment flow from start to finish
-- **Issue Diagnosis** - Detailed data helps identify problems quickly
-- **Performance Monitoring** - Can track which operations take time
-- **Audit Trail** - Complete record of what was assigned and when
-- **Error Investigation** - Full context available when things go wrong
-
-### Code Quality
-
-- **Simple Changes** - Only added console.log statements
-- **No Refactoring** - Existing logic untouched
-- **No Breaking Changes** - All functionality preserved
-- **Clean Structure** - Logs placed at logical breakpoints
-- **Consistent Style** - All logs follow same format pattern
-
-**Total Changes:** 1 file modified, ~180 lines of logging code added
+## Simplicity Notes
+- Simple find-and-replace task
+- Change `.id` to appropriate field ID (`.weapon_id` or `.gear_id`)
+- No complex logic changes
+- 12 total lines to change across 2 files

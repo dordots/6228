@@ -140,7 +140,7 @@ export default function MaintenancePage() {
 
     // Process weapon updates
     for (const [weaponId, data] of Object.entries(inspectionResults.weapons)) {
-        const weaponToUpdate = weapons.find(w => w.id === weaponId);
+        const weaponToUpdate = weapons.find(w => w.weapon_id === weaponId);
         if (weaponToUpdate) {
             const updateData = {
               status: data.status,
@@ -155,7 +155,7 @@ export default function MaintenancePage() {
 
     // Process gear updates
     for (const [gearId, data] of Object.entries(inspectionResults.gear)) {
-        const gearToUpdate = serializedGear.find(g => g.id === gearId);
+        const gearToUpdate = serializedGear.find(g => g.gear_id === gearId);
         if (gearToUpdate) {
             const updateData = {
               status: data.status,

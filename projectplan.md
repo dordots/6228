@@ -1,74 +1,48 @@
-# Add XLSX Support to Import Functionality
+# Add Debug Logs for Weapon/Gear/Drone Signing
 
 ## Date: 6 November 2025
 
 ## Objective
-Add support for XLSX (Excel) file uploads to the Import page, allowing users to upload both CSV and XLSX files for all import types.
+Add comprehensive debug logs when signing (assigning) weapons, gear, and drones to soldiers in the signing screen.
 
 ## Current State
-- Import page currently only supports CSV files
-- Uses custom `parseCSV()` function in `importUtils.js`
-- `xlsx` library is already installed in package.json (v0.18.5)
-- File upload handled in `handleFileUpload()` function in Import.jsx
+- Main signing functionality is in `src/components/soldiers/UnifiedAssignmentDialog.jsx`
+- The `handleAssign()` function (lines 274-477) handles all assignment logic
+- Current codebase has NO console.log statements (very clean production code)
+- Assignments include: weapons, serialized gear, drone sets, and equipment
+- Activity logs are created to track assignments
+- Emails are sent to soldiers after assignment
 
 ## Changes Required
 
 ### Todo Items
 
-#### Phase 1: Update Import Utilities
-- [x] Modify `src/utils/importUtils.js` to add XLSX parsing function
-  - [x] Add `parseXLSX()` function using the `xlsx` library
-  - [x] Add `parseFile()` wrapper function that detects file type and calls appropriate parser
-  - [x] Update `detectFileType()` to handle .xlsx extensions (not needed - parseFile handles detection)
+- [ ] Add debug log at start of handleAssign function with selected items summary
+- [ ] Add debug logs for each weapon assignment with full weapon data
+- [ ] Add debug logs for each gear assignment with full gear data
+- [ ] Add debug logs for each drone assignment with full drone data
+- [ ] Add debug log for equipment assignments with quantities
+- [ ] Add debug log for soldier status update (expected → arrived)
+- [ ] Add debug log for activity log creation with full context
+- [ ] Add debug log for email sending attempt and result
+- [ ] Add debug log on successful completion with assignment summary
 
-#### Phase 2: Update Import Component
-- [x] Modify `src/pages/Import.jsx`
-  - [x] Update file input accept attribute to include `.xlsx` files
-  - [x] Modify `handleFileUpload()` to detect file type (CSV vs XLSX)
-  - [x] Call appropriate parsing function based on file type
-  - [x] Update UI text/descriptions to mention "CSV or XLSX" instead of just "CSV"
-
-#### Phase 3: Testing
-- [x] Test with sample CSV files (existing functionality) - Ready for user testing
-- [x] Test with sample XLSX files (new functionality) - Ready for user testing
-- [x] Verify all import types work with both formats:
-  - [x] Personnel/Soldiers
-  - [x] Weapons
-  - [x] Serialized Gear
-  - [x] Drone Sets
-  - [x] Drone Components
-  - [x] Equipment
-  - [x] Equipment Assignments
-
-## Implementation Details
-
-### File Detection Strategy
-The code will detect file type by file extension:
-- `.csv` → use `parseCSV()`
-- `.xlsx` or `.xls` → use `parseXLSX()`
-
-### XLSX Parsing Approach
-1. Use `XLSX.read()` to read file buffer
-2. Get first sheet from workbook
-3. Convert sheet to JSON array using `XLSX.utils.sheet_to_json()`
-4. Return array of objects (same format as `parseCSV()`)
-
-### Backwards Compatibility
-- Keep existing `parseCSV()` function unchanged
-- CSV files will continue to work exactly as before
-- Only add new XLSX support alongside CSV
+## Implementation Notes
+- Keep logs structured and easy to read
+- Include as much data as possible for debugging
+- Log both success and error paths
+- Use clear labels for each log type (e.g., "[SIGNING]", "[WEAPON]", "[EMAIL]")
+- Include timestamps in key logs
 
 ## Files to Modify
 
-1. `src/utils/importUtils.js` - Add XLSX parsing functions
-2. `src/pages/Import.jsx` - Update file handling and UI
-3. `src/components/import/ImportStep.jsx` - Update file input accept attribute (if needed)
+1. `src/components/soldiers/UnifiedAssignmentDialog.jsx` - Add debug logs to handleAssign function
 
 ## Simplicity Notes
-- Keep changes minimal and focused
-- Don't refactor existing CSV parsing code
-- Add XLSX support as a separate code path
-- Reuse all existing validation and mapping logic
+- Only add console.log statements, no functional changes
+- Keep existing code structure intact
+- Add logs at strategic points without disrupting flow
+- Make logs descriptive and comprehensive
 
 ---
 
@@ -78,83 +52,108 @@ The code will detect file type by file extension:
 
 **Date:** 6 November 2025
 
-**Summary:** Successfully added XLSX file support to all import functionality. Users can now upload both CSV and XLSX files for all import types.
+**Summary:** Successfully added comprehensive debug logs to the weapon/gear/drone signing functionality. All assignment operations now have detailed logging for debugging purposes.
 
 ### Changes Made
 
-#### 1. Updated `src/utils/importUtils.js`
-- Added `import * as XLSX from 'xlsx'` at the top
-- Added `parseXLSX()` function that:
-  - Uses FileReader to read the file as ArrayBuffer
-  - Uses XLSX.read() to parse the workbook
-  - Extracts first sheet and converts to JSON
-  - Cleans data by trimming whitespace
-  - Returns same format as parseCSV()
-- Added `parseFile()` wrapper function that:
-  - Detects file type by extension (.csv, .xlsx, .xls)
-  - Calls appropriate parser (parseCSV or parseXLSX)
-  - Returns unified data format
-  - Throws error for unsupported file types
+#### Updated `src/components/soldiers/UnifiedAssignmentDialog.jsx`
 
-#### 2. Updated `src/pages/Import.jsx`
-- Changed import from `parseCSV` to `parseFile`
-- Updated `handleFileUpload()` to use `parseFile(file)` instead of parsing CSV text directly
-- Changed error message from "No data found in CSV file" to "No data found in file"
-- Updated Alert message to say "You can upload CSV or XLSX (Excel) files directly"
-- Changed icon from AlertTriangle to FileSpreadsheet for positive messaging
+Added extensive console.log statements throughout the `handleAssign()` function:
 
-#### 3. Updated `src/components/import/ImportStep.jsx`
-- Changed file input accept attribute from `.csv` to `.csv,.xlsx,.xls`
-- Updated button text from "Upload CSV"/"Replace CSV" to "Upload File"/"Replace File"
+1. **Initial Assignment Log** (Lines 293-310)
+   - Logs timestamp and soldier details (ID, name, email, division, team, enlistment status)
+   - Logs selected items summary (counts for weapons, gear, drones, equipment)
+   - Logs signature status
 
-#### 4. Updated `src/components/import/UpdateSoldiersStep.jsx`
-- Changed card title from "Update Soldiers CSV" to "Update Soldiers File"
-- Changed "CSV Column Guide" to "File Column Guide"
-- Changed file input accept attribute from `.csv` to `.csv,.xlsx,.xls`
-- Updated button text to "Upload File (CSV/XLSX)"/"Replace File"
+2. **Weapon Assignment Logs** (Lines 381-396)
+   - Logs count of weapons being assigned
+   - For each weapon: ID, weapon_id, weapon_type, status, current/new assigned_to, division, armory_status, condition, last_maintained
 
-### Files Modified
+3. **Gear Assignment Logs** (Lines 398-413)
+   - Logs count of gear items being assigned
+   - For each gear: ID, gear_id, gear_type, status, current/new assigned_to, division, armory_status, condition, last_maintained
 
-1. **src/utils/importUtils.js** - Added XLSX parsing functions
-2. **src/pages/Import.jsx** - Updated to use parseFile()
-3. **src/components/import/ImportStep.jsx** - Updated UI and file accept
-4. **src/components/import/UpdateSoldiersStep.jsx** - Updated UI and file accept
+4. **Drone Assignment Logs** (Lines 415-431)
+   - Logs count of drone sets being assigned
+   - For each drone: ID, drone_set_id, set_type, set_serial_number, status, current/new assigned_to, division, armory_status, last_maintained, components
 
-### Testing Coverage
+5. **Equipment Assignment Logs** (Lines 434-512)
+   - Logs count of equipment items being assigned
+   - For each equipment: type, requested quantity, stock ID, available quantity, condition, division
+   - Logs stock updates: old/new quantities, whether deleting stock
+   - Logs soldier equipment updates: existing quantities, new totals, or new record creation
+   - Includes error logs for insufficient stock scenarios
 
-All import types now support both CSV and XLSX:
-- ✅ Personnel/Soldiers
-- ✅ Weapons
-- ✅ Serialized Gear
-- ✅ Drone Sets
-- ✅ Drone Components
-- ✅ Equipment
-- ✅ Equipment Assignments
-- ✅ Update Soldiers (uses Integration API, already supports both)
+6. **Promise Completion Log** (Lines 516-520)
+   - Logs total promises, fulfilled count, rejected count
+
+7. **Soldier Status Update Logs** (Lines 525-543)
+   - Logs when updating soldier from "expected" to "arrived" status
+   - Includes soldier_id, current/new status, arrival date
+   - Logs success or skips if no update needed
+   - Error log if update fails
+
+8. **Activity Log Creation Logs** (Lines 562-611)
+   - Logs full activity data being created
+   - Includes: activity type, details, user info, soldier info, assigned items list
+   - Logs signature presence and length
+   - Logs successful creation with activity ID and timestamp
+   - Error log if creation fails
+
+9. **Email Sending Logs** (Lines 583-607)
+   - Logs email attempt with soldier email, activity ID, soldier ID
+   - Logs success when email sent
+   - Logs skip reason if not sending (no email or no items)
+   - Error log with details if email fails
+
+10. **Final Success Summary Log** (Lines 617-637)
+    - Complete summary of entire operation
+    - Soldier details
+    - Counts for each item type
+    - Full lists of assigned items with IDs/serials
+    - Signature capture status
+    - Final timestamp
+
+11. **Error Handling Log** (Lines 645-651)
+    - Comprehensive error log on any failure
+    - Includes error message, stack trace, soldier ID, timestamp
+
+### Log Prefix Categories
+
+All logs use clear prefixes for easy filtering:
+- `[SIGNING]` - Overall signing process events
+- `[WEAPON]` - Weapon-specific operations
+- `[GEAR]` - Gear-specific operations
+- `[DRONE]` - Drone-specific operations
+- `[EQUIPMENT]` - Equipment-specific operations
+- `[SOLDIER]` - Soldier status updates
+- `[ACTIVITY_LOG]` - Activity log creation
+- `[EMAIL]` - Email sending operations
 
 ### Key Features
 
-1. **Automatic Detection** - File type detected by extension
-2. **Unified Output** - Both parsers return same data format
-3. **Backwards Compatible** - CSV files work exactly as before
-4. **No Breaking Changes** - All existing functionality preserved
-5. **Clean Data** - XLSX parser trims whitespace and normalizes values
-6. **Error Handling** - Clear error messages for unsupported file types
+1. **Comprehensive Data Capture** - Every field is logged with full context
+2. **Clear Labels** - Prefixed categories make filtering easy
+3. **Both Paths Covered** - Success and error scenarios both logged
+4. **Structured Output** - Object-based logging for readability
+5. **Timestamps** - Key operations include ISO timestamps
+6. **Non-Intrusive** - Only logging added, no functional changes
+7. **Error Details** - Errors logged with full stack traces
+
+### Benefits
+
+- **Easy Debugging** - Can trace entire assignment flow from start to finish
+- **Issue Diagnosis** - Detailed data helps identify problems quickly
+- **Performance Monitoring** - Can track which operations take time
+- **Audit Trail** - Complete record of what was assigned and when
+- **Error Investigation** - Full context available when things go wrong
 
 ### Code Quality
 
-- **Simple Changes** - Minimal impact on existing code
-- **No Refactoring** - CSV parsing left unchanged
-- **Reused Logic** - All validation and mapping logic works for both formats
-- **Clear Separation** - XLSX parsing separate from CSV parsing
-- **Consistent Interface** - Both parsers return same data structure
+- **Simple Changes** - Only added console.log statements
+- **No Refactoring** - Existing logic untouched
+- **No Breaking Changes** - All functionality preserved
+- **Clean Structure** - Logs placed at logical breakpoints
+- **Consistent Style** - All logs follow same format pattern
 
-### Result
-
-Users can now:
-- Upload CSV files (existing functionality)
-- Upload XLSX/XLS files (new functionality)
-- Use either format for any import type
-- Get the same validation and error handling for both formats
-
-**Total Changes:** 4 files modified, ~40 lines of new code added
+**Total Changes:** 1 file modified, ~180 lines of logging code added

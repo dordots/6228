@@ -290,6 +290,25 @@ export default function UnifiedAssignmentDialog({
 
     const validEquipmentAssignments = equipmentAssignments.filter(e => e.quantity > 0);
 
+    console.log('[SIGNING] ==================== Assignment Started ====================');
+    console.log('[SIGNING] Timestamp:', new Date().toISOString());
+    console.log('[SIGNING] Soldier:', {
+      soldier_id: soldier.soldier_id,
+      name: `${soldier.first_name} ${soldier.last_name}`,
+      email: soldier.email,
+      division: soldier.division_name,
+      team: soldier.team_name,
+      enlistment_status: soldier.enlistment_status
+    });
+    console.log('[SIGNING] Selected Items Summary:', {
+      weapons: selectedWeapons.length,
+      gear: selectedGear.length,
+      droneSets: selectedDroneSets.length,
+      equipment: validEquipmentAssignments.length,
+      totalItems: selectedWeapons.length + selectedGear.length + selectedDroneSets.length + validEquipmentAssignments.length
+    });
+    console.log('[SIGNING] Has Signature:', !!signature);
+
     const hasSelectedItems = selectedWeapons.length > 0 || selectedGear.length > 0 ||
                              selectedDroneSets.length > 0 || validEquipmentAssignments.length > 0;
 
@@ -359,29 +378,94 @@ export default function UnifiedAssignmentDialog({
         const promises = [];
 
         // Serialized items (Weapons, Gear, Drones) - Simple assignment update
+        console.log('[WEAPON] Assigning', selectedWeapons.length, 'weapon(s)');
         for (const item of selectedWeapons) {
+            console.log('[WEAPON] Assigning weapon:', {
+                id: item.id,
+                weapon_id: item.weapon_id,
+                weapon_type: item.weapon_type,
+                status: item.status,
+                current_assigned_to: item.assigned_to,
+                new_assigned_to: soldier.soldier_id,
+                division_name: soldier.division_name,
+                armory_status: item.armory_status,
+                condition: item.condition,
+                last_maintained: item.last_maintained
+            });
             promises.push(Weapon.update(item.weapon_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
         }
+
+        console.log('[GEAR] Assigning', selectedGear.length, 'gear item(s)');
         for (const item of selectedGear) {
+            console.log('[GEAR] Assigning gear:', {
+                id: item.id,
+                gear_id: item.gear_id,
+                gear_type: item.gear_type,
+                status: item.status,
+                current_assigned_to: item.assigned_to,
+                new_assigned_to: soldier.soldier_id,
+                division_name: soldier.division_name,
+                armory_status: item.armory_status,
+                condition: item.condition,
+                last_maintained: item.last_maintained
+            });
             promises.push(SerializedGear.update(item.gear_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
         }
+
+        console.log('[DRONE] Assigning', selectedDroneSets.length, 'drone set(s)');
         for (const item of selectedDroneSets) {
+            console.log('[DRONE] Assigning drone set:', {
+                id: item.id,
+                drone_set_id: item.drone_set_id,
+                set_type: item.set_type,
+                set_serial_number: item.set_serial_number,
+                status: item.status,
+                current_assigned_to: item.assigned_to,
+                new_assigned_to: soldier.soldier_id,
+                division_name: soldier.division_name,
+                armory_status: item.armory_status,
+                last_maintained: item.last_maintained,
+                components: item.components
+            });
             promises.push(DroneSet.update(item.drone_set_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
         }
 
         // FIXED LOGIC for non-serialized equipment
+        console.log('[EQUIPMENT] Assigning', validEquipmentAssignments.length, 'equipment item(s)');
         for (const equip of validEquipmentAssignments) {
             const originalStockItem = availableEquipment.find(item => item.id === equip.original_stock_id);
 
+            console.log('[EQUIPMENT] Processing equipment:', {
+                equipment_type: equip.equipment_type,
+                requested_quantity: equip.quantity,
+                original_stock_id: equip.original_stock_id,
+                stock_available: originalStockItem?.quantity,
+                condition: equip.condition,
+                division_name: equip.division_name
+            });
+
             if (!originalStockItem) {
+                console.error('[EQUIPMENT] ERROR: Original stock item not found:', equip.original_stock_id);
                 throw new Error(`Insufficient stock: Original stock item for ${equip.equipment_type} (ID: ${equip.original_stock_id}) not found.`);
             }
             if (originalStockItem.quantity < equip.quantity) {
+                console.error('[EQUIPMENT] ERROR: Insufficient stock:', {
+                    equipment_type: equip.equipment_type,
+                    available: originalStockItem.quantity,
+                    requested: equip.quantity
+                });
                 throw new Error(`Insufficient stock: Only ${originalStockItem.quantity} of ${equip.equipment_type} available, tried to assign ${equip.quantity}.`);
             }
 
             // 1. Update (or delete) the source stock record
             const newStockQuantity = originalStockItem.quantity - equip.quantity;
+            console.log('[EQUIPMENT] Updating stock:', {
+                equipment_id: originalStockItem.equipment_id,
+                old_quantity: originalStockItem.quantity,
+                assigned_quantity: equip.quantity,
+                new_quantity: newStockQuantity,
+                will_delete: newStockQuantity <= 0
+            });
             if (newStockQuantity > 0) {
                 promises.push(Equipment.update(originalStockItem.equipment_id, { quantity: newStockQuantity }));
             } else {
@@ -397,9 +481,23 @@ export default function UnifiedAssignmentDialog({
             if (soldierExistingItem) {
                 // 3a. If yes, update the quantity of soldier's existing record
                 const newSoldierQuantity = (soldierExistingItem.quantity || 0) + equip.quantity;
+                console.log('[EQUIPMENT] Updating soldier existing item:', {
+                    equipment_type: equip.equipment_type,
+                    soldier_id: soldier.soldier_id,
+                    current_quantity: soldierExistingItem.quantity,
+                    adding: equip.quantity,
+                    new_total: newSoldierQuantity
+                });
                 promises.push(Equipment.update(soldierExistingItem.equipment_id, { quantity: newSoldierQuantity }));
             } else {
                 // 3b. If no, create a new record for the soldier
+                console.log('[EQUIPMENT] Creating new soldier equipment record:', {
+                    equipment_type: equip.equipment_type,
+                    soldier_id: soldier.soldier_id,
+                    quantity: equip.quantity,
+                    condition: equip.condition,
+                    division_name: soldier.division_name
+                });
                 promises.push(Equipment.create({
                     equipment_type: equip.equipment_type,
                     quantity: equip.quantity,
@@ -415,17 +513,45 @@ export default function UnifiedAssignmentDialog({
 
         // Use allSettled instead of all to handle cases where items don't exist in Firestore
         const results = await Promise.allSettled(promises);
+        console.log('[SIGNING] Assignment promises completed:', {
+            total: results.length,
+            fulfilled: results.filter(r => r.status === 'fulfilled').length,
+            rejected: results.filter(r => r.status === 'rejected').length
+        });
+
+        // Log any rejected promises with details
+        const rejectedResults = results.filter(r => r.status === 'rejected');
+        if (rejectedResults.length > 0) {
+            console.error('[SIGNING] ERROR: Some assignments failed:');
+            rejectedResults.forEach((result, index) => {
+                console.error(`[SIGNING] Rejection ${index + 1}:`, {
+                    reason: result.reason,
+                    message: result.reason?.message,
+                    stack: result.reason?.stack
+                });
+            });
+        }
 
         // CRITICAL: Update soldier status to "arrived" if currently "expected"
         // Wrap in try-catch so failure here doesn't prevent dialog from closing
         try {
             if (soldier.enlistment_status === 'expected') {
+                console.log('[SOLDIER] Updating soldier status from "expected" to "arrived":', {
+                    soldier_id: soldier.soldier_id,
+                    current_status: soldier.enlistment_status,
+                    new_status: 'arrived',
+                    arrival_date: soldier.arrival_date || new Date().toISOString().split('T')[0]
+                });
                 await Soldier.update(soldier.soldier_id, {
                     enlistment_status: 'arrived',
                     arrival_date: soldier.arrival_date || new Date().toISOString().split('T')[0]
                 });
+                console.log('[SOLDIER] Soldier status updated successfully');
+            } else {
+                console.log('[SOLDIER] No status update needed. Current status:', soldier.enlistment_status);
             }
         } catch (soldierUpdateError) {
+            console.error('[SOLDIER] ERROR: Failed to update soldier status:', soldierUpdateError);
             // Failed to update soldier status, but assignment was successful
         }
 
@@ -446,18 +572,54 @@ export default function UnifiedAssignmentDialog({
                 division_name: soldier.division_name,
             };
 
+            console.log('[ACTIVITY_LOG] Creating activity log:', {
+                activity_type: activityData.activity_type,
+                entity_type: activityData.entity_type,
+                details: activityData.details,
+                user_full_name: activityData.user_full_name,
+                user_soldier_id: activityData.user_soldier_id,
+                soldier_id: activityData.soldier_id,
+                division_name: activityData.division_name,
+                assigned_items_count: assignedItemDetails.length,
+                assigned_items: assignedItemDetails,
+                has_signature: !!signature,
+                signature_length: signature?.length
+            });
+
             const newActivityLog = await ActivityLog.create(activityData);
+            console.log('[ACTIVITY_LOG] Activity log created successfully:', {
+                activity_id: newActivityLog.id,
+                timestamp: newActivityLog.client_timestamp
+            });
 
             if (soldier.email && hasSelectedItems) {
                 try {
+                    console.log('[EMAIL] Attempting to send signing form email:', {
+                        soldier_email: soldier.email,
+                        activity_id: newActivityLog.id,
+                        soldier_id: soldier.soldier_id
+                    });
                     await sendSigningFormByActivity({
                         activityId: newActivityLog.id
                     });
+                    console.log('[EMAIL] Signing form email sent successfully');
                 } catch (emailError) {
+                    console.error('[EMAIL] ERROR: Failed to send signing form email:', {
+                        error: emailError.message,
+                        soldier_email: soldier.email,
+                        activity_id: newActivityLog.id
+                    });
                     // Failed to send signing email, but assignment was successful
                 }
+            } else {
+                console.log('[EMAIL] Skipping email send:', {
+                    has_email: !!soldier.email,
+                    has_selected_items: hasSelectedItems,
+                    soldier_email: soldier.email
+                });
             }
         } catch (activityLogError) {
+            console.error('[ACTIVITY_LOG] ERROR: Failed to create activity log:', activityLogError);
             // Failed to create activity log, but assignment was successful
         }
 
@@ -465,12 +627,41 @@ export default function UnifiedAssignmentDialog({
         setIsLoading(false);
         showToast("Equipment assigned successfully!", "success");
 
+        console.log('[SIGNING] ==================== Assignment Completed Successfully ====================');
+        console.log('[SIGNING] Final Summary:', {
+            soldier: {
+                soldier_id: soldier.soldier_id,
+                name: `${soldier.first_name} ${soldier.last_name}`,
+                email: soldier.email
+            },
+            items_assigned: {
+                weapons: selectedWeapons.length,
+                gear: selectedGear.length,
+                drone_sets: selectedDroneSets.length,
+                equipment: validEquipmentAssignments.length,
+                total: selectedWeapons.length + selectedGear.length + selectedDroneSets.length + validEquipmentAssignments.length
+            },
+            weapons_list: selectedWeapons.map(w => ({ type: w.weapon_type, id: w.weapon_id })),
+            gear_list: selectedGear.map(g => ({ type: g.gear_type, id: g.gear_id })),
+            drone_list: selectedDroneSets.map(d => ({ type: d.set_type, serial: d.set_serial_number })),
+            equipment_list: validEquipmentAssignments.map(e => ({ type: e.equipment_type, quantity: e.quantity })),
+            signature_captured: !!signature,
+            timestamp: new Date().toISOString()
+        });
+
         setTimeout(() => {
             handleClose(false);
             if (onSuccess) onSuccess();
         }, 1500);
 
     } catch (error) {
+        console.error('[SIGNING] ==================== Assignment Failed ====================');
+        console.error('[SIGNING] ERROR:', {
+            error_message: error.message,
+            error_stack: error.stack,
+            soldier_id: soldier?.soldier_id,
+            timestamp: new Date().toISOString()
+        });
         setIsLoading(false);
         showToast(`An error occurred during assignment: ${error.message}. Please check details and try again.`, "destructive");
     }

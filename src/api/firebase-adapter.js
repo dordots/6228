@@ -127,8 +127,8 @@ const buildQuery = (collectionRef, options = {}) => {
 // Create entity adapter factory
 export const createEntityAdapter = (collectionName, options = {}) => {
   const { idField = `${collectionName.slice(0, -1)}_id` } = options;
-  
-  return {
+
+  const adapter = {
     // Create
     create: async (data) => {
       const docData = {
@@ -185,7 +185,7 @@ export const createEntityAdapter = (collectionName, options = {}) => {
     
     // Find First
     findFirst: async (options = {}) => {
-      const results = await this.findMany({ ...options, take: 1 });
+      const results = await adapter.findMany({ ...options, take: 1 });
       return results[0] || null;
     },
     
@@ -207,17 +207,15 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         let docRef;
         if (typeof filter === 'string') {
           docRef = doc(db, collectionName, filter);
-        } else if (filter.where && filter.where[idField]) {
-          // Extract ID from where clause
-          const id = filter.where[idField].equals || filter.where[idField];
-          docRef = doc(db, collectionName, id);
-        } else {
-          // Find document first
-          const docs = await this.findMany({ where: filter.where, take: 1 });
+        } else if (filter.where) {
+          // Find document first by searching with where clause
+          const docs = await adapter.findMany({ where: filter.where, take: 1 });
           if (!docs.length) {
             throw new Error('Document not found');
           }
           docRef = doc(db, collectionName, docs[0].id);
+        } else {
+          throw new Error('Invalid filter provided to update');
         }
         
         const updateData = {
@@ -241,17 +239,17 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         let docId;
         if (typeof filter === 'string') {
           docId = filter;
-        } else if (filter.where && filter.where[idField]) {
-          docId = filter.where[idField].equals || filter.where[idField];
-        } else {
-          // Find document first
-          const docs = await this.findMany({ where: filter.where, take: 1 });
+        } else if (filter.where) {
+          // Find document first by searching with where clause
+          const docs = await adapter.findMany({ where: filter.where, take: 1 });
           if (!docs.length) {
             throw new Error('Document not found');
           }
           docId = docs[0].id;
+        } else {
+          throw new Error('Invalid filter provided to delete');
         }
-        
+
         await deleteDoc(doc(db, collectionName, docId));
         return true;
       } catch (error) {
@@ -262,7 +260,7 @@ export const createEntityAdapter = (collectionName, options = {}) => {
     // Delete Many
     deleteMany: async (filter) => {
       try {
-        const docs = await this.findMany(filter);
+        const docs = await adapter.findMany(filter);
         const batch = writeBatch(db);
         
         docs.forEach(doc => {
@@ -278,14 +276,14 @@ export const createEntityAdapter = (collectionName, options = {}) => {
     
     // Count
     count: async (filter) => {
-      const docs = await this.findMany(filter);
+      const docs = await adapter.findMany(filter);
       return docs.length;
     },
     
     // Update Many (for denormalization)
     updateMany: async (filter, data) => {
       try {
-        const docs = await this.findMany(filter);
+        const docs = await adapter.findMany(filter);
         const batch = writeBatch(db);
         
         const updateData = {
@@ -305,6 +303,8 @@ export const createEntityAdapter = (collectionName, options = {}) => {
       }
     }
   };
+
+  return adapter;
 };
 
 // Re-export the adapter with proper binding
@@ -354,12 +354,44 @@ export const createBoundEntityAdapter = (collectionName, options) => {
   boundAdapter.create = boundAdapter.create;
   boundAdapter.update = async (id, data) => {
     // Handle Base44 style update(id, data) calls
+    console.log('[FIREBASE_ADAPTER] update called:', {
+      id,
+      idField: options.idField,
+      hasIdField: !!options.idField,
+      idType: typeof id
+    });
+
     if (typeof id === 'string') {
+      // If we have an idField defined, search by that field instead of document ID
+      if (options.idField) {
+        console.log('[FIREBASE_ADAPTER] Using idField search:', {
+          field: options.idField,
+          value: id
+        });
+        return adapter.update({ where: { [options.idField]: id } }, data);
+      }
+      // Otherwise use id as document ID directly
+      console.log('[FIREBASE_ADAPTER] Using direct document ID:', id);
       return adapter.update(id, data);
     }
     // Handle update with filter
+    console.log('[FIREBASE_ADAPTER] Using filter object:', id);
     return adapter.update(id, data);
   };
-  
+
+  boundAdapter.delete = async (id) => {
+    // Handle Base44 style delete(id) calls
+    if (typeof id === 'string') {
+      // If we have an idField defined, search by that field instead of document ID
+      if (options.idField) {
+        return adapter.delete({ where: { [options.idField]: id } });
+      }
+      // Otherwise use id as document ID directly
+      return adapter.delete(id);
+    }
+    // Handle delete with filter
+    return adapter.delete(id);
+  };
+
   return boundAdapter;
 };

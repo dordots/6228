@@ -9,13 +9,13 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle, AlertTriangle, Upload, FileSpreadsheet, RefreshCw, Users, Shield, Package, Cpu, AlertCircle, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  parseCSV, 
-  detectFileType, 
-  validateEntityData, 
-  formatPhoneNumber, 
-  mapColumns, 
-  generateImportSummary 
+import {
+  parseFile,
+  detectFileType,
+  validateEntityData,
+  formatPhoneNumber,
+  mapColumns,
+  generateImportSummary
 } from "@/utils/importUtils";
 import { auth } from '@/firebase/config';
 
@@ -70,19 +70,18 @@ export default function ImportPage() {
   const handleFileUpload = async (fileType, file) => {
     setIsProcessing(true);
     setError('');
-    
+
     try {
       // Auto-detect file type from filename
       const detectedType = detectFileType(file.name);
       if (detectedType !== 'unknown' && detectedType !== fileType) {
       }
 
-      // Read file content directly for CSV parsing
-      const text = await file.text();
-      const rawData = parseCSV(text);
-      
+      // Parse file (CSV or XLSX) based on file extension
+      const rawData = await parseFile(file);
+
       if (rawData.length === 0) {
-        throw new Error('No data found in CSV file');
+        throw new Error('No data found in file');
       }
       
       // Map columns based on entity type
@@ -171,11 +170,15 @@ export default function ImportPage() {
 
     for (const item of entityData) {
       try {
-        // For equipment, check if 'id' field already exists in database
+        // For equipment, check if both 'id' and 'equipment_type' already exist in database
+        // Duplicate = same equipment_type AND same id
         if (entityName === 'equipment' && item.id && item.id.trim() !== '') {
-          const existingEquipment = await Equipment.filter({ id: item.id }).catch(() => []);
+          const existingEquipment = await Equipment.filter({
+            id: item.id,
+            equipment_type: item.equipment_type
+          }).catch(() => []);
           if (existingEquipment && existingEquipment.length > 0) {
-            throw new Error(`Equipment with id "${item.id}" already exists in database`);
+            throw new Error(`Equipment with type "${item.equipment_type}" and ID "${item.id}" already exists in database`);
           }
         }
 
@@ -513,26 +516,30 @@ export default function ImportPage() {
             }
 
             // Check if weapon already exists in database
-            let existingWeapon = null;
+            // Duplicate = same weapon_type AND same weapon_id
+            let existingWeapons = [];
             try {
-              existingWeapon = await Weapon.findById(weapon.weapon_id);
+              existingWeapons = await Weapon.filter({
+                weapon_id: weapon.weapon_id,
+                weapon_type: weapon.weapon_type
+              });
             } catch (findError) {
               // Weapon doesn't exist - this is expected for new weapons
             }
 
-            if (existingWeapon) {
+            if (existingWeapons && existingWeapons.length > 0) {
 
               results.push({
                 id: weapon.weapon_id,
                 success: false,
-                error: `Weapon with ID "${weapon.weapon_id}" already exists in database`,
+                error: `Weapon with type "${weapon.weapon_type}" and ID "${weapon.weapon_id}" already exists in database`,
                 data: weapon
               });
 
               const errorDetail = {
                 entity: 'weapons',
                 id: weapon.weapon_id,
-                message: `Weapon with ID "${weapon.weapon_id}" already exists in database`,
+                message: `Weapon with type "${weapon.weapon_type}" and ID "${weapon.weapon_id}" already exists in database`,
                 data: weapon
               };
               allErrors.push(errorDetail);
@@ -676,26 +683,30 @@ export default function ImportPage() {
             }
 
             // Check if gear already exists in database
-            let existingGear = null;
+            // Duplicate = same gear_type AND same gear_id
+            let existingGears = [];
             try {
-              existingGear = await SerializedGear.findById(gear.gear_id);
+              existingGears = await SerializedGear.filter({
+                gear_id: gear.gear_id,
+                gear_type: gear.gear_type
+              });
             } catch (findError) {
               // Gear doesn't exist - this is expected for new gear
             }
 
-            if (existingGear) {
+            if (existingGears && existingGears.length > 0) {
 
               results.push({
                 id: gear.gear_id,
                 success: false,
-                error: `Gear with ID "${gear.gear_id}" already exists in database`,
+                error: `Gear with type "${gear.gear_type}" and ID "${gear.gear_id}" already exists in database`,
                 data: gear
               });
 
               const errorDetail = {
                 entity: 'serialized_gear',
                 id: gear.gear_id,
-                message: `Gear with ID "${gear.gear_id}" already exists in database`,
+                message: `Gear with type "${gear.gear_type}" and ID "${gear.gear_id}" already exists in database`,
                 data: gear
               };
               allErrors.push(errorDetail);
@@ -1573,10 +1584,10 @@ export default function ImportPage() {
           {currentStep === 1 && (
             <div className="space-y-6">
               <Alert>
-                <AlertTriangle className="h-4 w-4" />
+                <FileSpreadsheet className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Important:</strong> Please export your Excel files as CSV format before uploading. 
-                  In Excel, use "File → Save As → CSV (Comma delimited)" to convert your files.
+                  <strong>Supported formats:</strong> You can upload CSV or XLSX (Excel) files directly.
+                  Both formats are supported for all import types.
                 </AlertDescription>
               </Alert>
 

@@ -1,4 +1,46 @@
 // Import utilities for CSV parsing and validation
+import * as XLSX from 'xlsx';
+
+// Parse XLSX file into array of objects
+export const parseXLSX = async (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        // Get first sheet
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+
+        // Convert to JSON
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+
+        // Clean up data - trim whitespace and ensure consistent format
+        const cleanedData = jsonData.map(row => {
+          const cleanedRow = {};
+          Object.keys(row).forEach(key => {
+            const value = row[key];
+            cleanedRow[key.trim()] = typeof value === 'string' ? value.trim() : String(value).trim();
+          });
+          return cleanedRow;
+        });
+
+        resolve(cleanedData);
+      } catch (error) {
+        reject(new Error(`Failed to parse XLSX file: ${error.message}`));
+      }
+    };
+
+    reader.onerror = () => {
+      reject(new Error('Failed to read file'));
+    };
+
+    reader.readAsArrayBuffer(file);
+  });
+};
 
 // Parse CSV text into array of objects
 export const parseCSV = (text) => {
@@ -58,6 +100,22 @@ const parseCSVLine = (line) => {
   
   result.push(current);
   return result;
+};
+
+// Parse file (CSV or XLSX) based on file extension
+export const parseFile = async (file) => {
+  const fileName = file.name.toLowerCase();
+
+  if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+    // Parse XLSX file
+    return await parseXLSX(file);
+  } else if (fileName.endsWith('.csv')) {
+    // Parse CSV file
+    const text = await file.text();
+    return parseCSV(text);
+  } else {
+    throw new Error('Unsupported file type. Please upload a CSV or XLSX file.');
+  }
 };
 
 // Detect file type from filename

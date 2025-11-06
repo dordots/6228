@@ -136,11 +136,21 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         created_at: serverTimestamp(),
         updated_at: serverTimestamp()
       };
-      
+
       let docRef;
       if (data[idField]) {
-        // Use custom ID
-        docRef = doc(db, collectionName, data[idField]);
+        // Use composite ID for weapons, gear, and equipment (to allow same ID with different types)
+        let documentId = data[idField];
+
+        if (collectionName === 'weapons' && data.weapon_type) {
+          documentId = `${data.weapon_id}_${data.weapon_type}`;
+        } else if (collectionName === 'serialized_gear' && data.gear_type) {
+          documentId = `${data.gear_id}_${data.gear_type}`;
+        } else if (collectionName === 'equipment' && data.equipment_type) {
+          documentId = `${data.id}_${data.equipment_type}`;
+        }
+
+        docRef = doc(db, collectionName, documentId);
         await setDoc(docRef, docData);
       } else {
         // Auto-generate ID
@@ -148,7 +158,7 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         // Update with generated ID
         await updateDoc(docRef, { [idField]: docRef.id });
       }
-      
+
       const newDoc = await getDoc(docRef);
       return convertDoc(newDoc);
     },

@@ -32,7 +32,8 @@
       "Grep",
       "Read",
       "Glob",
-      "Edit"
+      "Edit",
+      "Bash"
     ],
     "deny": []
   }

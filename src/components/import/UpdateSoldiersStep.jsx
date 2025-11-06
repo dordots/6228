@@ -61,7 +61,7 @@ export default function UpdateSoldiersStep({
     <Card className={`transition-all duration-200 ${getStatusColor()}`}>
       <CardHeader className="text-center">
         <div className="flex justify-between items-start mb-4">
-          <CardTitle className="text-lg text-left">Update Soldiers CSV</CardTitle>
+          <CardTitle className="text-lg text-left">Update Soldiers File</CardTitle>
           {getStatusBadge()}
         </div>
         <div className="flex justify-center mb-4">
@@ -70,22 +70,22 @@ export default function UpdateSoldiersStep({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-sm text-slate-600">
-          <p className="font-medium mb-2">CSV Column Guide:</p>
+          <p className="font-medium mb-2">File Column Guide:</p>
           <ul className="space-y-1 text-xs">
             <li><strong>soldier_id</strong> - (Required) Must match an existing soldier.</li>
             <li><strong>first_name, last_name, email, street_address, city, phone_number, etc.</strong> - (Optional) Include any columns for details you want to update.</li>
           </ul>
         </div>
-        
+
         <div className="space-y-2">
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             onChange={handleFileSelect}
             className="hidden"
           />
-          
+
           <Button
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
@@ -93,7 +93,7 @@ export default function UpdateSoldiersStep({
             className="w-full"
           >
             <Upload className="w-4 h-4 mr-2" />
-            {status.status === 'pending' ? 'Upload Update CSV' : 'Replace CSV'}
+            {status.status === 'pending' ? 'Upload File (CSV/XLSX)' : 'Replace File'}
           </Button>
           
           {status.status === 'uploaded' && (

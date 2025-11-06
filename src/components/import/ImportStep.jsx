@@ -78,11 +78,11 @@ export default function ImportStep({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             onChange={handleFileSelect}
             className="hidden"
           />
-          
+
           <Button
             variant="outline"
             size="sm"
@@ -91,7 +91,7 @@ export default function ImportStep({
             className="w-full"
           >
             <Upload className="w-4 h-4 mr-2" />
-            {status.status === 'pending' ? 'Upload CSV' : 'Replace CSV'}
+            {status.status === 'pending' ? 'Upload File' : 'Replace File'}
           </Button>
           
           {status.status === 'uploaded' && (

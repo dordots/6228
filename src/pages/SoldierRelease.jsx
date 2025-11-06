@@ -198,9 +198,9 @@ export default function SoldierReleasePage() {
   const allAssignedItemsForFullRelease = useMemo(() => {
     if (!selectedSoldier) return [];
     const items = [];
-    assignedWeapons.forEach(i => items.push({ id: i.id, itemType: 'Weapon', displayName: i.weapon_type, displayId: i.weapon_id }));
-    assignedGear.forEach(i => items.push({ id: i.id, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id }));
-    assignedDrones.forEach(i => items.push({ id: i.id, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number }));
+    assignedWeapons.forEach(i => items.push({ id: i.weapon_id, itemType: 'Weapon', displayName: i.weapon_type, displayId: i.weapon_id }));
+    assignedGear.forEach(i => items.push({ id: i.gear_id, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id }));
+    assignedDrones.forEach(i => items.push({ id: i.drone_set_id, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number }));
     assignedEquipmentList.forEach(i => items.push({ id: i.id, itemType: 'Equipment', displayName: `${i.equipment_type} (x${i.quantity})`, quantity: i.quantity, displayId: `ID: ${i.id.slice(0,8)}` }));
     return items;
   }, [selectedSoldier, assignedWeapons, assignedGear, assignedDrones, assignedEquipmentList]);
@@ -264,10 +264,10 @@ export default function SoldierReleasePage() {
 
         switch (item.itemType) {
           case 'Weapon':
-            await Weapon.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
+            await Weapon.update(item.weapon_id, { assigned_to: null, armory_status: 'with_soldier' });
             break;
           case 'Gear':
-            await SerializedGear.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
+            await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
             break;
           case 'Drone':
             await DroneSet.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });

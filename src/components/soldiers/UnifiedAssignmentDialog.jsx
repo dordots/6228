@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { Search, Plus, X, Users, Target, Binoculars, Joystick, Package, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import SignatureCanvas from './SignatureCanvas';
@@ -187,31 +188,17 @@ export default function UnifiedAssignmentDialog({
   const droneSetOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedDroneSets) || !soldier) return [];
 
-    // Get types of drones soldier already owns (from drones prop)
-    const alreadyOwnedTypes = new Set(
-      (drones || [])
-        .filter(d => d.assigned_to === soldier.soldier_id)
-        .map(d => d.set_type)
-        .filter(Boolean)
-    );
-
-    // Get types of already selected drone sets in current session
-    const selectedTypes = new Set(
-      selectedDroneSetIds
-        .map(id => localUnassignedDroneSets.find(d => d.id === id)?.set_type)
-        .filter(Boolean)
-    );
+    // NOTE: Unlike weapons and gear, soldiers CAN have multiple drones of the same type
+    // So we don't filter by type here
 
     return localUnassignedDroneSets.filter(droneSet => {
       const matchesDivision = !droneSet.division_name || droneSet.division_name === soldier.division_name;
       const notSelected = !selectedDroneSetIds.includes(droneSet.id);
-      const typeNotOwned = !alreadyOwnedTypes.has(droneSet.set_type); // Block types soldier already owns
-      const typeNotSelected = !selectedTypes.has(droneSet.set_type); // Prevent duplicate types in current selection
       const matchesSearch = droneSetSearch.length === 0 ||
          (droneSet.set_serial_number && droneSet.set_serial_number.toLowerCase().includes(droneSetSearch.toLowerCase())) ||
          (droneSet.set_type && droneSet.set_type.toLowerCase().includes(droneSetSearch.toLowerCase()));
 
-      return droneSet && matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch;
+      return droneSet && matchesDivision && notSelected && matchesSearch;
     });
   }, [localUnassignedDroneSets, droneSetSearch, selectedDroneSetIds, soldier, drones]);
 
@@ -335,11 +322,19 @@ export default function UnifiedAssignmentDialog({
     setToast(null);
 
     const assignedItemDetails = [
-        ...selectedWeapons.map(w => ({ type: 'Weapon', id: w.id, name: w.weapon_type })),
-        ...selectedGear.map(g => ({ type: 'Gear', id: g.id, name: g.gear_type })),
-        ...selectedDroneSets.map(d => ({ type: 'Drone Set', id: d.id, name: d.set_type })),
+        ...selectedWeapons.map(w => ({ type: 'Weapon', id: w.id, fieldId: w.weapon_id, name: w.weapon_type })),
+        ...selectedGear.map(g => ({ type: 'Gear', id: g.id, fieldId: g.gear_id, name: g.gear_type })),
+        ...selectedDroneSets.map(d => ({ type: 'Drone Set', id: d.id, fieldId: d.set_serial_number, name: d.set_type })),
         ...validEquipmentAssignments.map(e => ({ type: 'Equipment', name: e.equipment_type, quantity: e.quantity, original_stock_id: e.original_stock_id }))
     ];
+
+    // Create detailed description of assigned items
+    const itemsDescription = assignedItemDetails.map(item => {
+        if (item.type === 'Equipment') {
+            return `${item.name} (x${item.quantity})`;
+        }
+        return `${item.name} (${item.fieldId})`;
+    }).join(', ');
 
     try {
         const currentUser = await User.me();
@@ -437,7 +432,7 @@ export default function UnifiedAssignmentDialog({
             const activityData = {
                 activity_type: "ASSIGN",
                 entity_type: "Soldier",
-                details: `Assigned ${assignedItemDetails.length} item(s) to ${soldier.first_name} ${soldier.last_name} (${soldier.soldier_id}).`,
+                details: `Assigned to ${soldier.first_name} ${soldier.last_name} (${soldier.soldier_id}): ${itemsDescription}`,
                 user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
                 user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
                 soldier_id: soldier.soldier_id,
@@ -1029,6 +1024,17 @@ export default function UnifiedAssignmentDialog({
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {isLoading && (
+              <div className="space-y-2 py-4">
+                <div className="flex items-center justify-between text-sm text-slate-600">
+                  <span>Processing assignment...</span>
+                </div>
+                <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div className="h-full bg-green-600 animate-pulse" style={{ width: '100%' }} />
+                </div>
+              </div>
             )}
 
             <div className="flex justify-end gap-3">

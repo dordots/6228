@@ -148,7 +148,7 @@ export default function SerializedGearPage() {
     }
 
     try {
-      const updatePromises = gearToUpdate.map(g => SerializedGear.update(g.id, { gear_type: newType }));
+      const updatePromises = gearToUpdate.map(g => SerializedGear.update(g.gear_id, { gear_type: newType }));
       await Promise.all(updatePromises);
 
       // Try to create activity log, but don't fail rename if it errors
@@ -189,7 +189,7 @@ export default function SerializedGearPage() {
 
     if (editingGear) {
       activityDetails = `Updated gear: ${gearType} (${gearId}), assigned to ${assignedSoldierName}, in ${divisionName}.`;
-      await SerializedGear.update(editingGear.id, gearData);
+      await SerializedGear.update(editingGear.gear_id, gearData);
     } else {
       const serial = gearData.gear_id;
       if (!serial?.trim()) {

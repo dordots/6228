@@ -35,6 +35,7 @@ import UnifiedAssignmentDialog from "../components/soldiers/UnifiedAssignmentDia
 import UpdatePersonalDetailsDialog from "../components/soldiers/UpdatePersonalDetailsDialog";
 import SoldierFilters from "../components/soldiers/SoldierFilters";
 import SigningHistoryDialog from "../components/soldiers/SigningHistoryDialog";
+import DeleteConfirmDialog from "../components/common/DeleteConfirmDialog";
 import { sendBulkEquipmentForms } from "@/api/functions";
 import JSZip from 'jszip';
 import { generateEquipmentFormHTML } from "@/utils/equipmentFormGenerator";
@@ -66,6 +67,8 @@ export default function Soldiers() {
   const [showEmailsDialog, setShowEmailsDialog] = useState(false); // New state
   const [emailsForInvite, setEmailsForInvite] = useState([]); // New state
   const [isGeneratingZip, setIsGeneratingZip] = useState(false); // For ZIP download
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [soldierToDelete, setSoldierToDelete] = useState(null);
 
   // RENAMED: from availableEquipment to allEquipment for clarity
   const [allEquipment, setAllEquipment] = useState([]);
@@ -314,11 +317,18 @@ export default function Soldiers() {
     setShowForm(true);
   };
 
-  const handleDelete = async (soldier) => {
+  const handleDeleteClick = (soldier) => {
     if (!currentUser?.permissions?.can_delete_soldiers && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete soldiers.");
       return;
     }
+    setSoldierToDelete(soldier);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDelete = async () => {
+    if (!soldierToDelete) return;
+
     try {
       const currentUser = await User.me();
 
@@ -335,19 +345,19 @@ export default function Soldiers() {
         return now.toISOString();
       };
 
-      await Soldier.delete(soldier.id);
+      await Soldier.delete(soldierToDelete.id);
       
       const activityData = {
         activity_type: "DELETE",
         entity_type: "Soldier",
-        details: `Deleted soldier ${soldier.first_name} ${soldier.last_name} (${soldier.soldier_id})`,
+        details: `Deleted soldier ${soldierToDelete.first_name} ${soldierToDelete.last_name} (${soldierToDelete.soldier_id})`,
         user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
         user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
         client_timestamp: getAdjustedTimestamp(),
-        context: { deletedRecord: soldier },
-        division_name: soldier.division_name
+        context: { deletedRecord: soldierToDelete },
+        division_name: soldierToDelete.division_name
       };
-      
+
       await ActivityLog.create(activityData);
       await loadAllData();
     } catch (error) {
@@ -357,6 +367,9 @@ export default function Soldiers() {
         alert("An error occurred while deleting the soldier. The data has been refreshed.");
         await loadAllData();
       }
+    } finally {
+      setShowDeleteConfirm(false);
+      setSoldierToDelete(null);
     }
   };
 
@@ -1168,12 +1181,12 @@ export default function Soldiers() {
           <div className="overflow-auto max-h-[70vh]">
             <SoldierTable
               soldiers={sortedSoldiers}
-              weapons={weapons} 
-              serializedGear={serializedGear} 
-              droneSets={droneSets} 
+              weapons={weapons}
+              serializedGear={serializedGear}
+              droneSets={droneSets}
               equipment={allEquipment}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={handleDeleteClick}
               onMarkArrived={handleWelcomeSoldier}
               onUpdateDetails={handleUpdateDetails}
               onShowHistory={handleOpenHistory}
@@ -1187,6 +1200,14 @@ export default function Soldiers() {
           </div>
         </CardContent>
       </Card>
+
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        itemType="Soldier"
+        itemName={soldierToDelete ? `${soldierToDelete.first_name} ${soldierToDelete.last_name} (${soldierToDelete.soldier_id})` : ""}
+      />
     </div>
   );
 }

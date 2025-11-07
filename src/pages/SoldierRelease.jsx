@@ -198,10 +198,11 @@ export default function SoldierReleasePage() {
   const allAssignedItemsForFullRelease = useMemo(() => {
     if (!selectedSoldier) return [];
     const items = [];
-    assignedWeapons.forEach(i => items.push({ id: i.weapon_id, itemType: 'Weapon', displayName: i.weapon_type, displayId: i.weapon_id }));
-    assignedGear.forEach(i => items.push({ id: i.gear_id, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id }));
-    assignedDrones.forEach(i => items.push({ id: i.drone_set_id, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number }));
-    assignedEquipmentList.forEach(i => items.push({ id: i.id, itemType: 'Equipment', displayName: `${i.equipment_type} (x${i.quantity})`, quantity: i.quantity, displayId: `ID: ${i.id.slice(0,8)}` }));
+    // Store documentId (Firestore .id) for updates and field ID for display
+    assignedWeapons.forEach(i => items.push({ documentId: i.id, fieldId: i.weapon_id, itemType: 'Weapon', displayName: i.weapon_type, displayId: i.weapon_id }));
+    assignedGear.forEach(i => items.push({ documentId: i.id, fieldId: i.gear_id, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id }));
+    assignedDrones.forEach(i => items.push({ documentId: i.id, fieldId: i.drone_set_id, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number }));
+    assignedEquipmentList.forEach(i => items.push({ documentId: i.id, fieldId: i.id, itemType: 'Equipment', displayName: `${i.equipment_type} (x${i.quantity})`, quantity: i.quantity, displayId: `ID: ${i.id.slice(0,8)}` }));
     return items;
   }, [selectedSoldier, assignedWeapons, assignedGear, assignedDrones, assignedEquipmentList]);
 
@@ -255,7 +256,15 @@ export default function SoldierReleasePage() {
 
       const itemsToUnassign = assignedSerialized.filter(item => selectedSerializedItems.includes(item.id));
       const itemDetailsForLog = itemsToUnassign.map(item => {
-        return { type: item.itemType, name: item.displayName, id: item.displayId };
+        // Store both document ID (for cloud function .get()) and field ID (for display)
+        const logItem = {
+          type: item.itemType,
+          name: item.displayName,
+          id: item.id, // Firestore document ID for cloud function to fetch with .get()
+          fieldId: item.displayId // Field ID for display (weapon_id, gear_id, etc.)
+        };
+        console.log('[SoldierRelease] Item for activity log:', logItem);
+        return logItem;
       });
 
       for (const item of itemsToUnassign) {
@@ -284,10 +293,15 @@ export default function SoldierReleasePage() {
           logContext.signature = signature;
         }
 
+        // Create detailed description of released items
+        const itemsDescription = itemDetailsForLog.map(item => {
+          return `${item.name} (${item.fieldId})`;
+        }).join(', ');
+
         const newActivityLog = await ActivityLog.create({
           activity_type: "UNASSIGN",
           entity_type: "Soldier",
-          details: `Unassigned ${itemDetailsForLog.length} serialized items from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+          details: `Unassigned from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
           user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
           user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
           client_timestamp: new Date().toISOString(),
@@ -298,6 +312,8 @@ export default function SoldierReleasePage() {
 
         // Try to send email notification
         try {
+          console.log('[SoldierRelease PARTIAL] Sending release form email with activityId:', newActivityLog.id);
+          console.log('[SoldierRelease PARTIAL] Full activity log:', newActivityLog);
           const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
 
           const soldierReceived = emailResponse?.data?.soldierReceived || emailResponse?.soldierReceived || false;
@@ -309,6 +325,8 @@ export default function SoldierReleasePage() {
               : `The release form could not be sent to the soldier (they are not a registered app user). A copy was sent to your email for manual sharing.`,
           });
         } catch (emailError) {
+          console.error('[SoldierRelease PARTIAL] Error sending release form email:', emailError);
+          console.error('[SoldierRelease PARTIAL] Error details:', emailError.message, emailError.code);
           setDialogContent({
             title: 'Release Successful',
             description: `Items have been unassigned successfully. You can view and download the release form using the button below.`,
@@ -401,7 +419,13 @@ export default function SoldierReleasePage() {
 
         const itemsToUnassign = assignedSerialized.filter(item => selectedSerializedItems.includes(item.id));
         const itemDetailsForLog = itemsToUnassign.map(item => {
-          return { type: item.itemType, name: item.displayName, id: item.displayId };
+          // Store both document ID (for cloud function .get()) and field ID (for display)
+          return {
+            type: item.itemType,
+            name: item.displayName,
+            id: item.id, // Firestore document ID for cloud function to fetch with .get()
+            fieldId: item.displayId // Field ID for display (weapon_id, gear_id, etc.)
+          };
         });
 
         const logContext = { unassignedItems: itemDetailsForLog };
@@ -409,10 +433,15 @@ export default function SoldierReleasePage() {
           logContext.signature = signature;
         }
 
+        // Create detailed description of items
+        const itemsDescription = itemDetailsForLog.map(item => {
+          return `${item.name} (${item.fieldId})`;
+        }).join(', ');
+
         const newActivityLog = await ActivityLog.create({
           activity_type: "UNASSIGN",
           entity_type: "Soldier",
-          details: `Attempted to unassign ${itemDetailsForLog.length} serialized items from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+          details: `Attempted to unassign from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
           user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
           user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
           client_timestamp: new Date().toISOString(),
@@ -731,24 +760,33 @@ export default function SoldierReleasePage() {
 
         for (const item of allAssignedItemsForFullRelease) {
             let promise;
-            let logDetail = { type: item.itemType, name: item.displayName, id: item.id };
+            // Store both document ID (for cloud function .get()) and field ID (for display)
+            let logDetail = {
+                type: item.itemType,
+                name: item.displayName,
+                id: item.documentId, // Firestore document ID for cloud function to fetch with .get()
+                fieldId: item.fieldId // Field ID for display (weapon_id, gear_id, etc.)
+            };
             if (item.itemType === 'Equipment') {
                 logDetail.quantity = item.quantity; // For Equipment, log original assigned quantity
             }
 
             switch (item.itemType) {
                 case 'Weapon':
-                    promise = Weapon.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
+                    // Use fieldId (weapon_id) for updates with adapter
+                    promise = Weapon.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
                     break;
                 case 'Gear':
-                    promise = SerializedGear.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
+                    // Use fieldId (gear_id) for updates with adapter
+                    promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
                     break;
                 case 'Drone':
-                    promise = DroneSet.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
+                    // Use fieldId (drone_set_id) for updates with adapter
+                    promise = DroneSet.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
                     break;
                 case 'Equipment':
-                    // For full release, unassign the entire equipment instance
-                    promise = Equipment.update(item.id, { assigned_to: null });
+                    // For full release, unassign the entire equipment instance (uses document ID)
+                    promise = Equipment.update(item.documentId, { assigned_to: null });
                     break;
                 default:
                     continue;
@@ -771,10 +809,18 @@ export default function SoldierReleasePage() {
                 signature: signature || null // Add signature directly to context
             };
 
+            // Create detailed description of released items
+            const itemsDescription = itemDetailsForLog.map(item => {
+                if (item.quantity) {
+                    return `${item.name} (x${item.quantity})`;
+                }
+                return `${item.name} (${item.fieldId})`;
+            }).join(', ');
+
             const newActivityLog = await ActivityLog.create({
                 activity_type: "RELEASE",
                 entity_type: "Soldier",
-                details: `Unassigned all ${itemDetailsForLog.length} items from soldier ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+                details: `Full release from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
                 user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : user.full_name,
                 user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
                 context: logContext,
@@ -784,6 +830,8 @@ export default function SoldierReleasePage() {
 
             // Try to send email notification
             try {
+                console.log('[SoldierRelease] Sending release form email with activityId:', newActivityLog.id);
+                console.log('[SoldierRelease] Full activity log:', newActivityLog);
                 const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
 
                 // Show success dialog with detailed feedback
@@ -796,6 +844,8 @@ export default function SoldierReleasePage() {
                       : `The release form could not be sent to the soldier (they are not a registered app user). A copy was sent to your email for manual sharing.`,
                 });
             } catch (emailError) {
+                console.error('[SoldierRelease] Error sending release form email:', emailError);
+                console.error('[SoldierRelease] Error details:', emailError.message, emailError.code);
                 setDialogContent({
                     title: 'Full Release Successful',
                     description: `All equipment has been released successfully. You can view and download the release form using the button below.`,
@@ -893,7 +943,13 @@ export default function SoldierReleasePage() {
 
             const itemDetailsForLog = [];
             for (const item of allAssignedItemsForFullRelease) {
-                let logDetail = { type: item.itemType, name: item.displayName, id: item.id };
+                // Store both document ID (for cloud function .get()) and field ID (for display)
+                let logDetail = {
+                    type: item.itemType,
+                    name: item.displayName,
+                    id: item.documentId, // Firestore document ID for cloud function to fetch with .get()
+                    fieldId: item.fieldId // Field ID for display (weapon_id, gear_id, etc.)
+                };
                 if (item.itemType === 'Equipment') {
                     logDetail.quantity = item.quantity;
                 }
@@ -906,10 +962,18 @@ export default function SoldierReleasePage() {
                 signature: signature || null
             };
 
+            // Create detailed description of items
+            const itemsDescription = itemDetailsForLog.map(item => {
+                if (item.quantity) {
+                    return `${item.name} (x${item.quantity})`;
+                }
+                return `${item.name} (${item.fieldId})`;
+            }).join(', ');
+
             const newActivityLog = await ActivityLog.create({
                 activity_type: "RELEASE",
                 entity_type: "Soldier",
-                details: `Attempted to unassign all ${itemDetailsForLog.length} items from soldier ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+                details: `Attempted full release from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
                 user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : user.full_name,
                 user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
                 context: logContext,

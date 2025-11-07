@@ -47,6 +47,7 @@ export default function UserManagement() {
   const [soldierMap, setSoldierMap] = useState({}); // Map of soldier_id to soldier data
   const [currentUser, setCurrentUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -181,20 +182,28 @@ export default function UserManagement() {
     }
   };
 
-  const filteredUsers = users.filter(user => {
-    if (!user) return false;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (user.full_name && user.full_name.toLowerCase().includes(searchLower)) ||
-      (user.email && user.email.toLowerCase().includes(searchLower)) ||
-      (user.phoneNumber && user.phoneNumber.includes(searchLower))
-    );
-  });
-
   const getUserRole = (user) => {
     if (!user) return 'soldier';
     return user.custom_role || user.role || 'soldier';
   };
+
+  const filteredUsers = users.filter(user => {
+    if (!user) return false;
+
+    // Search filter
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = (
+      (user.full_name && user.full_name.toLowerCase().includes(searchLower)) ||
+      (user.email && user.email.toLowerCase().includes(searchLower)) ||
+      (user.phoneNumber && user.phoneNumber.includes(searchLower))
+    );
+
+    // Role filter
+    const userRole = getUserRole(user);
+    const matchesRole = roleFilter === "all" || userRole === roleFilter;
+
+    return matchesSearch && matchesRole;
+  });
 
   const getRoleBadge = (user) => {
     const role = getUserRole(user);
@@ -380,6 +389,19 @@ export default function UserManagement() {
               Current Users
             </CardTitle>
             <div className="flex items-center gap-4">
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Roles</SelectItem>
+                  {Object.entries(ROLES).map(([key, role]) => (
+                    <SelectItem key={key} value={key}>
+                      {role.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <div className="relative w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
@@ -422,9 +444,12 @@ export default function UserManagement() {
                 ) : (
                   filteredUsers.map((user) => {
                     const role = getUserRole(user);
-                    const canEditUser = isCurrentUserAdmin || 
+                    const canEditUser = isCurrentUserAdmin ||
                       (isCurrentUserDivisionManager && user.division === currentUser?.division);
-                    
+                    // Prevent editing other admins (but allow editing yourself)
+                    const isTargetUserAdmin = role === 'admin';
+                    const canEditThisUser = canEditUser && (user.id === currentUser?.id || !isTargetUserAdmin);
+
                     return (
                       <TableRow key={user.id} className={`group ${user.id === currentUser?.id ? 'bg-blue-50' : ''}`}>
                         <TableCell className="font-medium sticky left-0 z-10 bg-white group-hover:bg-slate-50">
@@ -482,7 +507,7 @@ export default function UserManagement() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2 items-center">
-                            {canEditUser && user.id !== currentUser?.id ? (
+                            {canEditThisUser ? (
                               <>
                                 <Select
                                   value={role}
@@ -506,7 +531,7 @@ export default function UserManagement() {
                                     )}
                                   </SelectContent>
                                 </Select>
-                                {isCurrentUserAdmin && (
+                                {isCurrentUserAdmin && !isTargetUserAdmin && user.id !== currentUser?.id && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
@@ -517,10 +542,10 @@ export default function UserManagement() {
                                   </Button>
                                 )}
                               </>
+                            ) : isTargetUserAdmin ? (
+                              <span className="text-sm text-slate-500">Admin (protected)</span>
                             ) : (
-                              <span className="text-sm text-slate-500">
-                                {user.id === currentUser?.id ? 'Current user' : 'No permission'}
-                              </span>
+                              <span className="text-sm text-slate-500">No permission</span>
                             )}
                           </div>
                         </TableCell>

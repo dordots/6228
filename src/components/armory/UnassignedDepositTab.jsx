@@ -33,7 +33,7 @@ const ItemRow = ({ item, isSelected, onSelect, type }) => {
             <div className="flex items-center gap-3">
                 <Checkbox
                     checked={isSelected}
-                    onCheckedChange={() => onSelect(item.id)}
+                    onCheckedChange={() => onSelect(id)}
                 />
                 <div>
                     <p className="font-medium">{name}</p>
@@ -184,17 +184,17 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
                             </TabsList>
                             <TabsContent value="weapons" className="space-y-3 pt-4">
                                 {filteredWeapons.length === 0 ? <p className="text-center py-8 text-slate-500">No weapons found matching search.</p> :
-                                filteredWeapons.map(w => <ItemRow key={w.id} item={w} isSelected={selectedWeaponIds.includes(w.id)} onSelect={() => handleSelect(w.id, 'weapon')} type="weapon" />)
+                                filteredWeapons.map(w => <ItemRow key={w.id} item={w} isSelected={selectedWeaponIds.includes(w.weapon_id)} onSelect={(id) => handleSelect(id, 'weapon')} type="weapon" />)
                                 }
                             </TabsContent>
                              <TabsContent value="gear" className="space-y-3 pt-4">
                                 {filteredGear.length === 0 ? <p className="text-center py-8 text-slate-500">No gear found matching search.</p> :
-                                filteredGear.map(g => <ItemRow key={g.id} item={g} isSelected={selectedGearIds.includes(g.id)} onSelect={() => handleSelect(g.id, 'gear')} type="gear" />)
+                                filteredGear.map(g => <ItemRow key={g.id} item={g} isSelected={selectedGearIds.includes(g.gear_id)} onSelect={(id) => handleSelect(id, 'gear')} type="gear" />)
                                 }
                             </TabsContent>
                              <TabsContent value="drones" className="space-y-3 pt-4">
                                 {filteredDroneSets.length === 0 ? <p className="text-center py-8 text-slate-500">No drone sets found matching search.</p> :
-                                filteredDroneSets.map(ds => <ItemRow key={ds.id} item={ds} isSelected={selectedDroneSetIds.includes(ds.id)} onSelect={() => handleSelect(ds.id, 'droneSet')} type="droneSet" />)
+                                filteredDroneSets.map(ds => <ItemRow key={ds.id} item={ds} isSelected={selectedDroneSetIds.includes(ds.set_serial_number)} onSelect={(id) => handleSelect(id, 'droneSet')} type="droneSet" />)
                                 }
                             </TabsContent>
                         </Tabs>

@@ -329,29 +329,13 @@ export default function SoldierTable({
                         <DropdownMenuItem onClick={() => onUpdateDetails(soldier)}>
                            <UserCog className="w-3 h-3 mr-2" /> Update Personal Details
                         </DropdownMenuItem>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                             <DropdownMenuItem
-                              className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                              disabled={!canDelete}
-                              onSelect={(e) => e.preventDefault()} // Prevent closing menu
-                            >
-                               <Trash2 className="w-3 h-3 mr-2" /> Delete
-                            </DropdownMenuItem>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently delete the soldier record for {soldier.first_name} {soldier.last_name}. This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => onDelete(soldier)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <DropdownMenuItem
+                          className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                          disabled={!canDelete}
+                          onClick={() => onDelete(soldier)}
+                        >
+                          <Trash2 className="w-3 h-3 mr-2" /> Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

@@ -31,6 +31,7 @@ import WeaponTable from "../components/weapons/WeaponTable";
 import WeaponFilters from "../components/weapons/WeaponFilters";
 import ReassignWeaponDialog from "../components/weapons/ReassignWeaponDialog";
 import RenameTypeDialog from "../components/common/RenameTypeDialog"; // New Import
+import DeleteConfirmDialog from "../components/common/DeleteConfirmDialog";
 
 export default function Weapons() {
   const [weapons, setWeapons] = useState([]);
@@ -58,6 +59,8 @@ export default function Weapons() {
   const [viewingComment, setViewingComment] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [showRenameDialog, setShowRenameDialog] = useState(false); // New State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [weaponToDelete, setWeaponToDelete] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -156,7 +159,7 @@ export default function Weapons() {
     }
 
     try {
-      const updatePromises = weaponsToUpdate.map(w => Weapon.update(w.id, { weapon_type: newType }));
+      const updatePromises = weaponsToUpdate.map(w => Weapon.update(w.weapon_id, { weapon_type: newType }));
       await Promise.all(updatePromises);
 
       // Try to create activity log, but don't fail rename if it errors
@@ -232,7 +235,7 @@ export default function Weapons() {
             updateDetails += ` No significant field changes detected.`;
         }
 
-        await Weapon.update(editingWeapon.id, weaponData);
+        await Weapon.update(editingWeapon.weapon_id, weaponData);
 
         // Try to create activity log, but don't fail weapon update if it errors
         try {
@@ -322,29 +325,36 @@ export default function Weapons() {
     setShowForm(true);
   };
 
-  const handleDelete = async (weapon) => {
+  const handleDeleteClick = (weapon) => {
     if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete weapons.");
       return;
     }
+    setWeaponToDelete(weapon);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDelete = async () => {
+    if (!weaponToDelete) return;
+
     try {
       const user = currentUser;
       if (!user) {
         alert("User not logged in. Please refresh.");
         return;
       }
-      
+
       const timestampWithOffset = new Date(new Date().getTime() + 3 * 60 * 60 * 1000).toISOString();
-      
+
       await ActivityLog.create({
         activity_type: 'DELETE',
         entity_type: 'Weapon',
-        details: `Weapon ${weapon.weapon_type} (${weapon.weapon_id}) was deleted.`,
+        details: `Weapon ${weaponToDelete.weapon_type} (${weaponToDelete.weapon_id}) was deleted.`,
         user_full_name: user.full_name,
         client_timestamp: timestampWithOffset,
-        division_name: weapon.division_name
+        division_name: weaponToDelete.division_name
       });
-      await Weapon.delete(weapon.id);
+      await Weapon.delete(weaponToDelete.id);
       loadData();
     } catch (error) {
       if (error.message?.includes('Object not found') || error.response?.status === 404) {
@@ -353,6 +363,9 @@ export default function Weapons() {
         alert("An error occurred while deleting the weapon. The data has been refreshed.");
         loadData();
       }
+    } finally {
+      setShowDeleteConfirm(false);
+      setWeaponToDelete(null);
     }
   };
 
@@ -763,7 +776,7 @@ export default function Weapons() {
               weapons={filteredWeapons}
               soldiers={soldiers}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={handleDeleteClick}
               onReassign={handleReassign}
               onViewComment={handleViewComment}
               isAdminOrManager={isAdminOrManager}
@@ -779,6 +792,14 @@ export default function Weapons() {
           </div>
         </CardContent>
       </Card>
+
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        itemType="Weapon"
+        itemName={weaponToDelete ? `${weaponToDelete.weapon_type} (${weaponToDelete.weapon_id})` : ""}
+      />
     </div>
   );
 }

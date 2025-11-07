@@ -277,37 +277,50 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
   const handleDepositUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature, depositLocation }) => {
     try {
+      console.log('[DepositUnassigned] Starting with:', { weaponIds, gearIds, droneSetIds, depositLocation });
       const currentUser = await User.me();
 
       // Update each item, preserving its division_name to satisfy security rules
       for (const weaponId of weaponIds) {
-        const weapon = unassignedToDeposit.weapons.find(w => w.id === weaponId);
+        console.log('[DepositUnassigned] Processing weapon:', weaponId);
+        console.log('[DepositUnassigned] Available weapons:', unassignedToDeposit.weapons.map(w => ({ id: w.id, weapon_id: w.weapon_id })));
+        const weapon = unassignedToDeposit.weapons.find(w => w.weapon_id === weaponId);
+        console.log('[DepositUnassigned] Found weapon:', weapon);
         const updatePayload = {
           armory_status: 'in_deposit',
           assigned_to: null,
           deposit_location: depositLocation,
           division_name: weapon?.division_name // Preserve division_name
         };
+        console.log('[DepositUnassigned] Updating weapon with payload:', updatePayload);
         await Weapon.update(weaponId, updatePayload);
       }
       for (const gearId of gearIds) {
-        const gearItem = unassignedToDeposit.gear.find(g => g.id === gearId);
+        console.log('[DepositUnassigned] Processing gear:', gearId);
+        console.log('[DepositUnassigned] Available gear:', unassignedToDeposit.gear.map(g => ({ id: g.id, gear_id: g.gear_id })));
+        const gearItem = unassignedToDeposit.gear.find(g => g.gear_id === gearId);
+        console.log('[DepositUnassigned] Found gear:', gearItem);
         const updatePayload = {
           armory_status: 'in_deposit',
           assigned_to: null,
           deposit_location: depositLocation,
           division_name: gearItem?.division_name // Preserve division_name
         };
+        console.log('[DepositUnassigned] Updating gear with payload:', updatePayload);
         await SerializedGear.update(gearId, updatePayload);
       }
       for (const droneSetId of droneSetIds) {
-        const droneSet = unassignedToDeposit.droneSets.find(d => d.id === droneSetId);
+        console.log('[DepositUnassigned] Processing droneSet:', droneSetId);
+        console.log('[DepositUnassigned] Available droneSets:', unassignedToDeposit.droneSets.map(d => ({ id: d.id, set_serial_number: d.set_serial_number })));
+        const droneSet = unassignedToDeposit.droneSets.find(d => d.set_serial_number === droneSetId);
+        console.log('[DepositUnassigned] Found droneSet:', droneSet);
         const updatePayload = {
           armory_status: 'in_deposit',
           assigned_to: null,
           deposit_location: depositLocation,
           division_name: droneSet?.division_name // Preserve division_name
         };
+        console.log('[DepositUnassigned] Updating droneSet with payload:', updatePayload);
         await DroneSet.update(droneSetId, updatePayload);
       }
 
@@ -334,37 +347,50 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
   const handleReleaseUnassigned = async ({ weaponIds, gearIds, droneSetIds, signature }) => {
     try {
+      console.log('[ReleaseUnassigned] Starting with:', { weaponIds, gearIds, droneSetIds });
       const currentUser = await User.me();
 
       // Update each item, preserving its division_name to satisfy security rules
       for (const weaponId of weaponIds) {
-        const weapon = unassignedInDeposit.weapons.find(w => w.id === weaponId);
+        console.log('[ReleaseUnassigned] Processing weapon:', weaponId);
+        console.log('[ReleaseUnassigned] Available weapons:', unassignedInDeposit.weapons.map(w => ({ id: w.id, weapon_id: w.weapon_id })));
+        const weapon = unassignedInDeposit.weapons.find(w => w.weapon_id === weaponId);
+        console.log('[ReleaseUnassigned] Found weapon:', weapon);
         const updatePayload = {
           armory_status: 'with_soldier',
           assigned_to: null,
           deposit_location: null,
           division_name: weapon?.division_name // Preserve division_name
         };
+        console.log('[ReleaseUnassigned] Updating weapon with payload:', updatePayload);
         await Weapon.update(weaponId, updatePayload);
       }
       for (const gearId of gearIds) {
-        const gearItem = unassignedInDeposit.gear.find(g => g.id === gearId);
+        console.log('[ReleaseUnassigned] Processing gear:', gearId);
+        console.log('[ReleaseUnassigned] Available gear:', unassignedInDeposit.gear.map(g => ({ id: g.id, gear_id: g.gear_id })));
+        const gearItem = unassignedInDeposit.gear.find(g => g.gear_id === gearId);
+        console.log('[ReleaseUnassigned] Found gear:', gearItem);
         const updatePayload = {
           armory_status: 'with_soldier',
           assigned_to: null,
           deposit_location: null,
           division_name: gearItem?.division_name // Preserve division_name
         };
+        console.log('[ReleaseUnassigned] Updating gear with payload:', updatePayload);
         await SerializedGear.update(gearId, updatePayload);
       }
       for (const droneSetId of droneSetIds) {
-        const droneSet = unassignedInDeposit.droneSets.find(d => d.id === droneSetId);
+        console.log('[ReleaseUnassigned] Processing droneSet:', droneSetId);
+        console.log('[ReleaseUnassigned] Available droneSets:', unassignedInDeposit.droneSets.map(d => ({ id: d.id, set_serial_number: d.set_serial_number })));
+        const droneSet = unassignedInDeposit.droneSets.find(d => d.set_serial_number === droneSetId);
+        console.log('[ReleaseUnassigned] Found droneSet:', droneSet);
         const updatePayload = {
           armory_status: 'with_soldier',
           assigned_to: null,
           deposit_location: null,
           division_name: droneSet?.division_name // Preserve division_name
         };
+        console.log('[ReleaseUnassigned] Updating droneSet with payload:', updatePayload);
         await DroneSet.update(droneSetId, updatePayload);
       }
 

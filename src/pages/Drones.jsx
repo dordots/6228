@@ -38,6 +38,7 @@ import ReassignDroneSetDialog from "../components/drones/ReassignDroneSetDialog"
 import DroneFilters from "../components/drones/DroneFilters";
 import DroneSetDetailsDialog from "../components/drones/DroneSetDetailsDialog";
 import RenameTypeDialog from "../components/common/RenameTypeDialog"; // New Import
+import DeleteConfirmDialog from "../components/common/DeleteConfirmDialog";
 
 export default function DronesPage() { // Renamed from Drones to DronesPage to match original
   const [droneSets, setDroneSets] = useState([]);
@@ -57,6 +58,9 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false); // New State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [droneSetToDelete, setDroneSetToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -230,24 +234,36 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
     setShowForm(true);
   };
 
-  const handleDelete = async (droneSet) => {
+  const handleDeleteClick = (droneSet) => {
+    setDroneSetToDelete(droneSet);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDelete = async () => {
     if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete drone sets.");
       return;
     }
+    if (!droneSetToDelete) return;
+
+    setIsDeleting(true);
     try {
       const user = await User.me();
       await ActivityLog.create({
         activity_type: "DELETE",
         entity_type: "DroneSet",
-        details: `Deleted drone set: ${droneSet.set_type} (${droneSet.set_serial_number})`,
+        details: `Deleted drone set: ${droneSetToDelete.set_type} (${droneSetToDelete.set_serial_number})`,
         user_full_name: user.full_name,
-        division_name: droneSet.division_name
+        division_name: droneSetToDelete.division_name
       });
-      await DroneSet.delete(droneSet.id);
+      await DroneSet.delete(droneSetToDelete.drone_set_id);
       loadData();
     } catch (error) {
       alert("An error occurred while deleting the drone set.");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setDroneSetToDelete(null);
     }
   };
 
@@ -285,7 +301,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
               user_full_name: user.full_name,
               division_name: setToDelete.division_name
             });
-            await DroneSet.delete(id);
+            await DroneSet.delete(setToDelete.drone_set_id);
           } catch (deleteError) {
           }
         }
@@ -431,20 +447,26 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         soldiers={soldiers}
         onReassign={handleReassignSubmit}
       />
-      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bulk Delete</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedItems.length} selected drone set(s)? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
+      {/* Single Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        itemType="drone set"
+        itemName={droneSetToDelete ? `${droneSetToDelete.set_type} (${droneSetToDelete.set_serial_number})` : ""}
+        isLoading={isDeleting}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        onConfirm={handleBulkDelete}
+        itemType="drone sets"
+        itemName={`${selectedItems.length} selected items`}
+        isLoading={false}
+      />
 
       <AlertDialog open={showDuplicates} onOpenChange={setShowDuplicates}>
         <AlertDialogContent>
@@ -582,7 +604,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
               droneSets={filteredDroneSets}
               soldiers={soldiers}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={handleDeleteClick}
               onReassign={handleReassign}
               onViewDetails={handleViewDetails}
               isLoading={isLoading}

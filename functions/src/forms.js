@@ -434,6 +434,35 @@ exports.sendSigningFormByActivity = functions
       db.collection("equipment").where("assigned_to", "==", soldierID).get(),
     ]);
 
+    // Fetch drone components for all drone sets
+    const droneSetIds = drones.docs.map(doc => doc.data().drone_set_id).filter(Boolean);
+    let droneComponents = [];
+    if (droneSetIds.length > 0) {
+      // Firestore 'in' query supports up to 10 items, so batch if needed
+      const componentPromises = [];
+      for (let i = 0; i < droneSetIds.length; i += 10) {
+        const batch = droneSetIds.slice(i, i + 10);
+        componentPromises.push(
+          db.collection("drone_components").where("drone_set_id", "in", batch).get()
+        );
+      }
+      const componentSnapshots = await Promise.all(componentPromises);
+      droneComponents = componentSnapshots.flatMap(snapshot => snapshot.docs);
+    }
+
+    // Group components by drone set ID
+    const componentsByDroneSet = {};
+    droneComponents.forEach(doc => {
+      const comp = doc.data();
+      if (!componentsByDroneSet[comp.drone_set_id]) {
+        componentsByDroneSet[comp.drone_set_id] = [];
+      }
+      componentsByDroneSet[comp.drone_set_id].push({
+        type: comp.component_type,
+        id: comp.component_id
+      });
+    });
+
     // Build list of all current items
     const allCurrentItems = [];
     weapons.docs.forEach(doc => {
@@ -456,10 +485,12 @@ exports.sendSigningFormByActivity = functions
     });
     drones.docs.forEach(doc => {
       const data = doc.data();
+      const components = componentsByDroneSet[data.drone_set_id] || [];
       allCurrentItems.push({
         type: 'Drone',
         name: data.set_type,
         id: data.set_serial_number,
+        components: components, // Add components array
         status: data.armory_status || 'assigned'
       });
     });
@@ -474,7 +505,9 @@ exports.sendSigningFormByActivity = functions
     });
 
     // Calculate previous items (all current items minus the newly assigned ones)
-    const newItemIds = assignedItems.map(item => item.id || item.displayId);
+    // We need to match by field IDs (weapon_id, gear_id, set_serial_number) not document IDs
+    // Priority: fieldId > displayId > id (because fieldId is the actual serial/ID number)
+    const newItemIds = assignedItems.map(item => item.fieldId || item.displayId || item.id);
     const previousItems = allCurrentItems.filter(item => !newItemIds.includes(item.id));
 
     // Format date and time
@@ -488,20 +521,38 @@ exports.sendSigningFormByActivity = functions
       ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;object-fit:contain;" />`
       : '<p><em>No signature provided</em></p>';
 
+    // Helper function to format item rows with components
+    const formatItemRow = (item, index) => {
+      const mainRow = `<tr>
+        <td>${index + 1}</td>
+        <td>${item.type || item.itemType || ''}</td>
+        <td>${item.name || item.displayName || ''}</td>
+        <td>${item.id || item.displayId || ''}</td>
+        <td>${item.status || 'Assigned'}</td>
+      </tr>`;
+
+      // Add component rows if this is a drone with components
+      if ((item.type === 'Drone' || item.type === 'Drone Set') && item.components && item.components.length > 0) {
+        const componentRows = item.components.map(comp =>
+          `<tr style="background-color: #f9f9f9;">
+            <td></td>
+            <td colspan="2" style="padding-right: 30px;">↳ ${comp.type}</td>
+            <td>${comp.id}</td>
+            <td></td>
+          </tr>`
+        ).join('');
+        return mainRow + componentRows;
+      }
+
+      return mainRow;
+    };
+
     // Build items table rows for newly assigned items
     let newItemsTableRows = '';
     if (assignedItems.length === 0) {
       newItemsTableRows = '<tr><td colspan="5">אין פריטים שנחתמו</td></tr>';
     } else {
-      newItemsTableRows = assignedItems.map((item, index) =>
-        `<tr>
-          <td>${index + 1}</td>
-          <td>${item.type || item.itemType || ''}</td>
-          <td>${item.name || item.displayName || ''}</td>
-          <td>${item.id || item.displayId || ''}</td>
-          <td>${item.status || 'Assigned'}</td>
-        </tr>`
-      ).join('');
+      newItemsTableRows = assignedItems.map((item, index) => formatItemRow(item, index)).join('');
     }
 
     // Build items table rows for previous items
@@ -509,15 +560,7 @@ exports.sendSigningFormByActivity = functions
     if (previousItems.length === 0) {
       previousItemsHtml = '<p><strong>לא היה ציוד קודם ברשות החייל.</strong></p>';
     } else {
-      const previousItemsTableRows = previousItems.map((item, index) =>
-        `<tr>
-          <td>${index + 1}</td>
-          <td>${item.type}</td>
-          <td>${item.name}</td>
-          <td>${item.id}</td>
-          <td>${item.status}</td>
-        </tr>`
-      ).join('');
+      const previousItemsTableRows = previousItems.map((item, index) => formatItemRow(item, index)).join('');
       previousItemsHtml = `<table class="items-table">
         <thead>
           <tr>
@@ -747,6 +790,35 @@ exports.sendReleaseFormByActivity = functions
       db.collection("equipment").where("assigned_to", "==", soldierID).get(),
     ]);
 
+    // Fetch drone components for all remaining drone sets
+    const releaseDroneSetIds = drones.docs.map(doc => doc.data().drone_set_id).filter(Boolean);
+    let releaseDroneComponents = [];
+    if (releaseDroneSetIds.length > 0) {
+      // Firestore 'in' query supports up to 10 items, so batch if needed
+      const releaseComponentPromises = [];
+      for (let i = 0; i < releaseDroneSetIds.length; i += 10) {
+        const batch = releaseDroneSetIds.slice(i, i + 10);
+        releaseComponentPromises.push(
+          db.collection("drone_components").where("drone_set_id", "in", batch).get()
+        );
+      }
+      const releaseComponentSnapshots = await Promise.all(releaseComponentPromises);
+      releaseDroneComponents = releaseComponentSnapshots.flatMap(snapshot => snapshot.docs);
+    }
+
+    // Group components by drone set ID
+    const releaseComponentsByDroneSet = {};
+    releaseDroneComponents.forEach(doc => {
+      const comp = doc.data();
+      if (!releaseComponentsByDroneSet[comp.drone_set_id]) {
+        releaseComponentsByDroneSet[comp.drone_set_id] = [];
+      }
+      releaseComponentsByDroneSet[comp.drone_set_id].push({
+        type: comp.component_type,
+        id: comp.component_id
+      });
+    });
+
     // Build list of remaining items
     const remainingItems = [];
     weapons.docs.forEach(doc => {
@@ -769,10 +841,12 @@ exports.sendReleaseFormByActivity = functions
     });
     drones.docs.forEach(doc => {
       const data = doc.data();
+      const components = releaseComponentsByDroneSet[data.drone_set_id] || [];
       remainingItems.push({
         type: 'Drone',
         name: data.set_type,
         id: data.set_serial_number,
+        components: components, // Add components array
         status: data.armory_status || 'assigned'
       });
     });
@@ -798,20 +872,38 @@ exports.sendReleaseFormByActivity = functions
       ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;object-fit:contain;" />`
       : '<p><em>No signature provided</em></p>';
 
+    // Helper function to format item rows with components (same as signing form)
+    const formatReleaseItemRow = (item, index, defaultStatus = 'Assigned') => {
+      const mainRow = `<tr>
+        <td>${index + 1}</td>
+        <td>${item.type || item.itemType || ''}</td>
+        <td>${item.name || item.displayName || ''}</td>
+        <td>${item.id || item.displayId || ''}</td>
+        <td>${item.status || defaultStatus}</td>
+      </tr>`;
+
+      // Add component rows if this is a drone with components
+      if ((item.type === 'Drone' || item.type === 'Drone Set') && item.components && item.components.length > 0) {
+        const componentRows = item.components.map(comp =>
+          `<tr style="background-color: #f9f9f9;">
+            <td></td>
+            <td colspan="2" style="padding-right: 30px;">↳ ${comp.type}</td>
+            <td>${comp.id}</td>
+            <td></td>
+          </tr>`
+        ).join('');
+        return mainRow + componentRows;
+      }
+
+      return mainRow;
+    };
+
     // Build items table rows for released items
     let itemsTableRows = '';
     if (releasedItems.length === 0) {
       itemsTableRows = '<tr><td colspan="5">אין פריטים ששוחררו</td></tr>';
     } else {
-      itemsTableRows = releasedItems.map((item, index) =>
-        `<tr>
-          <td>${index + 1}</td>
-          <td>${item.type || item.itemType || ''}</td>
-          <td>${item.name || item.displayName || ''}</td>
-          <td>${item.id || item.displayId || ''}</td>
-          <td>Released</td>
-        </tr>`
-      ).join('');
+      itemsTableRows = releasedItems.map((item, index) => formatReleaseItemRow(item, index, 'Released')).join('');
     }
 
     // Build HTML for remaining items
@@ -819,15 +911,7 @@ exports.sendReleaseFormByActivity = functions
     if (remainingItems.length === 0) {
       remainingItemsHtml = '<p><strong>לא נותר ציוד ברשות החייל.</strong></p>';
     } else {
-      const remainingItemsTableRows = remainingItems.map((item, index) =>
-        `<tr>
-          <td>${index + 1}</td>
-          <td>${item.type}</td>
-          <td>${item.name}</td>
-          <td>${item.id}</td>
-          <td>${item.status}</td>
-        </tr>`
-      ).join('');
+      const remainingItemsTableRows = remainingItems.map((item, index) => formatReleaseItemRow(item, index)).join('');
       remainingItemsHtml = `<table class="items-table">
         <thead>
           <tr>

@@ -23,6 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Weapon } from "@/api/entities";
 import { SerializedGear } from "@/api/entities";
 import { DroneSet } from "@/api/entities";
+import { DroneComponent } from "@/api/entities";
 import { Equipment } from "@/api/entities";
 import { ActivityLog } from '@/api/entities';
 import { User } from '@/api/entities';
@@ -325,10 +326,40 @@ export default function UnifiedAssignmentDialog({
     setProgress(0);
     setProgressMessage('Preparing assignment...');
 
+    // Fetch drone components for selected drone sets
+    const droneSetIds = selectedDroneSets.map(d => d.drone_set_id).filter(Boolean);
+    let droneComponents = [];
+    if (droneSetIds.length > 0) {
+        try {
+            const allComponents = await DroneComponent.filter({});
+            droneComponents = allComponents.filter(comp => droneSetIds.includes(comp.drone_set_id));
+        } catch (error) {
+            console.error("Error fetching drone components:", error);
+        }
+    }
+
+    // Group components by drone set ID
+    const componentsByDroneSet = {};
+    droneComponents.forEach(comp => {
+        if (!componentsByDroneSet[comp.drone_set_id]) {
+            componentsByDroneSet[comp.drone_set_id] = [];
+        }
+        componentsByDroneSet[comp.drone_set_id].push({
+            type: comp.component_type,
+            id: comp.component_id
+        });
+    });
+
     const assignedItemDetails = [
         ...selectedWeapons.map(w => ({ type: 'Weapon', id: w.id, fieldId: w.weapon_id, name: w.weapon_type })),
         ...selectedGear.map(g => ({ type: 'Gear', id: g.id, fieldId: g.gear_id, name: g.gear_type })),
-        ...selectedDroneSets.map(d => ({ type: 'Drone Set', id: d.id, fieldId: d.set_serial_number, name: d.set_type })),
+        ...selectedDroneSets.map(d => ({
+            type: 'Drone Set',
+            id: d.id,
+            fieldId: d.set_serial_number,
+            name: d.set_type,
+            components: componentsByDroneSet[d.drone_set_id] || [] // Add components
+        })),
         ...validEquipmentAssignments.map(e => ({ type: 'Equipment', name: e.equipment_type, quantity: e.quantity, original_stock_id: e.original_stock_id }))
     ];
 

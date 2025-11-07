@@ -311,17 +311,21 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       }
       for (const droneSetId of droneSetIds) {
         console.log('[DepositUnassigned] Processing droneSet:', droneSetId);
-        console.log('[DepositUnassigned] Available droneSets:', unassignedToDeposit.droneSets.map(d => ({ id: d.id, set_serial_number: d.set_serial_number })));
+        console.log('[DepositUnassigned] Available droneSets:', unassignedToDeposit.droneSets.map(d => ({ id: d.id, drone_set_id: d.drone_set_id, set_serial_number: d.set_serial_number })));
         const droneSet = unassignedToDeposit.droneSets.find(d => d.set_serial_number === droneSetId);
         console.log('[DepositUnassigned] Found droneSet:', droneSet);
+        if (!droneSet) {
+          console.error('[DepositUnassigned] DroneSet not found for set_serial_number:', droneSetId);
+          continue;
+        }
         const updatePayload = {
           armory_status: 'in_deposit',
           assigned_to: null,
           deposit_location: depositLocation,
           division_name: droneSet?.division_name // Preserve division_name
         };
-        console.log('[DepositUnassigned] Updating droneSet with payload:', updatePayload);
-        await DroneSet.update(droneSetId, updatePayload);
+        console.log('[DepositUnassigned] Updating droneSet with drone_set_id:', droneSet.drone_set_id, 'payload:', updatePayload);
+        await DroneSet.update(droneSet.drone_set_id, updatePayload);
       }
 
       const actionItems = [];
@@ -381,17 +385,21 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       }
       for (const droneSetId of droneSetIds) {
         console.log('[ReleaseUnassigned] Processing droneSet:', droneSetId);
-        console.log('[ReleaseUnassigned] Available droneSets:', unassignedInDeposit.droneSets.map(d => ({ id: d.id, set_serial_number: d.set_serial_number })));
+        console.log('[ReleaseUnassigned] Available droneSets:', unassignedInDeposit.droneSets.map(d => ({ id: d.id, drone_set_id: d.drone_set_id, set_serial_number: d.set_serial_number })));
         const droneSet = unassignedInDeposit.droneSets.find(d => d.set_serial_number === droneSetId);
         console.log('[ReleaseUnassigned] Found droneSet:', droneSet);
+        if (!droneSet) {
+          console.error('[ReleaseUnassigned] DroneSet not found for set_serial_number:', droneSetId);
+          continue;
+        }
         const updatePayload = {
           armory_status: 'with_soldier',
           assigned_to: null,
           deposit_location: null,
           division_name: droneSet?.division_name // Preserve division_name
         };
-        console.log('[ReleaseUnassigned] Updating droneSet with payload:', updatePayload);
-        await DroneSet.update(droneSetId, updatePayload);
+        console.log('[ReleaseUnassigned] Updating droneSet with drone_set_id:', droneSet.drone_set_id, 'payload:', updatePayload);
+        await DroneSet.update(droneSet.drone_set_id, updatePayload);
       }
 
       const actionItems = [];

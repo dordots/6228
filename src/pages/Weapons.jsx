@@ -61,6 +61,7 @@ export default function Weapons() {
   const [showRenameDialog, setShowRenameDialog] = useState(false); // New State
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [weaponToDelete, setWeaponToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -337,6 +338,7 @@ export default function Weapons() {
   const handleDelete = async () => {
     if (!weaponToDelete) return;
 
+    setIsDeleting(true);
     try {
       const user = currentUser;
       if (!user) {
@@ -354,7 +356,7 @@ export default function Weapons() {
         client_timestamp: timestampWithOffset,
         division_name: weaponToDelete.division_name
       });
-      await Weapon.delete(weaponToDelete.id);
+      await Weapon.delete(weaponToDelete.weapon_id);
       loadData();
     } catch (error) {
       if (error.message?.includes('Object not found') || error.response?.status === 404) {
@@ -364,6 +366,7 @@ export default function Weapons() {
         loadData();
       }
     } finally {
+      setIsDeleting(false);
       setShowDeleteConfirm(false);
       setWeaponToDelete(null);
     }
@@ -426,7 +429,7 @@ export default function Weapons() {
               client_timestamp: timestampWithOffset,
               division_name: weaponToDelete.division_name
             });
-            await Weapon.delete(id);
+            await Weapon.delete(weaponToDelete.weapon_id);
             successCount++;
           } catch (deleteError) {
             if (deleteError.message?.includes('Object not found') || deleteError.response?.status === 404) {
@@ -655,21 +658,25 @@ export default function Weapons() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bulk Delete Confirm Dialog */}
-      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bulk Delete</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedItems.length} selected weapon(s)? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowBulkDeleteConfirm(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Single Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        itemType="weapon"
+        itemName={weaponToDelete ? `${weaponToDelete.weapon_type} (${weaponToDelete.weapon_id})` : ""}
+        isLoading={isDeleting}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        onConfirm={handleBulkDelete}
+        itemType="weapons"
+        itemName={`${selectedItems.length} selected items`}
+        isLoading={false}
+      />
 
       {/* Rename Type Dialog */}
       <RenameTypeDialog

@@ -34,6 +34,7 @@ import GearTable from "../components/gear/GearTable";
 import GearFilters from "../components/gear/GearFilters";
 import ReassignGearDialog from "../components/gear/ReassignGearDialog";
 import RenameTypeDialog from "../components/common/RenameTypeDialog"; // New Import
+import DeleteConfirmDialog from "../components/common/DeleteConfirmDialog";
 
 export default function SerializedGearPage() {
   const [gear, setGear] = useState([]);
@@ -48,6 +49,9 @@ export default function SerializedGearPage() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [showReassignDialog, setShowReassignDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [gearToDelete, setGearToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [reassigningGear, setReassigningGear] = useState(null);
   const [viewingComment, setViewingComment] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -252,23 +256,31 @@ export default function SerializedGearPage() {
     setShowForm(true);
   };
 
-  const handleDelete = async (gearItem) => {
+  const handleDeleteClick = (gearItem) => {
+    setGearToDelete(gearItem);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDelete = async () => {
     if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete gear.");
       return;
     }
+    if (!gearToDelete) return;
+
+    setIsDeleting(true);
     try {
       const user = await User.me();
       const adjustedTimestamp = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
 
-      const gearType = gearItem.gear_type || "Unknown Type";
-      const gearId = gearItem.gear_id;
-      const assignedSoldier = soldiers.find(s => s && s.soldier_id === gearItem.assigned_to);
+      const gearType = gearToDelete.gear_type || "Unknown Type";
+      const gearId = gearToDelete.gear_id;
+      const assignedSoldier = soldiers.find(s => s && s.soldier_id === gearToDelete.assigned_to);
       const assignedSoldierName = assignedSoldier ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}` : "unassigned";
 
-      const divisionName = gearItem.division_name || "Unknown Division";
+      const divisionName = gearToDelete.division_name || "Unknown Division";
 
-      await SerializedGear.delete(gearItem.id);
+      await SerializedGear.delete(gearToDelete.gear_id);
 
       // Try to create activity log, but don't fail delete if it errors
       try {
@@ -278,7 +290,7 @@ export default function SerializedGearPage() {
           details: `Deleted gear: ${gearType} (${gearId}), previously assigned to ${assignedSoldierName}, in ${divisionName}.`,
           user_full_name: user.full_name,
           client_timestamp: adjustedTimestamp,
-          division_name: gearItem.division_name || 'N/A'
+          division_name: gearToDelete.division_name || 'N/A'
         });
       } catch (logError) {
       }
@@ -291,6 +303,10 @@ export default function SerializedGearPage() {
         alert("An error occurred while deleting the gear item. The data has been refreshed.");
         loadData();
       }
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setGearToDelete(null);
     }
   };
 
@@ -344,7 +360,7 @@ export default function SerializedGearPage() {
 
             const divisionName = gearToDelete.division_name || "Unknown Division";
 
-            await SerializedGear.delete(id);
+            await SerializedGear.delete(gearToDelete.gear_id);
             successCount++;
 
             // Try to create activity log, but don't fail bulk delete if it errors
@@ -528,20 +544,25 @@ export default function SerializedGearPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bulk Delete</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedItems.length} selected gear item(s)? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowBulkDeleteConfirm(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Single Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        itemType="gear"
+        itemName={gearToDelete ? `${gearToDelete.gear_type} (${gearToDelete.gear_id})` : ""}
+        isLoading={isDeleting}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        onConfirm={handleBulkDelete}
+        itemType="gear items"
+        itemName={`${selectedItems.length} selected items`}
+        isLoading={false}
+      />
 
       {/* Comment Viewer Dialog */}
       <Dialog open={!!viewingComment} onOpenChange={() => setViewingComment(null)}>
@@ -651,7 +672,7 @@ export default function SerializedGearPage() {
               gear={filteredGear}
               soldiers={soldiers}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={handleDeleteClick}
               onReassign={handleReassign}
               onViewComment={handleViewComment}
               isAdminOrManager={isAdminOrManager}

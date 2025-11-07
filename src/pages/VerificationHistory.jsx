@@ -18,10 +18,12 @@ export default function VerificationHistoryPage() {
   const [currentUser, setCurrentUser] = useState(null);
   
   const [filters, setFilters] = useState({
-    dateRange: "week", // week, month, all
+    dateRange: "week", // week, month, all, custom
     division: "all",
     verifiedBy: "all",
-    search: ""
+    search: "",
+    startDate: "", // For custom date range (YYYY-MM-DD format)
+    endDate: ""    // For custom date range (YYYY-MM-DD format)
   });
 
   useEffect(() => {
@@ -103,21 +105,34 @@ export default function VerificationHistoryPage() {
       
       // Date range filter
       if (filters.dateRange !== "all") {
-        const verificationDate = new Date(verification.verification_date);
-        const now = new Date();
-        
-        let startDate, endDate;
-        if (filters.dateRange === "week") {
-          startDate = startOfWeek(now, { weekStartsOn: 1 }); // Monday
-          endDate = endOfWeek(now, { weekStartsOn: 1 });
-        } else if (filters.dateRange === "month") {
-          startDate = startOfMonth(now);
-          endDate = endOfMonth(now);
-        }
-        
-        if (startDate && endDate) {
-          if (verificationDate < startDate || verificationDate > endDate) {
+        const verificationDate = verification.verification_date; // Already in YYYY-MM-DD format
+
+        if (filters.dateRange === "custom") {
+          // Custom date range (from startDate to endDate)
+          if (filters.startDate && verificationDate < filters.startDate) {
             return false;
+          }
+          if (filters.endDate && verificationDate > filters.endDate) {
+            return false;
+          }
+        } else {
+          // Week or Month range
+          const verificationDateObj = new Date(verificationDate);
+          const now = new Date();
+
+          let startDate, endDate;
+          if (filters.dateRange === "week") {
+            startDate = startOfWeek(now, { weekStartsOn: 1 }); // Monday
+            endDate = endOfWeek(now, { weekStartsOn: 1 });
+          } else if (filters.dateRange === "month") {
+            startDate = startOfMonth(now);
+            endDate = endOfMonth(now);
+          }
+
+          if (startDate && endDate) {
+            if (verificationDateObj < startDate || verificationDateObj > endDate) {
+              return false;
+            }
           }
         }
       }
@@ -198,7 +213,7 @@ export default function VerificationHistoryPage() {
             Filters
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4">
           <Select value={filters.dateRange} onValueChange={(value) => setFilters(prev => ({ ...prev, dateRange: value }))}>
             <SelectTrigger>
               <SelectValue placeholder="Date Range" />
@@ -206,9 +221,29 @@ export default function VerificationHistoryPage() {
             <SelectContent>
               <SelectItem value="week">This Week</SelectItem>
               <SelectItem value="month">This Month</SelectItem>
+              <SelectItem value="custom">Custom Range</SelectItem>
               <SelectItem value="all">All Time</SelectItem>
             </SelectContent>
           </Select>
+
+          {filters.dateRange === "custom" && (
+            <>
+              <Input
+                type="date"
+                placeholder="Start Date"
+                value={filters.startDate}
+                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                className="w-full"
+              />
+              <Input
+                type="date"
+                placeholder="End Date"
+                value={filters.endDate}
+                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                className="w-full"
+              />
+            </>
+          )}
 
           <Select value={filters.division} onValueChange={(value) => setFilters(prev => ({ ...prev, division: value }))}>
             <SelectTrigger>

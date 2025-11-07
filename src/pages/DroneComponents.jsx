@@ -18,6 +18,7 @@ import DroneComponentTable from "../components/drones/DroneComponentTable";
 import DroneComponentForm from "../components/drones/DroneComponentForm";
 import DroneComponentFilters from "../components/drones/DroneComponentFilters";
 import RenameTypeDialog from "../components/common/RenameTypeDialog";
+import DeleteConfirmDialog from "../components/common/DeleteConfirmDialog";
 
 export default function DroneComponents() {
   const [components, setComponents] = useState([]);
@@ -33,6 +34,9 @@ export default function DroneComponents() {
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [componentToDelete, setComponentToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
 
   useEffect(() => {
@@ -297,24 +301,36 @@ export default function DroneComponents() {
     setShowForm(true);
   };
 
-  const handleDelete = async (component) => {
+  const handleDeleteClick = (component) => {
+    setComponentToDelete(component);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDelete = async () => {
     if (!currentUser?.permissions?.can_delete_drone_components && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete drone components.");
       return;
     }
+    if (!componentToDelete) return;
+
+    setIsDeleting(true);
     try {
       const user = await User.me();
       await ActivityLog.create({
         activity_type: "DELETE",
         entity_type: "DroneComponent",
-        details: `Deleted drone component: ${component.component_type} (${component.component_id})`,
+        details: `Deleted drone component: ${componentToDelete.component_type} (${componentToDelete.component_id})`,
         user_full_name: user.full_name,
         division_name: user.division // Log component changes under user's division
       });
-      await DroneComponent.delete(component.id);
+      await DroneComponent.delete(componentToDelete.component_id);
       loadData();
     } catch (error) {
       alert("An error occurred while deleting the drone component.");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setComponentToDelete(null);
     }
   };
 
@@ -444,7 +460,7 @@ export default function DroneComponents() {
               user_full_name: user.full_name,
               division_name: user.division
             });
-            await DroneComponent.delete(id);
+            await DroneComponent.delete(componentToDelete.component_id);
           } catch (error) {
             console.error(`Error deleting component ${id}:`, error);
             // Continue with other deletions even if one fails
@@ -483,20 +499,25 @@ export default function DroneComponents() {
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-      <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bulk Delete</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedItems.length} selected component(s)? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowBulkDeleteConfirm(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Single Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        itemType="drone component"
+        itemName={componentToDelete ? `${componentToDelete.component_type} (${componentToDelete.component_id})` : ""}
+        isLoading={isDeleting}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        onConfirm={handleBulkDelete}
+        itemType="drone components"
+        itemName={`${selectedItems.length} selected items`}
+        isLoading={false}
+      />
 
       {/* Rename Type Dialog */}
       <RenameTypeDialog
@@ -603,7 +624,7 @@ export default function DroneComponents() {
               components={filteredComponents}
               droneSets={droneSets}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={handleDeleteClick}
               isLoading={isLoading}
               selectedItems={selectedItems}
               onSelectItem={handleSelectItem}

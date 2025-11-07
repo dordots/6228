@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,6 +9,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { AlertTriangle } from "lucide-react";
 
 export default function DeleteConfirmDialog({
@@ -18,7 +20,31 @@ export default function DeleteConfirmDialog({
   itemType = "item",
   itemName = "",
   isLoading = false,
+  requireCode = true,
+  confirmationCode = "1",
 }) {
+  const [inputCode, setInputCode] = useState("");
+  const [error, setError] = useState("");
+
+  // Reset input when dialog opens/closes
+  useEffect(() => {
+    if (open) {
+      setInputCode("");
+      setError("");
+    }
+  }, [open]);
+
+  const handleConfirm = () => {
+    if (requireCode && inputCode !== confirmationCode) {
+      setError(`Please enter "${confirmationCode}" to confirm deletion`);
+      return;
+    }
+    setError("");
+    onConfirm();
+  };
+
+  const isConfirmDisabled = isLoading || (requireCode && inputCode !== confirmationCode);
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -38,12 +64,35 @@ export default function DeleteConfirmDialog({
             <strong className="text-red-600">This action cannot be undone.</strong>
           </AlertDialogDescription>
         </AlertDialogHeader>
+
+        {requireCode && (
+          <div className="space-y-2">
+            <Label htmlFor="confirmation-code">
+              Enter <strong>"{confirmationCode}"</strong> to confirm:
+            </Label>
+            <Input
+              id="confirmation-code"
+              value={inputCode}
+              onChange={(e) => {
+                setInputCode(e.target.value);
+                setError("");
+              }}
+              placeholder={`Type ${confirmationCode} to confirm`}
+              disabled={isLoading}
+              autoComplete="off"
+            />
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
+          </div>
+        )}
+
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
-            disabled={isLoading}
-            className="bg-red-600 hover:bg-red-700"
+            onClick={handleConfirm}
+            disabled={isConfirmDisabled}
+            className="bg-red-600 hover:bg-red-700 disabled:opacity-50"
           >
             {isLoading ? "Deleting..." : "Delete"}
           </AlertDialogAction>

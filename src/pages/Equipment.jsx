@@ -32,6 +32,7 @@ import EquipmentForm from "../components/equipment/EquipmentForm";
 import EquipmentTable from "../components/equipment/EquipmentTable";
 import EquipmentFilters from "../components/equipment/EquipmentFilters";
 import RenameTypeDialog from "../components/common/RenameTypeDialog"; // New Import
+import DeleteConfirmDialog from "../components/common/DeleteConfirmDialog"; // New Import
 import { Edit } from "lucide-react"; // New Import
 
 // Define equipment types that are typically serialized and require unique serial numbers
@@ -50,6 +51,8 @@ export default function EquipmentPage() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false); // Added state for bulk delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // Added state for single delete confirmation
+  const [equipmentToDelete, setEquipmentToDelete] = useState(null); // Added state for equipment to delete
   const [reassigningEquipment, setReassigningEquipment] = useState(null); // New state for reassigning
   const [currentUser, setCurrentUser] = useState(null); // State to store the current user
   const [showRenameDialog, setShowRenameDialog] = useState(false); // New State
@@ -241,24 +244,34 @@ export default function EquipmentPage() {
     setShowForm(true);
   };
 
-  const handleDelete = async (equipmentItem) => {
+  const handleDeleteClick = (equipmentItem) => {
     if (!currentUser?.permissions?.can_delete_equipment && currentUser?.role !== 'admin') {
-        alert("You do not have permission to delete this equipment.");
+        alert("You do not have permission to delete equipment.");
         return;
     }
+    setEquipmentToDelete(equipmentItem);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDelete = async () => {
+    if (!equipmentToDelete) return;
+
     try {
       const user = await User.me(); // Fetched user for activity log
       await ActivityLog.create({
         activity_type: "DELETE",
         entity_type: "Equipment",
-        details: `Deleted equipment: ${equipmentItem.equipment_type} (ID: ${equipmentItem.id})`,
+        details: `Deleted equipment: ${equipmentToDelete.equipment_type} (ID: ${equipmentToDelete.id})`,
         user_full_name: user?.full_name || 'System', // Use user?.full_name with fallback
-        division_name: equipmentItem.division_name
+        division_name: equipmentToDelete.division_name
       });
-      await Equipment.delete(equipmentItem.id);
+      await Equipment.delete(equipmentToDelete.id);
       loadData();
     } catch (error) {
       alert("An error occurred while deleting the equipment item.");
+    } finally {
+      setShowDeleteConfirm(false);
+      setEquipmentToDelete(null);
     }
   };
 
@@ -416,29 +429,14 @@ export default function EquipmentPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {selectedItems.length > 0 && (
-            // Controlled AlertDialog for bulk delete confirmation
-            <AlertDialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={!currentUser?.permissions?.can_delete_equipment && currentUser?.role !== 'admin'}>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Selected ({selectedItems.length})
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirm Bulk Delete</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete {selectedItems.length} selected equipment items? This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              variant="destructive"
+              disabled={!currentUser?.permissions?.can_delete_equipment && currentUser?.role !== 'admin'}
+              onClick={() => setShowBulkDeleteConfirm(true)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Selected ({selectedItems.length})
+            </Button>
           )}
           {currentUser?.role === 'admin' && (
             <Button variant="outline" onClick={() => setShowRenameDialog(true)}>
@@ -517,7 +515,7 @@ export default function EquipmentPage() {
             equipment={sortedEquipment}
             soldiers={soldiers}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onDelete={handleDeleteClick}
             isLoading={isLoading}
             sortConfig={sortConfig}
             onSort={handleSort}
@@ -527,6 +525,26 @@ export default function EquipmentPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Single Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        itemType="equipment"
+        itemName={equipmentToDelete ? `${equipmentToDelete.equipment_type}${equipmentToDelete.serial_number ? ` (${equipmentToDelete.serial_number})` : ''}` : ""}
+        isLoading={false}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={showBulkDeleteConfirm}
+        onOpenChange={setShowBulkDeleteConfirm}
+        onConfirm={handleBulkDelete}
+        itemType="equipment items"
+        itemName={`${selectedItems.length} selected items`}
+        isLoading={false}
+      />
     </div>
   );
 }

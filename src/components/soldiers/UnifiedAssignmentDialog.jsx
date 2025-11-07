@@ -62,6 +62,8 @@ export default function UnifiedAssignmentDialog({
 
   const [signature, setSignature] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
   const [toast, setToast] = useState(null);
 
   // Local state for optimistic updates
@@ -320,6 +322,8 @@ export default function UnifiedAssignmentDialog({
 
     setIsLoading(true);
     setToast(null);
+    setProgress(0);
+    setProgressMessage('Preparing assignment...');
 
     const assignedItemDetails = [
         ...selectedWeapons.map(w => ({ type: 'Weapon', id: w.id, fieldId: w.weapon_id, name: w.weapon_type })),
@@ -327,6 +331,15 @@ export default function UnifiedAssignmentDialog({
         ...selectedDroneSets.map(d => ({ type: 'Drone Set', id: d.id, fieldId: d.set_serial_number, name: d.set_type })),
         ...validEquipmentAssignments.map(e => ({ type: 'Equipment', name: e.equipment_type, quantity: e.quantity, original_stock_id: e.original_stock_id }))
     ];
+
+    const totalSteps = 5; // Prepare, Assign Items, Update Soldier, Create Activity Log, Send Email
+    let currentStep = 0;
+
+    const updateProgress = (step, message) => {
+        currentStep = step;
+        setProgress((currentStep / totalSteps) * 100);
+        setProgressMessage(message);
+    };
 
     // Create detailed description of assigned items
     const itemsDescription = assignedItemDetails.map(item => {
@@ -337,6 +350,7 @@ export default function UnifiedAssignmentDialog({
     }).join(', ');
 
     try {
+        updateProgress(1, 'Authenticating user...');
         const currentUser = await User.me();
         if (!currentUser) {
             throw new Error("User not authenticated. Please log in.");
@@ -412,11 +426,13 @@ export default function UnifiedAssignmentDialog({
         }
 
         // Use allSettled instead of all to handle cases where items don't exist in Firestore
+        updateProgress(2, `Assigning ${assignedItemDetails.length} item(s)...`);
         const results = await Promise.allSettled(promises);
 
         // CRITICAL: Update soldier status to "arrived" if currently "expected"
         // Wrap in try-catch so failure here doesn't prevent dialog from closing
         try {
+            updateProgress(3, 'Updating soldier status...');
             if (soldier.enlistment_status === 'expected') {
                 await Soldier.update(soldier.soldier_id, {
                     enlistment_status: 'arrived',
@@ -429,6 +445,7 @@ export default function UnifiedAssignmentDialog({
 
         // Create activity log - wrap in try-catch
         try {
+            updateProgress(4, 'Creating activity log...');
             const activityData = {
                 activity_type: "ASSIGN",
                 entity_type: "Soldier",
@@ -448,6 +465,7 @@ export default function UnifiedAssignmentDialog({
 
             if (soldier.email && hasSelectedItems) {
                 try {
+                    updateProgress(5, 'Sending confirmation email...');
                     await sendSigningFormByActivity({
                         activityId: newActivityLog.id
                     });
@@ -455,6 +473,8 @@ export default function UnifiedAssignmentDialog({
                     // Failed to send signing email, but assignment was successful
                 }
             }
+
+            updateProgress(5, 'Assignment complete!');
         } catch (activityLogError) {
             // Failed to create activity log, but assignment was successful
         }
@@ -1029,11 +1049,10 @@ export default function UnifiedAssignmentDialog({
             {isLoading && (
               <div className="space-y-2 py-4">
                 <div className="flex items-center justify-between text-sm text-slate-600">
-                  <span>Processing assignment...</span>
+                  <span>{progressMessage}</span>
+                  <span className="font-medium">{Math.round(progress)}%</span>
                 </div>
-                <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                  <div className="h-full bg-green-600 animate-pulse" style={{ width: '100%' }} />
-                </div>
+                <Progress value={progress} className="h-2" />
               </div>
             )}
 

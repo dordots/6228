@@ -562,8 +562,16 @@ export default function ImportPage() {
               continue;
             }
 
-            // Weapon doesn't exist - create it
-            await Weapon.create(weapon);
+            // Weapon doesn't exist - create it with default values for missing fields
+            const weaponWithDefaults = {
+              status: 'functioning',
+              armory_status: null,
+              assigned_to: null,
+              division_name: null,
+              notes: null,
+              ...weapon // Override with actual values from CSV
+            };
+            await Weapon.create(weaponWithDefaults);
 
             results.push({ id: weapon.weapon_id, success: true });
 
@@ -729,8 +737,16 @@ export default function ImportPage() {
               continue;
             }
 
-            // Gear doesn't exist - create it
-            await SerializedGear.create(gear);
+            // Gear doesn't exist - create it with default values for missing fields
+            const gearWithDefaults = {
+              status: 'functioning',
+              armory_status: null,
+              assigned_to: null,
+              division_name: null,
+              notes: null,
+              ...gear // Override with actual values from CSV
+            };
+            await SerializedGear.create(gearWithDefaults);
 
             results.push({ id: gear.gear_id, success: true });
 
@@ -1028,8 +1044,15 @@ export default function ImportPage() {
               continue;
             }
 
-            // Component doesn't exist - create it
-            await DroneComponent.create(component);
+            // Component doesn't exist - create it with default values for missing fields
+            const componentWithDefaults = {
+              status: 'operational',
+              drone_set_id: null,
+              division_name: null,
+              notes: null,
+              ...component // Override with actual values from CSV
+            };
+            await DroneComponent.create(componentWithDefaults);
 
             results.push({ id: component.component_id, success: true });
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -143,6 +143,36 @@ export default function UnifiedAssignmentDialog({
     return filtered;
   }, [equipment, soldier]);
 
+  // Helper function to find paired weapon for קנס"פ weapons
+  // Defined before weaponOptions to avoid hoisting issues
+  const findPairedWeapon = useCallback((weapon, includeSelected = false) => {
+    if (!weapon || !weapon.weapon_type || !weapon.weapon_id) return null;
+    
+    // Check if weapon type contains "קנס"פ"
+    if (!weapon.weapon_type.includes('קנס"פ')) return null;
+    
+    // Extract base ID (remove -1 or -2 suffix)
+    const weaponId = weapon.weapon_id;
+    const baseId = weaponId.replace(/-[12]$/, '');
+    
+    // Determine the suffix of current weapon
+    const currentSuffix = weaponId.endsWith('-1') ? '1' : weaponId.endsWith('-2') ? '2' : null;
+    if (!currentSuffix) return null;
+    
+    // Find the paired weapon with the other suffix
+    const pairedSuffix = currentSuffix === '1' ? '2' : '1';
+    const pairedWeaponId = `${baseId}-${pairedSuffix}`;
+    
+    // Find the paired weapon in available weapons
+    const pairedWeapon = localUnassignedWeapons.find(w => 
+      w.weapon_id === pairedWeaponId && 
+      w.weapon_type === weapon.weapon_type &&
+      (includeSelected || !selectedWeaponIds.includes(w.id))
+    );
+    
+    return pairedWeapon || null;
+  }, [localUnassignedWeapons, selectedWeaponIds]);
+
   // Filter weapons: prevent selecting types soldier already owns or already selected
   const weaponOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedWeapons) || !soldier) return [];
@@ -171,9 +201,19 @@ export default function UnifiedAssignmentDialog({
          (weapon.weapon_type && weapon.weapon_type.toLowerCase().includes(weaponSearch.toLowerCase())) ||
          (weapon.weapon_id && weapon.weapon_id.toLowerCase().includes(weaponSearch.toLowerCase()));
 
-      return weapon && matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch;
+      // For קנס"פ weapons, hide this weapon if its pair is already selected
+      let isPairedWeaponHidden = false;
+      if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ') && selectedWeaponIds.length > 0) {
+        // Check if the paired weapon is already selected - if so, hide this one
+        const pairedWeapon = findPairedWeapon(weapon, true);
+        if (pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id)) {
+          isPairedWeaponHidden = true;
+        }
+      }
+
+      return weapon && matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch && !isPairedWeaponHidden;
     });
-  }, [localUnassignedWeapons, weaponSearch, selectedWeaponIds, soldier, weapons]);
+  }, [localUnassignedWeapons, weaponSearch, selectedWeaponIds, soldier, weapons, findPairedWeapon]);
 
   const gearOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedGear) || !soldier) return [];
@@ -237,7 +277,19 @@ export default function UnifiedAssignmentDialog({
   // Selection handlers
   const selectItem = (type, item) => {
     if (type === 'weapon') {
-      setSelectedWeaponIds(prev => [...prev, item.id]);
+      const newIds = [item.id];
+      
+      // Check if this is a קנס"פ weapon and find its pair
+      const pairedWeapon = findPairedWeapon(item);
+      if (pairedWeapon) {
+        newIds.push(pairedWeapon.id);
+      }
+      
+      setSelectedWeaponIds(prev => {
+        const combined = [...prev, ...newIds];
+        // Remove duplicates
+        return [...new Set(combined)];
+      });
     } else if (type === 'gear') {
       setSelectedGearIds(prev => [...prev, item.id]);
     } else if (type === 'droneSet') {
@@ -250,7 +302,24 @@ export default function UnifiedAssignmentDialog({
 
   const handleRemoveItem = (type, id) => {
     if (type === 'weapon') {
-      setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id));
+      // Find the weapon to check if it's part of a קנס"פ pair
+      const weapon = localUnassignedWeapons.find(w => w.id === id);
+      
+      if (weapon && weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+        // This is a קנס"פ weapon - find its pair
+        const pairedWeapon = findPairedWeapon(weapon, true);
+        
+        if (pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id)) {
+          // Both weapons are selected - remove both
+          setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id && weaponId !== pairedWeapon.id));
+        } else {
+          // Only this weapon is selected - remove just this one
+          setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id));
+        }
+      } else {
+        // Regular weapon - just remove this one
+        setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id));
+      }
     } else if (type === 'gear') {
       setSelectedGearIds(prev => prev.filter(gearId => gearId !== id));
     } else if (type === 'droneSet') {
@@ -307,19 +376,61 @@ export default function UnifiedAssignmentDialog({
       return;
     }
 
-    // NEW: Check for duplicate types
+    // NEW: Check for duplicate types (excluding קנס"פ pairs)
     const weaponTypes = selectedWeapons.map(w => w.weapon_type);
     const gearTypes = selectedGear.map(g => g.gear_type);
     const droneTypes = selectedDroneSets.map(d => d.set_type);
 
-    const hasDuplicateWeapons = weaponTypes.length !== new Set(weaponTypes).size;
+    // Helper to check if two weapons are a valid קנס"פ pair
+    const isValidKansapPair = (weapon1, weapon2) => {
+      if (!weapon1 || !weapon2) return false;
+      if (!weapon1.weapon_type || !weapon2.weapon_type) return false;
+      if (!weapon1.weapon_type.includes('קנס"פ') || !weapon2.weapon_type.includes('קנס"פ')) return false;
+      if (weapon1.weapon_type !== weapon2.weapon_type) return false;
+      
+      // Check if they have the same base ID (without -1/-2 suffix)
+      const baseId1 = weapon1.weapon_id.replace(/-[12]$/, '');
+      const baseId2 = weapon2.weapon_id.replace(/-[12]$/, '');
+      return baseId1 === baseId2;
+    };
+
+    // Filter out valid קנס"פ pairs from duplicate check
+    const weaponTypesForDuplicateCheck = [];
+    const processedWeaponIndices = new Set();
+    
+    for (let i = 0; i < selectedWeapons.length; i++) {
+      if (processedWeaponIndices.has(i)) continue;
+      
+      const weapon1 = selectedWeapons[i];
+      let isPartOfPair = false;
+      
+      // Check if this weapon is part of a קנס"פ pair
+      for (let j = i + 1; j < selectedWeapons.length; j++) {
+        if (processedWeaponIndices.has(j)) continue;
+        
+        const weapon2 = selectedWeapons[j];
+        if (isValidKansapPair(weapon1, weapon2)) {
+          // This is a valid pair, skip both from duplicate check
+          processedWeaponIndices.add(i);
+          processedWeaponIndices.add(j);
+          isPartOfPair = true;
+          break;
+        }
+      }
+      
+      if (!isPartOfPair) {
+        weaponTypesForDuplicateCheck.push(weapon1.weapon_type);
+      }
+    }
+
+    const hasDuplicateWeapons = weaponTypesForDuplicateCheck.length !== new Set(weaponTypesForDuplicateCheck).size;
     const hasDuplicateGear = gearTypes.length !== new Set(gearTypes).size;
     const hasDuplicateDrones = droneTypes.length !== new Set(droneTypes).size;
 
     if (hasDuplicateWeapons || hasDuplicateGear || hasDuplicateDrones) {
       let errorMessage = "Cannot assign multiple items of the same type:\n";
       if (hasDuplicateWeapons) {
-        const duplicates = weaponTypes.filter((type, index) => weaponTypes.indexOf(type) !== index);
+        const duplicates = weaponTypesForDuplicateCheck.filter((type, index) => weaponTypesForDuplicateCheck.indexOf(type) !== index);
         errorMessage += `\n• Weapons: ${[...new Set(duplicates)].join(', ')}`;
       }
       if (hasDuplicateGear) {
@@ -768,23 +879,97 @@ export default function UnifiedAssignmentDialog({
                   <Card className="border-red-200">
                     <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-red-700"><Target className="w-4 h-4" />Weapons</CardTitle></CardHeader>
                     <CardContent className="space-y-3">
-                      {selectedWeaponIds.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Selected Weapons:</Label>
-                          {selectedWeaponIds.map(id => {
-                            const weapon = getSelectedItemDetails('weapon', id);
-                            return weapon ? (
-                              <div key={id} className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded">
+                      {selectedWeaponIds.length > 0 && (() => {
+                        // Group קנס"פ weapons together
+                        const groupedWeapons = [];
+                        const processedIds = new Set();
+                        
+                        selectedWeaponIds.forEach(id => {
+                          if (processedIds.has(id)) return;
+                          
+                          const weapon = getSelectedItemDetails('weapon', id);
+                          if (!weapon) return;
+                          
+                          // Check if this is a קנס"פ weapon
+                          if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+                            const pairedWeapon = findPairedWeapon(weapon, true);
+                            const pairedId = pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id) ? pairedWeapon.id : null;
+                            
+                            if (pairedId) {
+                              // Group both weapons together
+                              const pairedWeaponObj = getSelectedItemDetails('weapon', pairedId);
+                              processedIds.add(id);
+                              processedIds.add(pairedId);
+                              
+                              // Extract the name part after "קנס"פ" (e.g., "קנס"פ-נגב" or "קנס"פ - נגב" -> "קנס"פ - נגב")
+                              const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+                              const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+                              
+                              groupedWeapons.push({
+                                id: id,
+                                pairedId: pairedId,
+                                displayName: displayName,
+                                weapon1: weapon,
+                                weapon2: pairedWeaponObj,
+                                isPaired: true
+                              });
+                            } else {
+                              // Only one of the pair is selected
+                              processedIds.add(id);
+                              groupedWeapons.push({
+                                id: id,
+                                displayName: weapon.weapon_type,
+                                weapon1: weapon,
+                                isPaired: false
+                              });
+                            }
+                          } else {
+                            // Regular weapon
+                            processedIds.add(id);
+                            groupedWeapons.push({
+                              id: id,
+                              displayName: weapon.weapon_type,
+                              weapon1: weapon,
+                              isPaired: false
+                            });
+                          }
+                        });
+                        
+                        return (
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Selected Weapons:</Label>
+                            {groupedWeapons.map(group => (
+                              <div key={group.id} className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded">
                                 <div className="flex-1">
-                                  <p className="font-medium text-sm">{weapon.weapon_type}</p>
-                                  <p className="text-xs text-red-600">{weapon.weapon_id}</p>
+                                  <p className="font-medium text-sm">{group.displayName}</p>
+                                  {group.isPaired ? (
+                                    <p className="text-xs text-red-600">
+                                      {group.weapon1.weapon_id}, {group.weapon2?.weapon_id}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-red-600">{group.weapon1.weapon_id}</p>
+                                  )}
                                 </div>
-                                <Button variant="ghost" size="sm" onClick={() => handleRemoveItem('weapon', id)} className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"><X className="w-3 h-3" /></Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => {
+                                    // If it's a paired weapon, remove both
+                                    if (group.isPaired && group.pairedId) {
+                                      setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== group.id && weaponId !== group.pairedId));
+                                    } else {
+                                      handleRemoveItem('weapon', group.id);
+                                    }
+                                  }} 
+                                  className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
                               </div>
-                            ) : null;
-                          })}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <div className="space-y-2">
                         <Label>Search Weapons</Label>
                         <div className="relative">
@@ -794,14 +979,72 @@ export default function UnifiedAssignmentDialog({
                       </div>
                       <ScrollArea className="h-32 border rounded-md">
                         <div className="p-2 space-y-1">
-                          {weaponOptions.length > 0 ? (
-                            weaponOptions.map(weapon => (
-                              <div key={weapon.id} onClick={() => selectItem('weapon', weapon)} className="p-2 hover:bg-red-50 cursor-pointer rounded border border-red-100">
-                                <p className="font-medium text-sm">{weapon.weapon_type}</p>
-                                <p className="text-xs text-red-600">{weapon.weapon_id}</p>
+                          {weaponOptions.length > 0 ? (() => {
+                            // Group קנס"פ weapons together in the options list
+                            const groupedOptions = [];
+                            const processedIds = new Set();
+                            
+                            weaponOptions.forEach(weapon => {
+                              if (processedIds.has(weapon.id)) return;
+                              
+                              // Check if this is a קנס"פ weapon
+                              if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+                                const pairedWeapon = findPairedWeapon(weapon, false);
+                                
+                                if (pairedWeapon && weaponOptions.find(w => w.id === pairedWeapon.id)) {
+                                  // Both weapons are available - group them
+                                  processedIds.add(weapon.id);
+                                  processedIds.add(pairedWeapon.id);
+                                  
+                                  // Extract the name part after "קנס"פ" (e.g., "קנס"פ-נגב" or "קנס"פ - נגב" -> "קנס"פ - נגב")
+                                  const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+                                  const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+                                  
+                                  groupedOptions.push({
+                                    id: weapon.id,
+                                    pairedId: pairedWeapon.id,
+                                    displayName: displayName,
+                                    weapon1: weapon,
+                                    weapon2: pairedWeapon,
+                                    isPaired: true
+                                  });
+                                } else {
+                                  // Only one is available - show it normally
+                                  processedIds.add(weapon.id);
+                                  groupedOptions.push({
+                                    id: weapon.id,
+                                    displayName: weapon.weapon_type,
+                                    weapon1: weapon,
+                                    isPaired: false
+                                  });
+                                }
+                              } else {
+                                // Regular weapon - show it normally
+                                processedIds.add(weapon.id);
+                                groupedOptions.push({
+                                  id: weapon.id,
+                                  displayName: weapon.weapon_type,
+                                  weapon1: weapon,
+                                  isPaired: false
+                                });
+                              }
+                            });
+                            
+                            return groupedOptions.map(group => (
+                              <div 
+                                key={group.id} 
+                                onClick={() => selectItem('weapon', group.weapon1)} 
+                                className="p-2 hover:bg-red-50 cursor-pointer rounded border border-red-100"
+                              >
+                                <p className="font-medium text-sm">{group.displayName}</p>
+                                {group.isPaired ? (
+                                  <p className="text-xs text-red-600">{group.weapon1.weapon_id}, {group.weapon2.weapon_id}</p>
+                                ) : (
+                                  <p className="text-xs text-red-600">{group.weapon1.weapon_id}</p>
+                                )}
                               </div>
-                            ))
-                          ) : weaponSearch.length > 0 ? (
+                            ));
+                          })() : weaponSearch.length > 0 ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
                               <p className="mb-2">No weapons found matching "{weaponSearch}"</p>
                               {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
@@ -1065,10 +1308,45 @@ export default function UnifiedAssignmentDialog({
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <p className="font-medium text-slate-700 mb-1">Weapons ({selectedWeaponIds.length})</p>
-                      {selectedWeaponIds.map(id => {
-                        const weapon = getSelectedItemDetails('weapon', id);
-                        return weapon ? (<Badge key={id} variant="outline" className="mr-1 mb-1">{weapon.weapon_type}</Badge>) : null;
-                      })}
+                      {(() => {
+                        // Group קנס"פ weapons for display
+                        const groupedWeapons = [];
+                        const processedIds = new Set();
+                        
+                        selectedWeaponIds.forEach(id => {
+                          if (processedIds.has(id)) return;
+                          
+                          const weapon = getSelectedItemDetails('weapon', id);
+                          if (!weapon) return;
+                          
+                          if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+                            const pairedWeapon = findPairedWeapon(weapon, true);
+                            const pairedId = pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id) ? pairedWeapon.id : null;
+                            
+                            if (pairedId) {
+                              processedIds.add(id);
+                              processedIds.add(pairedId);
+                              const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+                              const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+                              groupedWeapons.push(
+                                <Badge key={id} variant="outline" className="mr-1 mb-1">{displayName}</Badge>
+                              );
+                            } else {
+                              processedIds.add(id);
+                              groupedWeapons.push(
+                                <Badge key={id} variant="outline" className="mr-1 mb-1">{weapon.weapon_type}</Badge>
+                              );
+                            }
+                          } else {
+                            processedIds.add(id);
+                            groupedWeapons.push(
+                              <Badge key={id} variant="outline" className="mr-1 mb-1">{weapon.weapon_type}</Badge>
+                            );
+                          }
+                        });
+                        
+                        return groupedWeapons;
+                      })()}
                     </div>
                     <div>
                       <p className="font-medium text-slate-700 mb-1">Gear ({selectedGearIds.length})</p>

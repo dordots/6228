@@ -183,10 +183,68 @@ export default function SoldierReleasePage() {
 
   const assignedSerialized = useMemo(() => {
     if (!selectedSoldier) return [];
-    const mappedWeapons = assignedWeapons.map(i => ({ ...i, itemType: 'Weapon', displayName: i.weapon_type, displayId: i.weapon_id }));
+    
+    // Helper to find paired weapon for קנס"פ weapons
+    const findPairedWeapon = (weapon, weaponsList) => {
+      if (!weapon || !weapon.weapon_type || !weapon.weapon_id) return null;
+      if (!weapon.weapon_type.includes('קנס"פ')) return null;
+      
+      const weaponId = weapon.weapon_id;
+      const baseId = weaponId.replace(/-[12]$/, '');
+      const currentSuffix = weaponId.endsWith('-1') ? '1' : weaponId.endsWith('-2') ? '2' : null;
+      if (!currentSuffix) return null;
+      
+      const pairedSuffix = currentSuffix === '1' ? '2' : '1';
+      const pairedWeaponId = `${baseId}-${pairedSuffix}`;
+      
+      return weaponsList.find(w => 
+        w.weapon_id === pairedWeaponId && 
+        w.weapon_type === weapon.weapon_type
+      ) || null;
+    };
+    
+    // Group קנס"פ weapons together
+    const processedWeaponIds = new Set();
+    const groupedWeapons = [];
+    
+    assignedWeapons.forEach(weapon => {
+      if (processedWeaponIds.has(weapon.id)) return;
+      
+      if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+        const pairedWeapon = findPairedWeapon(weapon, assignedWeapons);
+        
+        if (pairedWeapon) {
+          processedWeaponIds.add(weapon.id);
+          processedWeaponIds.add(pairedWeapon.id);
+          
+          // Extract the name part after "קנס"פ"
+          const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+          const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+          
+          // Create a grouped item with both weapons
+          groupedWeapons.push({
+            id: weapon.id, // Use first weapon's ID as the group ID
+            pairedId: pairedWeapon.id,
+            itemType: 'Weapon',
+            displayName: displayName,
+            displayId: `${weapon.weapon_id}, ${pairedWeapon.weapon_id}`,
+            weapon1: weapon,
+            weapon2: pairedWeapon,
+            isPaired: true
+          });
+        } else {
+          processedWeaponIds.add(weapon.id);
+          groupedWeapons.push({ ...weapon, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id, isPaired: false });
+        }
+      } else {
+        processedWeaponIds.add(weapon.id);
+        groupedWeapons.push({ ...weapon, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id, isPaired: false });
+      }
+    });
+    
     const mappedGear = assignedGear.map(i => ({ ...i, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id }));
     const mappedDrones = assignedDrones.map(i => ({ ...i, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number }));
-    return [...mappedWeapons, ...mappedGear, ...mappedDrones];
+    return [...groupedWeapons, ...mappedGear, ...mappedDrones];
   }, [selectedSoldier, assignedWeapons, assignedGear, assignedDrones]);
 
   const assignedEquipment = useMemo(() => {
@@ -198,8 +256,59 @@ export default function SoldierReleasePage() {
   const allAssignedItemsForFullRelease = useMemo(() => {
     if (!selectedSoldier) return [];
     const items = [];
-    // Store documentId (Firestore .id) for updates and field ID for display
-    assignedWeapons.forEach(i => items.push({ documentId: i.id, fieldId: i.weapon_id, itemType: 'Weapon', displayName: i.weapon_type, displayId: i.weapon_id }));
+    
+    // Helper to find paired weapon for קנס"פ weapons
+    const findPairedWeapon = (weapon, weaponsList) => {
+      if (!weapon || !weapon.weapon_type || !weapon.weapon_id) return null;
+      if (!weapon.weapon_type.includes('קנס"פ')) return null;
+      
+      const weaponId = weapon.weapon_id;
+      const baseId = weaponId.replace(/-[12]$/, '');
+      const currentSuffix = weaponId.endsWith('-1') ? '1' : weaponId.endsWith('-2') ? '2' : null;
+      if (!currentSuffix) return null;
+      
+      const pairedSuffix = currentSuffix === '1' ? '2' : '1';
+      const pairedWeaponId = `${baseId}-${pairedSuffix}`;
+      
+      return weaponsList.find(w => 
+        w.weapon_id === pairedWeaponId && 
+        w.weapon_type === weapon.weapon_type
+      ) || null;
+    };
+    
+    // Group קנס"פ weapons to avoid processing them twice
+    const processedWeaponIds = new Set();
+    assignedWeapons.forEach(weapon => {
+      if (processedWeaponIds.has(weapon.id)) return;
+      
+      if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+        const pairedWeapon = findPairedWeapon(weapon, assignedWeapons);
+        if (pairedWeapon) {
+          processedWeaponIds.add(weapon.id);
+          processedWeaponIds.add(pairedWeapon.id);
+          // Add only one entry for the pair - the release logic will handle both
+          const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+          const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+          items.push({ 
+            documentId: weapon.id, 
+            fieldId: weapon.weapon_id, 
+            itemType: 'Weapon', 
+            displayName: displayName, 
+            displayId: `${weapon.weapon_id}, ${pairedWeapon.weapon_id}`,
+            isPaired: true,
+            pairedWeaponId: pairedWeapon.weapon_id,
+            pairedWeaponDocId: pairedWeapon.id
+          });
+        } else {
+          processedWeaponIds.add(weapon.id);
+          items.push({ documentId: weapon.id, fieldId: weapon.weapon_id, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id });
+        }
+      } else {
+        processedWeaponIds.add(weapon.id);
+        items.push({ documentId: weapon.id, fieldId: weapon.weapon_id, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id });
+      }
+    });
+    
     assignedGear.forEach(i => items.push({ documentId: i.id, fieldId: i.gear_id, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id }));
     assignedDrones.forEach(i => items.push({ documentId: i.id, fieldId: i.drone_set_id, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number }));
     assignedEquipmentList.forEach(i => items.push({ documentId: i.id, fieldId: i.id, itemType: 'Equipment', displayName: `${i.equipment_type} (x${i.quantity})`, quantity: i.quantity, displayId: `ID: ${i.id.slice(0,8)}` }));
@@ -254,8 +363,26 @@ export default function SoldierReleasePage() {
           } catch (e) { }
       }
 
-      const itemsToUnassign = assignedSerialized.filter(item => selectedSerializedItems.includes(item.id));
+      // Expand paired weapons - if a paired weapon is selected, include both weapons
+      const expandedSelectedItems = new Set(selectedSerializedItems);
+      assignedSerialized.forEach(item => {
+        if (item.isPaired && selectedSerializedItems.includes(item.id)) {
+          // If paired weapon is selected, also add the paired weapon
+          expandedSelectedItems.add(item.pairedId);
+        }
+      });
+      
+      const itemsToUnassign = assignedSerialized.filter(item => expandedSelectedItems.has(item.id));
       const itemDetailsForLog = itemsToUnassign.map(item => {
+        // For paired weapons, use the grouped display info
+        if (item.isPaired) {
+          return {
+            type: item.itemType,
+            name: item.displayName,
+            id: item.id, // Firestore document ID for cloud function to fetch with .get()
+            fieldId: item.displayId // Field ID for display (weapon_id, gear_id, etc.)
+          };
+        }
         // Store both document ID (for cloud function .get()) and field ID (for display)
         const logItem = {
           type: item.itemType,
@@ -270,10 +397,23 @@ export default function SoldierReleasePage() {
       for (const item of itemsToUnassign) {
         if (!item) continue;
 
-
         switch (item.itemType) {
           case 'Weapon':
-            await Weapon.update(item.weapon_id, { assigned_to: null, armory_status: 'with_soldier' });
+            // Handle paired weapons - unassign both if it's a pair
+            if (item.isPaired && item.weapon1 && item.weapon2) {
+              await Promise.all([
+                Weapon.update(item.weapon1.weapon_id, { assigned_to: null, armory_status: 'with_soldier' }),
+                Weapon.update(item.weapon2.weapon_id, { assigned_to: null, armory_status: 'with_soldier' })
+              ]);
+            } else if (item.weapon_id) {
+              await Weapon.update(item.weapon_id, { assigned_to: null, armory_status: 'with_soldier' });
+            } else {
+              // Fallback: try to get weapon_id from the original weapon object
+              const weapon = assignedWeapons.find(w => w.id === item.id);
+              if (weapon) {
+                await Weapon.update(weapon.weapon_id, { assigned_to: null, armory_status: 'with_soldier' });
+              }
+            }
             break;
           case 'Gear':
             await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
@@ -773,8 +913,16 @@ export default function SoldierReleasePage() {
 
             switch (item.itemType) {
                 case 'Weapon':
-                    // Use fieldId (weapon_id) for updates with adapter
-                    promise = Weapon.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                    // Handle paired weapons - if this is a paired item, unassign both
+                    if (item.isPaired && item.pairedWeaponId) {
+                      promise = Promise.all([
+                        Weapon.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' }),
+                        Weapon.update(item.pairedWeaponId, { assigned_to: null, armory_status: 'with_soldier' })
+                      ]);
+                    } else {
+                      // Use fieldId (weapon_id) for updates with adapter
+                      promise = Weapon.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                    }
                     break;
                 case 'Gear':
                     // Use fieldId (gear_id) for updates with adapter

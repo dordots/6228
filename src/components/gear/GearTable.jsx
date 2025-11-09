@@ -118,8 +118,12 @@ export default function GearTable({
                       <Badge variant="outline" className="text-xs font-normal text-amber-800 bg-amber-50 border-amber-200">
                         In Deposit
                       </Badge>
+                    ) : gearItem.armory_status === 'with_soldier' ? (
+                      <Badge variant="outline" className="text-xs font-normal text-green-800 bg-green-50 border-green-200">
+                        With Soldier
+                      </Badge>
                     ) : (
-                      gearItem.armory_status || 'N/A' // Display status or N/A
+                      <span className="text-slate-500">Unknown</span>
                     )}
                   </TableCell>
                   <TableCell>{gearItem.last_signed_by || 'N/A'}</TableCell>

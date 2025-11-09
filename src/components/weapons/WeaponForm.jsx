@@ -8,9 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { Save, X, Calendar as CalendarIcon, Plus } from "lucide-react";
+import { Save, X, Calendar as CalendarIcon, Plus, Package, PackageOpen } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import ComboBox from "@/components/common/ComboBox"; // New import
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const CONDITIONS = ["functioning", "not_functioning"];
 
@@ -31,6 +38,9 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
   const [idError, setIdError] = useState('');
   const [showCustomType, setShowCustomType] = useState(false);
   const [customType, setCustomType] = useState('');
+  const [showDepositDialog, setShowDepositDialog] = useState(false);
+  const [depositLocation, setDepositLocation] = useState('division_deposit');
+  const [depositAction, setDepositAction] = useState('deposit'); // 'deposit' or 'release'
 
   // Get unique weapon types from existing weapons
   const existingTypes = useMemo(() => {
@@ -153,6 +163,41 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
       handleChange('weapon_type', value);
     }
   };
+
+  const handleTransferToDeposit = () => {
+    setDepositAction('deposit');
+    setShowDepositDialog(true);
+  };
+
+  const handleReleaseFromDeposit = () => {
+    setDepositAction('release');
+    setShowDepositDialog(true);
+  };
+
+  const handleConfirmDeposit = () => {
+    if (depositAction === 'deposit') {
+      const depositData = {
+        ...formData,
+        armory_status: 'in_deposit',
+        deposit_location: depositLocation,
+        assigned_to: null, // Unassign when transferring to deposit
+      };
+      onSubmit(depositData);
+    } else {
+      // Release from deposit
+      const releaseData = {
+        ...formData,
+        armory_status: 'with_soldier',
+        deposit_location: null, // Clear deposit location
+        // Keep assigned_to as is (could be null or already assigned)
+      };
+      onSubmit(releaseData);
+    }
+    setShowDepositDialog(false);
+  };
+
+  const isWithSoldier = weapon && (weapon.armory_status || 'with_soldier') === 'with_soldier';
+  const isInDeposit = weapon && weapon.armory_status === 'in_deposit';
 
   return (
     <Card className="border-slate-200 shadow-md">
@@ -294,17 +339,96 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
           </div>
         </CardContent>
         
-        <CardFooter className="flex justify-end gap-3 bg-slate-50 border-t border-slate-200">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            <X className="w-4 h-4 mr-2" />
-            Cancel
-          </Button>
-          <Button type="submit" className="bg-red-700 hover:bg-red-800 text-white">
-            <Save className="w-4 h-4 mr-2" />
-            {weapon ? 'Update' : 'Create'} Weapon
-          </Button>
+        <CardFooter className="flex justify-between gap-3 bg-slate-50 border-t border-slate-200">
+          <div>
+            {weapon && isWithSoldier && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleTransferToDeposit}
+                className="border-amber-500 text-amber-700 hover:bg-amber-50"
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Transfer to Deposit
+              </Button>
+            )}
+            {weapon && isInDeposit && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleReleaseFromDeposit}
+                className="border-green-500 text-green-700 hover:bg-green-50"
+              >
+                <PackageOpen className="w-4 h-4 mr-2" />
+                Release from Deposit
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+            <Button type="submit" className="bg-red-700 hover:bg-red-800 text-white">
+              <Save className="w-4 h-4 mr-2" />
+              {weapon ? 'Update' : 'Create'} Weapon
+            </Button>
+          </div>
         </CardFooter>
       </form>
+
+      {/* Deposit/Release Dialog */}
+      <Dialog open={showDepositDialog} onOpenChange={setShowDepositDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {depositAction === 'deposit' ? 'Transfer to Deposit' : 'Release from Deposit'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {depositAction === 'deposit' && (
+              <div className="space-y-2">
+                <Label htmlFor="deposit-location">Deposit Location *</Label>
+                <Select value={depositLocation} onValueChange={setDepositLocation}>
+                  <SelectTrigger id="deposit-location">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="division_deposit">Division Deposit</SelectItem>
+                    <SelectItem value="armory_deposit">Armory Deposit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <p className="text-sm text-slate-600">
+              {depositAction === 'deposit' 
+                ? 'This will transfer the weapon to deposit and unassign it from the current soldier.'
+                : 'This will release the weapon from deposit and set its status to "with soldier".'}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDepositDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmDeposit} 
+              className={depositAction === 'deposit' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}
+            >
+              {depositAction === 'deposit' ? (
+                <>
+                  <Package className="w-4 h-4 mr-2" />
+                  Transfer to Deposit
+                </>
+              ) : (
+                <>
+                  <PackageOpen className="w-4 h-4 mr-2" />
+                  Release from Deposit
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

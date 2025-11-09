@@ -5,10 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Save, X, ChevronDown } from "lucide-react";
+import { Save, X, ChevronDown, Package, PackageOpen } from "lucide-react";
 import ComboBox from "@/components/common/ComboBox";
 import { Textarea } from "@/components/ui/textarea";
 import { DroneSetType } from "@/api/entities";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 function SimpleSearchableSelect({ 
   label, 
@@ -136,6 +143,9 @@ export default function DroneSetForm({
       is_sample: "false",
     }
   );
+  const [showDepositDialog, setShowDepositDialog] = useState(false);
+  const [depositLocation, setDepositLocation] = useState('division_deposit');
+  const [depositAction, setDepositAction] = useState('deposit'); // 'deposit' or 'release'
 
   // Load drone set types from database
   useEffect(() => {
@@ -310,7 +320,43 @@ export default function DroneSetForm({
     }
   };
 
+  const handleTransferToDeposit = () => {
+    setDepositAction('deposit');
+    setShowDepositDialog(true);
+  };
+
+  const handleReleaseFromDeposit = () => {
+    setDepositAction('release');
+    setShowDepositDialog(true);
+  };
+
+  const handleConfirmDeposit = () => {
+    if (depositAction === 'deposit') {
+      const depositData = {
+        ...formData,
+        armory_status: 'in_deposit',
+        deposit_location: depositLocation,
+        assigned_to: null, // Unassign when transferring to deposit
+      };
+      onSubmit(depositData);
+    } else {
+      // Release from deposit
+      const releaseData = {
+        ...formData,
+        armory_status: 'with_soldier',
+        deposit_location: null, // Clear deposit location
+        // Keep assigned_to as is (could be null or already assigned)
+      };
+      onSubmit(releaseData);
+    }
+    setShowDepositDialog(false);
+  };
+
+  const isWithSoldier = droneSet && (droneSet.armory_status || 'with_soldier') === 'with_soldier';
+  const isInDeposit = droneSet && droneSet.armory_status === 'in_deposit';
+
   return (
+    <>
     <form onSubmit={handleSubmit}>
       <CardContent className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -423,16 +469,96 @@ export default function DroneSetForm({
           </div>
         </div>
       </CardContent>
-      <CardFooter className="bg-slate-50 border-t flex justify-end gap-3 p-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          <X className="w-4 h-4 mr-2" />
-          Cancel
-        </Button>
-        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
-          <Save className="w-4 h-4 mr-2" />
-          {droneSet ? "Update Set" : "Create Set"}
-        </Button>
+      <CardFooter className="bg-slate-50 border-t flex justify-between gap-3 p-4">
+        <div>
+          {droneSet && isWithSoldier && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={handleTransferToDeposit}
+              className="border-amber-500 text-amber-700 hover:bg-amber-50"
+            >
+              <Package className="w-4 h-4 mr-2" />
+              Transfer to Deposit
+            </Button>
+          )}
+          {droneSet && isInDeposit && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={handleReleaseFromDeposit}
+              className="border-green-500 text-green-700 hover:bg-green-50"
+            >
+              <PackageOpen className="w-4 h-4 mr-2" />
+              Release from Deposit
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            <X className="w-4 h-4 mr-2" />
+            Cancel
+          </Button>
+          <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Save className="w-4 h-4 mr-2" />
+            {droneSet ? "Update Set" : "Create Set"}
+          </Button>
+        </div>
       </CardFooter>
     </form>
+
+    {/* Deposit/Release Dialog */}
+    <Dialog open={showDepositDialog} onOpenChange={setShowDepositDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {depositAction === 'deposit' ? 'Transfer to Deposit' : 'Release from Deposit'}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          {depositAction === 'deposit' && (
+            <div className="space-y-2">
+              <Label htmlFor="deposit-location">Deposit Location *</Label>
+              <Select value={depositLocation} onValueChange={setDepositLocation}>
+                <SelectTrigger id="deposit-location">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="division_deposit">Division Deposit</SelectItem>
+                  <SelectItem value="armory_deposit">Armory Deposit</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <p className="text-sm text-slate-600">
+            {depositAction === 'deposit' 
+              ? 'This will transfer the drone set to deposit and unassign it from the current soldier.'
+              : 'This will release the drone set from deposit and set its status to "with soldier".'}
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowDepositDialog(false)}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmDeposit} 
+            className={depositAction === 'deposit' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}
+          >
+            {depositAction === 'deposit' ? (
+              <>
+                <Package className="w-4 h-4 mr-2" />
+                Transfer to Deposit
+              </>
+            ) : (
+              <>
+                <PackageOpen className="w-4 h-4 mr-2" />
+                Release from Deposit
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

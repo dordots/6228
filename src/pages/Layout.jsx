@@ -56,6 +56,11 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
         icon: Joystick,
       },
       {
+        title: "Daily Verification",
+        url: createPageUrl("DailyVerification"),
+        icon: ClipboardCheck,
+      },
+      {
         title: "Security",
         url: createPageUrl("SecuritySettings"),
         icon: Lock,

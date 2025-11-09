@@ -33,11 +33,22 @@ export default function SoldierVerificationCard({ soldier, assignedWeapons, assi
                 className="mt-1"
               />
             )}
-            <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-slate-600" />
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isVerified ? 'bg-green-100' : 'bg-slate-100'}`}>
+                {isVerified ? (
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                ) : (
+                  <User className="w-5 h-5 text-slate-600" />
+                )}
             </div>
-            <div>
-                <CardTitle className="text-base">{soldier.first_name} {soldier.last_name}</CardTitle>
+            <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">{soldier.first_name} {soldier.last_name}</CardTitle>
+                  {isVerified && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 text-xs">
+                      Verified
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-xs text-slate-500">ID: {soldier.soldier_id}</p>
             </div>
         </div>
@@ -71,17 +82,36 @@ export default function SoldierVerificationCard({ soldier, assignedWeapons, assi
       <CardFooter>
         {isVerified ? (
           <div className="w-full flex flex-col items-center gap-2 text-center">
-             <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+             <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 px-3 py-1.5">
                 <CheckCircle className="w-4 h-4 mr-2" />
-                Verified by {verificationRecord?.verified_by_user_name}
+                Verified
             </Badge>
+            {verificationRecord?.verified_by_user_name && (
+              <p className="text-xs text-slate-600">
+                Verified by {verificationRecord.verified_by_user_name}
+                {verificationRecord?.verification_timestamp && (
+                  <span className="block text-slate-500 mt-1">
+                    {format(new Date(verificationRecord.verification_timestamp), 'MMM d, yyyy HH:mm')}
+                  </span>
+                )}
+              </p>
+            )}
+            <Button 
+              onClick={handleVerifyClick} 
+              className="w-full bg-blue-600 hover:bg-blue-700" 
+              disabled={true}
+              title="Already verified for today"
+            >
+              <ShieldCheck className="w-4 h-4 mr-2" />
+              Verify Equipment
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleUndoClick} disabled={isUndoing} className="text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 h-auto px-2 py-1">
               {isUndoing ? (
                 <Loader2 className="w-3 h-3 mr-1 animate-spin" />
               ) : (
                 <Undo2 className="w-3 h-3 mr-1" />
               )}
-              Undo
+              Undo Verification
             </Button>
           </div>
         ) : (

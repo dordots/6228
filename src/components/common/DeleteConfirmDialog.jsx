@@ -21,7 +21,7 @@ export default function DeleteConfirmDialog({
   itemName = "",
   isLoading = false,
   requireCode = true,
-  confirmationCode = "1",
+  confirmationCode = "8520",
 }) {
   const [inputCode, setInputCode] = useState("");
   const [error, setError] = useState("");
@@ -36,7 +36,7 @@ export default function DeleteConfirmDialog({
 
   const handleConfirm = () => {
     if (requireCode && inputCode !== confirmationCode) {
-      setError(`Please enter "${confirmationCode}" to confirm deletion`);
+      setError(`Please enter the confirmation code to confirm deletion`);
       return;
     }
     setError("");
@@ -68,7 +68,7 @@ export default function DeleteConfirmDialog({
         {requireCode && (
           <div className="space-y-2">
             <Label htmlFor="confirmation-code">
-              Enter <strong>"{confirmationCode}"</strong> to confirm:
+              Enter the confirmation code to confirm:
             </Label>
             <Input
               id="confirmation-code"
@@ -77,7 +77,7 @@ export default function DeleteConfirmDialog({
                 setInputCode(e.target.value);
                 setError("");
               }}
-              placeholder={`Type ${confirmationCode} to confirm`}
+              placeholder="Enter confirmation code"
               disabled={isLoading}
               autoComplete="off"
             />

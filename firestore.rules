@@ -222,10 +222,25 @@ service cloud.firestore {
     
     // Daily verifications
     match /daily_verifications/{verificationID} {
-      allow read: if hasPermission('operations.verify') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data));
-      allow create: if hasPermission('operations.verify');
+      allow read: if hasPermission('operations.verify') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data)) ||
+        // Allow soldiers to read their own verification records
+        (isAuthenticated() && 
+         request.auth.token.custom_role == 'soldier' &&
+         request.auth.token.linked_soldier_id != null &&
+         resource.data.soldier_id == request.auth.token.linked_soldier_id);
+      allow create: if hasPermission('operations.verify') ||
+        // Allow soldiers to create verification records for themselves
+        (isAuthenticated() && 
+         request.auth.token.custom_role == 'soldier' &&
+         request.auth.token.linked_soldier_id != null &&
+         request.resource.data.soldier_id == request.auth.token.linked_soldier_id);
       allow update: if false; // Immutable once created
-      allow delete: if hasPermission('operations.verify') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data));
+      allow delete: if hasPermission('operations.verify') && (isAdmin() || getUserScope() == 'global' || canAccessByScope(resource.data)) ||
+        // Allow soldiers to delete their own verification records
+        (isAuthenticated() && 
+         request.auth.token.custom_role == 'soldier' &&
+         request.auth.token.linked_soldier_id != null &&
+         resource.data.soldier_id == request.auth.token.linked_soldier_id);
     }
     
     // Users collection - for profile management

@@ -356,7 +356,7 @@ export const createBoundEntityAdapter = (collectionName, options) => {
     // Handle Base44 style update(id, data) calls
     if (typeof id === 'string') {
       // If we have an idField defined, search by that field instead of document ID
-      if (options.idField) {
+      if (options && options.idField) {
         return adapter.update({ where: { [options.idField]: id } }, data);
       }
       // Otherwise use id as document ID directly
@@ -370,7 +370,7 @@ export const createBoundEntityAdapter = (collectionName, options) => {
     // Handle Base44 style delete(id) calls
     if (typeof id === 'string') {
       // If we have an idField defined, search by that field instead of document ID
-      if (options.idField) {
+      if (options && options.idField) {
         return adapter.delete({ where: { [options.idField]: id } });
       }
       // Otherwise use id as document ID directly

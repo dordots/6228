@@ -318,13 +318,17 @@ exports.updateUserRole = functions
       const permissions = { ...rolePermissions };
       delete permissions.scope;
       
-      // Ensure permissions object doesn't have unwanted fields for non-admin roles
-      if (role !== 'admin') {
+      // Ensure permissions object has correct values based on role
+      if (role === 'admin') {
+        // Admin gets all permissions, including assign_components
+        permissions['equipment.assign_components'] = true;
+      } else {
         // Explicitly set these to false for non-admin roles
         permissions['personnel.create'] = false;
         permissions['personnel.delete'] = false;
         permissions['equipment.create'] = false;
         permissions['equipment.delete'] = false;
+        permissions['equipment.assign_components'] = false;
       }
 
       // Prepare updated user data
@@ -731,6 +735,7 @@ function getDefaultPermissions(role) {
     'equipment.create': false,
     'equipment.update': false,
     'equipment.delete': false,
+    'equipment.assign_components': false,
     
     // Operations permissions
     'operations.sign': false,
@@ -768,6 +773,7 @@ function getDefaultPermissions(role) {
         'equipment.create': false,  // Admin only
         'equipment.update': true,
         'equipment.delete': false,  // Admin only
+        'equipment.assign_components': false,  // Admin only
         'operations.sign': true,
         'operations.transfer': true,
         'operations.deposit': true,
@@ -790,6 +796,7 @@ function getDefaultPermissions(role) {
         'personnel.update': true,
         'equipment.view': true,
         'equipment.update': true,
+        'equipment.assign_components': false,  // Admin only
         'operations.sign': true,
         'operations.deposit': true,
         'operations.verify': true,

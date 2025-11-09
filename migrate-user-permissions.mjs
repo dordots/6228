@@ -46,6 +46,7 @@ const ROLE_PERMISSIONS = {
       'equipment.create': true,
       'equipment.update': true,
       'equipment.delete': true,
+      'equipment.assign_components': true,
       'operations.sign': true,
       'operations.transfer': true,
       'operations.deposit': true,
@@ -71,6 +72,7 @@ const ROLE_PERMISSIONS = {
       'equipment.create': false,  // Admin only
       'equipment.update': true,
       'equipment.delete': false,  // Admin only
+      'equipment.assign_components': false,  // Admin only
       'operations.sign': true,
       'operations.transfer': true,
       'operations.deposit': true,
@@ -96,6 +98,7 @@ const ROLE_PERMISSIONS = {
       'equipment.create': false,
       'equipment.update': true,
       'equipment.delete': false,
+      'equipment.assign_components': false,  // Admin only
       'operations.sign': true,
       'operations.transfer': true,
       'operations.deposit': true,
@@ -121,6 +124,7 @@ const ROLE_PERMISSIONS = {
       'equipment.create': false,
       'equipment.update': false,
       'equipment.delete': false,
+      'equipment.assign_components': false,  // Admin only
       'operations.sign': false,
       'operations.transfer': false,
       'operations.deposit': false,
@@ -147,6 +151,7 @@ const ROLE_PERMISSIONS = {
       'equipment.create': false,
       'equipment.update': false,
       'equipment.delete': false,
+      'equipment.assign_components': false,  // Admin only
       'operations.sign': false,
       'operations.transfer': false,
       'operations.deposit': false,

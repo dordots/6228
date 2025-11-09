@@ -445,29 +445,31 @@ export default function DroneSetForm({
           />
         </div>
 
-        <div className="space-y-4 pt-4 border-t">
-          <h4 className="font-medium">Assign Components</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            {Object.entries(currentComponentSlots).map(([key, name]) => {
-              const availableComponents = getAvailableComponentsForSlot(key);
-              const componentLabel = name.replace(formData.set_type, '').trim();
-              
-              return (
-                <SimpleSearchableSelect
-                  key={key}
-                  label={componentLabel}
-                  value={formData.components?.[key]}
-                  onValueChange={(componentId) => handleComponentChange(key, componentId)}
-                  items={availableComponents}
-                  displayField={(component) => `${component.component_type} (${component.component_id})`}
-                  valueField="id"
-                  searchFields={["component_type", "component_id"]}
-                  placeholder={`Select ${componentLabel}...`}
-                />
-              );
-            })}
+        {(currentUser?.permissions?.['equipment.assign_components'] || currentUser?.role === 'admin') && (
+          <div className="space-y-4 pt-4 border-t">
+            <h4 className="font-medium">Assign Components</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              {Object.entries(currentComponentSlots).map(([key, name]) => {
+                const availableComponents = getAvailableComponentsForSlot(key);
+                const componentLabel = name.replace(formData.set_type, '').trim();
+                
+                return (
+                  <SimpleSearchableSelect
+                    key={key}
+                    label={componentLabel}
+                    value={formData.components?.[key]}
+                    onValueChange={(componentId) => handleComponentChange(key, componentId)}
+                    items={availableComponents}
+                    displayField={(component) => `${component.component_type} (${component.component_id})`}
+                    valueField="id"
+                    searchFields={["component_type", "component_id"]}
+                    placeholder={`Select ${componentLabel}...`}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
       <CardFooter className="bg-slate-50 border-t flex justify-between gap-3 p-4">
         <div>

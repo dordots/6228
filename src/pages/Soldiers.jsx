@@ -1187,6 +1187,7 @@ export default function Soldiers() {
               onShowHistory={handleOpenHistory}
               isLoading={isLoading}
               sortConfig={sortConfig}
+              currentUser={currentUser}
               onSort={handleSort}
               selectedItems={selectedItems}
               onSelectItem={handleSelectItem}

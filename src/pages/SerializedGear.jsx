@@ -585,12 +585,11 @@ export default function SerializedGearPage() {
           <p className="text-slate-600">Track and manage specialized equipment with serial numbers</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {selectedItems.length > 0 && (
+          {selectedItems.length > 0 && (currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
             <Button
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!isAdminOrManager}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -602,14 +601,15 @@ export default function SerializedGearPage() {
             </Button>
           )}
           <Button variant="outline" onClick={checkForDuplicates}>Check Duplicates</Button>
-          <Button
-            onClick={() => { setEditingGear(null); setShowForm(true); }}
-            className="bg-purple-700 hover:bg-purple-800 text-white"
-            disabled={!isAdminOrManager}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Gear
-          </Button>
+          {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+            <Button
+              onClick={() => { setEditingGear(null); setShowForm(true); }}
+              className="bg-purple-700 hover:bg-purple-800 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Gear
+            </Button>
+          )}
         </div>
       </div>
 
@@ -679,11 +679,13 @@ export default function SerializedGearPage() {
               permissions={{
                 canEdit: currentUser?.permissions?.['equipment.update'] || false,
                 canReassign: currentUser?.permissions?.['equipment.update'] || currentUser?.permissions?.['operations.transfer'] || false,
-                canDelete: currentUser?.permissions?.['equipment.delete'] || false
+                canDelete: currentUser?.permissions?.['equipment.delete'] || false,
+                'equipment.delete': currentUser?.permissions?.['equipment.delete'] || false
               }}
               selectedItems={selectedItems}
               onSelectItem={handleSelectItem}
               onSelectAll={handleSelectAll}
+              currentUser={currentUser}
             />
           </div>
         </CardContent>

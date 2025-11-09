@@ -64,13 +64,13 @@ const ROLE_PERMISSIONS = {
   division_manager: {
     permissions: {
       'personnel.view': true,
-      'personnel.create': true,
+      'personnel.create': false,  // Admin only
       'personnel.update': true,
       'personnel.delete': false,
       'equipment.view': true,
-      'equipment.create': true,
+      'equipment.create': false,  // Admin only
       'equipment.update': true,
-      'equipment.delete': false,
+      'equipment.delete': false,  // Admin only
       'operations.sign': true,
       'operations.transfer': true,
       'operations.deposit': true,

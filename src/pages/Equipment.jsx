@@ -428,10 +428,9 @@ export default function EquipmentPage() {
           <p className="text-slate-600">Track and manage all company equipment inventory</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {selectedItems.length > 0 && (
+          {selectedItems.length > 0 && (currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
             <Button
               variant="destructive"
-              disabled={!currentUser?.permissions?.can_delete_equipment && currentUser?.role !== 'admin'}
               onClick={() => setShowBulkDeleteConfirm(true)}
             >
               <Trash2 className="w-4 h-4 mr-2" />
@@ -444,14 +443,15 @@ export default function EquipmentPage() {
             </Button>
           )}
           <Button variant="outline" onClick={checkForDuplicates}>Check Duplicates</Button>
-          <Button
-            onClick={() => { setEditingEquipment(null); setShowForm(true); }}
-            className="bg-green-700 hover:bg-green-800 text-white"
-            disabled={!currentUser?.permissions?.['equipment.create'] && currentUser?.role !== 'admin'}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Equipment
-          </Button>
+          {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+            <Button
+              onClick={() => { setEditingEquipment(null); setShowForm(true); }}
+              className="bg-green-700 hover:bg-green-800 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Equipment
+            </Button>
+          )}
         </div>
       </div>
 
@@ -522,6 +522,7 @@ export default function EquipmentPage() {
             selectedItems={selectedItems}
             onSelectItem={handleSelectItem}
             onSelectAll={handleSelectAll}
+            currentUser={currentUser}
           />
         </CardContent>
       </Card>

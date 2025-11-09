@@ -48,6 +48,9 @@ export default function UnifiedAssignmentDialog({
   drones = [],
   onSuccess,
 }) {
+  // User state for permissions
+  const [currentUser, setCurrentUser] = useState(null);
+  
   // Serialized items state
   const [selectedWeaponIds, setSelectedWeaponIds] = useState([]);
   const [selectedGearIds, setSelectedGearIds] = useState([]);
@@ -79,6 +82,21 @@ export default function UnifiedAssignmentDialog({
   const [initialWeaponData, setInitialWeaponData] = useState(null);
   const [initialGearData, setInitialGearData] = useState(null);
   const [initialDroneSetData, setInitialDroneSetData] = useState(null);
+
+  useEffect(() => {
+    // Fetch current user for permissions
+    const fetchUser = async () => {
+      try {
+        const user = await User.me();
+        setCurrentUser(user);
+      } catch (error) {
+        // Error fetching user
+      }
+    };
+    if (open) {
+      fetchUser();
+    }
+  }, [open]);
 
   useEffect(() => {
     // Sync local unassigned items with props
@@ -786,9 +804,11 @@ export default function UnifiedAssignmentDialog({
                           ) : weaponSearch.length > 0 ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
                               <p className="mb-2">No weapons found matching "{weaponSearch}"</p>
-                              <Button variant="link" className="text-sm h-auto p-0 text-blue-600" onClick={() => handleOpenWeaponForm(weaponSearch)}>
-                                <Plus className="w-4 h-4 mr-1" />Add as a new weapon
-                              </Button>
+                              {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+                                <Button variant="link" className="text-sm h-auto p-0 text-blue-600" onClick={() => handleOpenWeaponForm(weaponSearch)}>
+                                  <Plus className="w-4 h-4 mr-1" />Add as a new weapon
+                                </Button>
+                              )}
                             </div>
                           ) : (
                             <div className="p-4 text-center text-slate-500 text-sm">
@@ -840,9 +860,11 @@ export default function UnifiedAssignmentDialog({
                           ) : gearSearch.length > 0 ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
                               <p className="mb-2">No gear found matching "{gearSearch}"</p>
-                              <Button variant="link" className="text-sm h-auto p-0 text-blue-600" onClick={() => handleOpenGearForm(gearSearch)}>
-                                <Plus className="w-4 h-4 mr-1" />Add as new gear
-                              </Button>
+                              {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+                                <Button variant="link" className="text-sm h-auto p-0 text-blue-600" onClick={() => handleOpenGearForm(gearSearch)}>
+                                  <Plus className="w-4 h-4 mr-1" />Add as new gear
+                                </Button>
+                              )}
                             </div>
                           ) : (
                             <div className="p-4 text-center text-slate-500 text-sm">
@@ -894,9 +916,11 @@ export default function UnifiedAssignmentDialog({
                           ) : droneSetSearch.length > 0 ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
                               <p className="mb-2">No drone sets found matching "{droneSetSearch}"</p>
-                              <Button variant="link" className="text-sm h-auto p-0 text-blue-600" onClick={() => handleOpenDroneSetForm(droneSetSearch)}>
-                                <Plus className="w-4 h-4 mr-1" />Add as new drone set
-                              </Button>
+                              {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+                                <Button variant="link" className="text-sm h-auto p-0 text-blue-600" onClick={() => handleOpenDroneSetForm(droneSetSearch)}>
+                                  <Plus className="w-4 h-4 mr-1" />Add as new drone set
+                                </Button>
+                              )}
                             </div>
                           ) : (
                             <div className="p-4 text-center text-slate-500 text-sm">

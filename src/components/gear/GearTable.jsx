@@ -44,7 +44,8 @@ export default function GearTable({
   permissions = { canEdit: false, canDelete: false, canReassign: false }, // New prop for granular permissions
   selectedItems = [],
   onSelectItem = () => {},
-  onSelectAll = () => {}
+  onSelectAll = () => {},
+  currentUser = null // Add currentUser to check admin role
 }) {
   // Helper function to get soldier's full name, as implied by the outline
   const getSoldierName = (soldierId) => {
@@ -151,7 +152,7 @@ export default function GearTable({
                               <ArrowRightLeft className="mr-2 h-4 w-4" /> Reassign
                             </DropdownMenuItem>
                           )}
-                          {(isAdminOrManager || permissions.canDelete) && (
+                          {(permissions['equipment.delete'] || currentUser?.role === 'admin') && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem

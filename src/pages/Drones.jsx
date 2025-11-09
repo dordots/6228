@@ -511,12 +511,11 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
           <p className="text-slate-600">Manage company drone sets and their components</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {selectedItems.length > 0 && (
+          {selectedItems.length > 0 && (currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
             <Button
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!isAdminOrManager}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -528,14 +527,15 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
             </Button>
           )}
           <Button variant="outline" onClick={checkForDuplicates}>Check Duplicates</Button>
-          <Button
-            onClick={() => { setEditingSet(null); setShowForm(true); }}
-            className="bg-sky-600 hover:bg-sky-700 text-white"
-            disabled={!isAdminOrManager}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Drone Set
-          </Button>
+          {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+            <Button
+              onClick={() => { setEditingSet(null); setShowForm(true); }}
+              className="bg-sky-600 hover:bg-sky-700 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Drone Set
+            </Button>
+          )}
         </div>
       </div>
 
@@ -611,6 +611,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
               selectedItems={selectedItems}
               onSelectItem={handleSelectItem}
               onSelectAll={handleSelectAll}
+              currentUser={currentUser}
             />
         </CardContent>
       </Card>

@@ -693,12 +693,11 @@ export default function Weapons() {
           <p className="text-slate-600">Track and manage all company weapons systems</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {selectedItems.length > 0 && (
+          {selectedItems.length > 0 && (currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
             <Button
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!currentUser?.permissions?.can_delete_weapons && currentUser?.role !== 'admin'}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -710,14 +709,15 @@ export default function Weapons() {
             </Button>
           )}
           <Button variant="outline" onClick={checkForDuplicates}>Check Duplicates</Button>
-          <Button
-            onClick={() => { setEditingWeapon(null); setShowForm(true); }}
-            className="bg-red-700 hover:bg-red-800 text-white"
-            disabled={!isAdminOrManager}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Weapon
-          </Button>
+          {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+            <Button
+              onClick={() => { setEditingWeapon(null); setShowForm(true); }}
+              className="bg-red-700 hover:bg-red-800 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Weapon
+            </Button>
+          )}
         </div>
       </div>
 
@@ -795,6 +795,7 @@ export default function Weapons() {
               selectedItems={selectedItems}
               onSelectItem={handleSelectItem}
               onSelectAll={handleSelectAll}
+              currentUser={currentUser}
             />
           </div>
         </CardContent>

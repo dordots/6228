@@ -81,40 +81,60 @@ export default function DroneComponents() {
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
 
-        // Step 2: Get all division drone sets, then filter by team
+        // Step 2: Get all drone sets in the division
+        // Include both assigned to team soldiers and unassigned (in division deposit)
         const allDroneSets = await DroneSet.filter({ division_name: userDivision }).catch(() => []);
 
         const soldierIdSet = new Set(soldierIds);
-        const droneSetsData = allDroneSets.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
+        
+        // Filter: include drones that are either:
+        // 1. Assigned to team soldiers, OR
+        // 2. Unassigned (empty/null assigned_to) - these are division drones in deposit
+        const droneSetsData = allDroneSets.filter(d => {
+          const hasAssignedTo = d.assigned_to != null && d.assigned_to !== '';
+          if (!hasAssignedTo) {
+            // Unassigned drone - include it (it's in division deposit)
+            return true;
+          }
+          // Check if assigned to a team soldier
+          const assignedToString = String(d.assigned_to);
+          const isInSet = soldierIdSet.has(assignedToString);
+          return isInSet;
+        });
 
         // Step 3: Extract component IDs from team drone sets
         const teamComponentIds = new Set();
         droneSetsData.forEach(droneSet => {
           if (droneSet.components && typeof droneSet.components === 'object') {
             // components is a map/object with component IDs as values
-            Object.values(droneSet.components).forEach(componentId => {
+            // The values are component_id from the drone components table
+            Object.entries(droneSet.components).forEach(([slotName, componentId]) => {
               if (componentId) {
-                teamComponentIds.add(componentId);
+                // The value is the component_id field from drone components table
+                const componentIdStr = String(componentId);
+                teamComponentIds.add(componentIdStr);
               }
             });
           }
         });
 
         // Step 4: Fetch only the specific components that are in team drone sets
-        // Fetch all components from the system and filter to only team components
-        // Note: We can't filter by division since components are shared resources
         const componentsData = [];
 
         if (teamComponentIds.size > 0) {
           try {
             // Try to fetch all components and filter
-            // This might fail due to permissions, so we'll catch and handle
             const allSystemComponents = await DroneComponent.list("-created_date").catch(() => []);
 
             // Filter to only components that are in team drone sets
+            // The component IDs in drone sets are component_id values, not document IDs
             allSystemComponents.forEach(component => {
-              // Check if component.id or component.component_id matches any team component ID
-              if (component && (teamComponentIds.has(component.id) || teamComponentIds.has(component.component_id))) {
+              // The values in drone set components map are component_id (serial number), not document id
+              const componentIdStr = component?.component_id ? String(component.component_id) : null;
+              
+              const matches = component && componentIdStr && teamComponentIds.has(componentIdStr);
+              
+              if (matches) {
                 componentsData.push(component);
               }
             });
@@ -127,6 +147,7 @@ export default function DroneComponents() {
                   componentsData.push(...foundComponents);
                 }
               } catch (err) {
+                // Silently continue if component not found
               }
             }
           }
@@ -144,29 +165,42 @@ export default function DroneComponents() {
 
         const soldierIds = divisionSoldiers.map(s => s.soldier_id);
 
-        // Step 2: Get all division drone sets, then filter by division soldiers
+        // Step 2: Get all drone sets in the division
+        // Include both assigned and unassigned drones (assigned_to can be empty/null or assigned to division soldiers)
         const allDroneSets = await DroneSet.filter({ division_name: userDivision }).catch(() => []);
 
-
         const soldierIdSet = new Set(soldierIds);
-        const droneSetsData = allDroneSets.filter(d => d.assigned_to && soldierIdSet.has(d.assigned_to));
-
+        
+        // Filter: include drones that are either:
+        // 1. Assigned to division soldiers, OR
+        // 2. Unassigned (empty/null assigned_to) - these are division drones in deposit
+        const droneSetsData = allDroneSets.filter(d => {
+          const hasAssignedTo = d.assigned_to != null && d.assigned_to !== '';
+          if (!hasAssignedTo) {
+            // Unassigned drone - include it (it's in division deposit)
+            return true;
+          }
+          // Check if assigned to a division soldier
+          const assignedToString = String(d.assigned_to);
+          const isInSet = soldierIdSet.has(assignedToString);
+          return isInSet;
+        });
 
         // Step 3: Extract component IDs from division drone sets
         const divisionComponentIds = new Set();
         droneSetsData.forEach(droneSet => {
           if (droneSet.components && typeof droneSet.components === 'object') {
             // components is a map/object with component IDs as values
-            Object.values(droneSet.components).forEach(componentId => {
+            // The values are component_id from the drone components table
+            Object.entries(droneSet.components).forEach(([slotName, componentId]) => {
               if (componentId) {
-                divisionComponentIds.add(componentId);
+                // The value is the component_id field from drone components table
+                const componentIdStr = String(componentId);
+                divisionComponentIds.add(componentIdStr);
               }
             });
           }
         });
-
-        console.log(`Division manager (DroneComponents): Found ${divisionComponentIds.size} unique component IDs in division drone sets`);
-        console.log('Division manager (DroneComponents): Component IDs:', Array.from(divisionComponentIds));
 
         // Step 4: Fetch only the specific components that are in division drone sets
         const componentsData = [];
@@ -176,18 +210,19 @@ export default function DroneComponents() {
             // Try to fetch all components and filter
             const allSystemComponents = await DroneComponent.list("-created_date").catch(() => []);
 
-            console.log(`Division manager (DroneComponents): Fetched ${allSystemComponents.length} total system components`);
-
             // Filter to only components that are in division drone sets
+            // The component IDs in drone sets are component_id values, not document IDs
             allSystemComponents.forEach(component => {
-              // Check if component.id or component.component_id matches any division component ID
-              if (component && (divisionComponentIds.has(component.id) || divisionComponentIds.has(component.component_id))) {
+              // The values in drone set components map are component_id (serial number), not document id
+              const componentIdStr = component?.component_id ? String(component.component_id) : null;
+              
+              const matches = component && componentIdStr && divisionComponentIds.has(componentIdStr);
+              
+              if (matches) {
                 componentsData.push(component);
               }
             });
           } catch (error) {
-            console.error('Failed to fetch components list:', error);
-
             // Fallback: try to fetch components one by one using filter
             for (const componentId of divisionComponentIds) {
               try {
@@ -196,13 +231,11 @@ export default function DroneComponents() {
                   componentsData.push(...foundComponents);
                 }
               } catch (err) {
-                console.error(`Failed to fetch component ${componentId}:`, err);
+                // Silently continue if component not found
               }
             }
           }
         }
-
-        console.log(`Division manager (DroneComponents): Successfully loaded ${componentsData.length} components for division drone sets`);
 
         setComponents(Array.isArray(componentsData) ? componentsData : []);
         setDroneSets(Array.isArray(droneSetsData) ? droneSetsData : []);
@@ -216,7 +249,7 @@ export default function DroneComponents() {
         setDroneSets(sets);
       }
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error("[DroneComponents] Error loading data:", error);
       setComponents([]);
       setDroneSets([]);
     }
@@ -534,12 +567,11 @@ export default function DroneComponents() {
           <p className="text-slate-600">Manage individual drone parts and accessories.</p>
         </div>
         <div className="flex gap-2">
-          {selectedItems.length > 0 && (
+          {selectedItems.length > 0 && (currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
             <Button
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!currentUser?.permissions?.can_delete_drone_components && currentUser?.role !== 'admin'}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
@@ -557,14 +589,15 @@ export default function DroneComponents() {
           >
             Check Duplicates
           </Button>
-          <Button
-            onClick={() => { setEditingComponent(null); setShowForm(true); }}
-            className="bg-sky-600 hover:bg-sky-700 text-white"
-            disabled={!isAdminOrManager}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Component
-          </Button>
+          {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+            <Button
+              onClick={() => { setEditingComponent(null); setShowForm(true); }}
+              className="bg-sky-600 hover:bg-sky-700 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Component
+            </Button>
+          )}
         </div>
       </div>
 
@@ -629,6 +662,7 @@ export default function DroneComponents() {
               selectedItems={selectedItems}
               onSelectItem={handleSelectItem}
               onSelectAll={handleSelectAll}
+              currentUser={currentUser}
             />
           </div>
         </CardContent>

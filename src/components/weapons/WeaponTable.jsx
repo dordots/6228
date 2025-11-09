@@ -27,7 +27,8 @@ export default function WeaponTable({
   permissions = {}, // New prop for granular permissions
   selectedItems = [],
   onSelectItem = () => {},
-  onSelectAll = () => {}
+  onSelectAll = () => {},
+  currentUser = null // Add currentUser to check admin role
 }) {
 
   // Removed SortableHeader component as sorting is removed from the table headers
@@ -142,14 +143,17 @@ export default function WeaponTable({
                           >
                             Reassign
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-red-600"
-                            onClick={() => onDelete(weapon)}
-                            disabled={!isAdminOrManager && !permissions['equipment.delete']}
-                          >
-                            Delete
-                          </DropdownMenuItem>
+                          {(permissions['equipment.delete'] || currentUser?.role === 'admin') && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => onDelete(weapon)}
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>

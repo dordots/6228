@@ -21,7 +21,8 @@ export default function DroneComponentTable({
   isLoading,
   selectedItems = [],
   onSelectItem = () => {},
-  onSelectAll = () => {}
+  onSelectAll = () => {},
+  currentUser = null
 }) {
 
   if (isLoading) {
@@ -94,14 +95,16 @@ export default function DroneComponentTable({
               <TableCell>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => onEdit(component)}><Edit className="w-4 h-4" /></Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                    onClick={() => onDelete(component)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {(currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => onDelete(component)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </TableCell>
             </TableRow>

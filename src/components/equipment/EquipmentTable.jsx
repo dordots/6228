@@ -22,7 +22,8 @@ export default function EquipmentTable({
   onSort = () => {},
   selectedItems = [],
   onSelectItem = () => {},
-  onSelectAll = () => {}
+  onSelectAll = () => {},
+  currentUser = null
 }) {
 
   const getSoldierName = (soldierID) => {
@@ -122,14 +123,16 @@ export default function EquipmentTable({
                   <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>
                     <Edit className="w-4 h-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                    onClick={() => onDelete(item)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {(currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => onDelete(item)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </TableCell>
             </TableRow>

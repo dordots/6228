@@ -193,7 +193,8 @@ export default function SoldierTable({
   onSort = () => {},
   selectedItems = [],
   onSelectItem = () => {},
-  onSelectAll = () => {}
+  onSelectAll = () => {},
+  currentUser = null
 }) {
   const SortableHeader = ({ column, children, sortConfig, onSort, className = '' }) => {
     const getSortIcon = (column) => {
@@ -329,13 +330,14 @@ export default function SoldierTable({
                         <DropdownMenuItem onClick={() => onUpdateDetails(soldier)}>
                            <UserCog className="w-3 h-3 mr-2" /> Update Personal Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                          disabled={!canDelete}
-                          onClick={() => onDelete(soldier)}
-                        >
-                          <Trash2 className="w-3 h-3 mr-2" /> Delete
-                        </DropdownMenuItem>
+                        {(currentUser?.permissions?.['personnel.delete'] || currentUser?.role === 'admin') && canDelete && (
+                          <DropdownMenuItem
+                            className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                            onClick={() => onDelete(soldier)}
+                          >
+                            <Trash2 className="w-3 h-3 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

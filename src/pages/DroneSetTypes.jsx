@@ -228,25 +228,25 @@ export default function DroneSetTypesPage() {
           <p className="text-slate-600">Create and manage custom drone set configurations</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {selectedItems.length > 0 && (
+          {selectedItems.length > 0 && (currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
             <Button
               variant="destructive"
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!isAdminOrManager}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete Selected ({selectedItems.length})
             </Button>
           )}
-          <Button
-            onClick={() => { setEditingType(null); setShowForm(true); }}
-            className="bg-sky-600 hover:bg-sky-700 text-white"
-            disabled={!isAdminOrManager}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add New Type
-          </Button>
+          {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
+            <Button
+              onClick={() => { setEditingType(null); setShowForm(true); }}
+              className="bg-sky-600 hover:bg-sky-700 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add New Type
+            </Button>
+          )}
         </div>
       </div>
 
@@ -309,6 +309,7 @@ export default function DroneSetTypesPage() {
             onSelectItem={handleSelectItem}
             onSelectAll={handleSelectAll}
             isAdminOrManager={isAdminOrManager}
+            currentUser={currentUser}
           />
         </CardContent>
       </Card>

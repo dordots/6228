@@ -311,14 +311,28 @@ exports.updateUserRole = functions
       const userDoc = await userDocRef.get();
 
       // Get default permissions for the role
-      const permissions = getDefaultPermissions(role);
+      const rolePermissions = getDefaultPermissions(role);
+      
+      // Extract scope and create permissions object without scope
+      const scope = rolePermissions.scope;
+      const permissions = { ...rolePermissions };
+      delete permissions.scope;
+      
+      // Ensure permissions object doesn't have unwanted fields for non-admin roles
+      if (role !== 'admin') {
+        // Explicitly set these to false for non-admin roles
+        permissions['personnel.create'] = false;
+        permissions['personnel.delete'] = false;
+        permissions['equipment.create'] = false;
+        permissions['equipment.delete'] = false;
+      }
 
       // Prepare updated user data
       const updatedUserData = {
         role: role === 'admin' ? 'admin' : 'user',
         custom_role: role,
         permissions: permissions,
-        scope: permissions.scope,
+        scope: scope,
         division: division || null,
         team: team || null,
         updated_at: admin.firestore.FieldValue.serverTimestamp()
@@ -344,7 +358,7 @@ exports.updateUserRole = functions
           role: role === 'admin' ? 'admin' : 'user',
           custom_role: role,
           permissions: permissions,
-          scope: permissions.scope,
+          scope: scope,
           division: division || null,
           team: team || null,
           totp_enabled: currentClaims.totp_enabled || false,
@@ -747,13 +761,13 @@ function getDefaultPermissions(role) {
       return {
         ...basePermissions,
         'personnel.view': true,
-        'personnel.create': true,
+        'personnel.create': false,  // Admin only
         'personnel.update': true,
         'personnel.delete': false,
         'equipment.view': true,
-        'equipment.create': true,
+        'equipment.create': false,  // Admin only
         'equipment.update': true,
-        'equipment.delete': true,
+        'equipment.delete': false,  // Admin only
         'operations.sign': true,
         'operations.transfer': true,
         'operations.deposit': true,

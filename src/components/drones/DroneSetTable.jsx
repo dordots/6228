@@ -25,7 +25,8 @@ export default function DroneSetTable({
   isLoading,
   selectedItems = [],
   onSelectItem = () => {},
-  onSelectAll = () => {}
+  onSelectAll = () => {},
+  currentUser = null
 }) {
 
   // Sortable Header Component is removed as per the outline.
@@ -150,14 +151,16 @@ export default function DroneSetTable({
                     >
                       Reassign
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700"
-                      onClick={() => onDelete(droneSet)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {(currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => onDelete(droneSet)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

@@ -81,20 +81,17 @@ export default function DroneComponents() {
 
         const soldierIds = teamSoldiers.map(s => s.soldier_id);
 
-        // Step 2: Get all drone sets in the division
-        // Include both assigned to team soldiers and unassigned (in division deposit)
+        // Step 2: Get all drone sets assigned to team soldiers only
         const allDroneSets = await DroneSet.filter({ division_name: userDivision }).catch(() => []);
 
         const soldierIdSet = new Set(soldierIds);
         
-        // Filter: include drones that are either:
-        // 1. Assigned to team soldiers, OR
-        // 2. Unassigned (empty/null assigned_to) - these are division drones in deposit
+        // Filter: include only drones assigned to team soldiers
         const droneSetsData = allDroneSets.filter(d => {
           const hasAssignedTo = d.assigned_to != null && d.assigned_to !== '';
           if (!hasAssignedTo) {
-            // Unassigned drone - include it (it's in division deposit)
-            return true;
+            // Unassigned drone - exclude it (team leaders only see their team's assigned drones)
+            return false;
           }
           // Check if assigned to a team soldier
           const assignedToString = String(d.assigned_to);

@@ -143,8 +143,8 @@ export default function VerificationHistoryPage() {
 
           let startDate, endDate;
           if (filters.dateRange === "week") {
-            startDate = startOfWeek(now, { weekStartsOn: 1 }); // Monday
-            endDate = endOfWeek(now, { weekStartsOn: 1 });
+            startDate = startOfWeek(now, { weekStartsOn: 0 }); // Sunday
+            endDate = endOfWeek(now, { weekStartsOn: 0 });
           } else if (filters.dateRange === "month") {
             startDate = startOfMonth(now);
             endDate = endOfMonth(now);
@@ -258,8 +258,8 @@ export default function VerificationHistoryPage() {
         } else if (reportParams.dateType === "thisWeek") {
           const verificationDateObj = new Date(verificationDate);
           const now = new Date();
-          const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Monday
-          const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+          const weekStart = startOfWeek(now, { weekStartsOn: 0 }); // Sunday
+          const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
           if (verificationDateObj < weekStart || verificationDateObj > weekEnd) {
             return false;
           }

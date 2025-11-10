@@ -322,6 +322,8 @@ exports.updateUserRole = functions
       if (role === 'admin') {
         // Admin gets all permissions, including assign_components
         permissions['equipment.assign_components'] = true;
+        permissions['operations.deposit'] = true;
+        permissions['operations.release'] = true;
       } else {
         // Explicitly set these to false for non-admin roles
         permissions['personnel.create'] = false;
@@ -329,6 +331,8 @@ exports.updateUserRole = functions
         permissions['equipment.create'] = false;
         permissions['equipment.delete'] = false;
         permissions['equipment.assign_components'] = false;
+        permissions['operations.deposit'] = false;  // Admin only
+        permissions['operations.release'] = false;  // Admin only
       }
 
       // Prepare updated user data
@@ -776,8 +780,8 @@ function getDefaultPermissions(role) {
         'equipment.assign_components': false,  // Admin only
         'operations.sign': true,
         'operations.transfer': true,
-        'operations.deposit': true,
-        'operations.release': true,
+        'operations.deposit': false,  // Admin only
+        'operations.release': false,  // Admin only
         'operations.verify': true,
         'operations.maintain': true,
         'system.reports': true,
@@ -798,7 +802,8 @@ function getDefaultPermissions(role) {
         'equipment.update': true,
         'equipment.assign_components': false,  // Admin only
         'operations.sign': true,
-        'operations.deposit': true,
+        'operations.deposit': false,  // Admin only
+        'operations.release': false,  // Admin only
         'operations.verify': true,
         'system.reports': true,
         'system.history': true,

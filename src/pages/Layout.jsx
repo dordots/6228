@@ -221,6 +221,10 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
     }
     // If no specific permission is required for the item, it's always visible
     if (!item.permission) return true;
+    // Special cases: operations.deposit and operations.release are admin-only
+    if (item.permission === 'operations.deposit' || item.permission === 'operations.release') {
+      return permissions.role === 'admin';
+    }
     // Otherwise, check if the user has the required permission
     return permissions[item.permission];
   });

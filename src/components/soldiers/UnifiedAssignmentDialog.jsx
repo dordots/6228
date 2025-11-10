@@ -88,6 +88,12 @@ export default function UnifiedAssignmentDialog({
   const [selectedMachineGun, setSelectedMachineGun] = useState(null);
   const [availableKansapPairs, setAvailableKansapPairs] = useState([]);
 
+  // קרן dialog state for אמר"לים
+  const [showBeamDialog, setShowBeamDialog] = useState(false);
+  const [selectedAmaral, setSelectedAmaral] = useState(null);
+  const [availableBeams, setAvailableBeams] = useState([]);
+  const [beamCode, setBeamCode] = useState("");
+
   useEffect(() => {
     // Fetch current user for permissions
     const fetchUser = async () => {
@@ -126,6 +132,13 @@ export default function UnifiedAssignmentDialog({
 
   }, [soldier, unassignedWeapons, unassignedGear, unassignedDroneSets, equipment]); // Added equipment to dependencies as it impacts availableEquipment
 
+  // Debug: Log when beam dialog state changes
+  useEffect(() => {
+    console.log('[useEffect] showBeamDialog changed to:', showBeamDialog);
+    console.log('[useEffect] selectedAmaral:', selectedAmaral);
+    console.log('[useEffect] availableBeams:', availableBeams);
+  }, [showBeamDialog, selectedAmaral, availableBeams]);
+
   // Filter equipment by soldier's division and availability
   const availableEquipment = useMemo(() => {
     if (!Array.isArray(equipment) || !soldier) {
@@ -155,6 +168,22 @@ export default function UnifiedAssignmentDialog({
     'מקלע אחיד מאג 7.62',
     'מקלע נגב קומנדו'
   ];
+
+  // אמר"ל types that need קרן (beam)
+  const AMARAL_TYPES = [
+    'אמר"ל דו עיני;עידו',
+    'אמר"ל דו עיני;MICRON',
+    'אמר"ל דו עיני NYX',
+    'אמר"ל חד עיני - שח"מ'
+  ];
+
+  // Mapping from אמר"ל type to קרן gear_id prefix
+  const AMARAL_TO_BEAM_MAP = {
+    'אמר"ל דו עיני;עידו': 'IDO-001',
+    'אמר"ל דו עיני;MICRON': 'MICRON-001',
+    'אמר"ל דו עיני NYX': 'NYX-001',
+    'אמר"ל חד עיני - שח"מ': 'SHAHAM-001'
+  };
 
   // Helper function to check if a weapon is a machine gun
   const isMachineGun = useCallback((weapon) => {
@@ -257,6 +286,86 @@ export default function UnifiedAssignmentDialog({
     return pairs;
   }, [localUnassignedWeapons]);
 
+  // Helper function to check if a gear item is an אמר"ל that needs קרן
+  // Note: אמר"לים are gear, not weapons
+  const isAmaralNeedingBeam = useCallback((item) => {
+    if (!item) {
+      console.log('[isAmaralNeedingBeam] No item');
+      return false;
+    }
+    // אמר"לים are gear, so check gear_type
+    const itemType = item.gear_type;
+    if (!itemType) {
+      console.log('[isAmaralNeedingBeam] No gear_type');
+      return false;
+    }
+    console.log('[isAmaralNeedingBeam] Checking gear type:', itemType);
+    console.log('[isAmaralNeedingBeam] AMARAL_TYPES:', AMARAL_TYPES);
+    const result = AMARAL_TYPES.some(type => {
+      const matches = itemType.includes(type);
+      console.log('[isAmaralNeedingBeam] Checking type:', type, 'matches:', matches);
+      return matches;
+    });
+    console.log('[isAmaralNeedingBeam] Final result:', result);
+    return result;
+  }, []);
+
+  // Helper function to find all matching קרנות for an אמר"ל
+  const findBeamsForAmaral = useCallback((amaral, soldier) => {
+    // אמר"לים הם gear, לא weapon
+    const itemType = amaral?.gear_type;
+    console.log('[findBeamsForAmaral] Looking for beams for:', itemType);
+    if (!amaral || !itemType) {
+      console.log('[findBeamsForAmaral] No amaral or gear_type');
+      return [];
+    }
+    
+    // Find which אמר"ל type this is - check if gear_type includes any of the AMARAL_TYPES
+    const amaralType = AMARAL_TYPES.find(type => itemType.includes(type));
+    console.log('[findBeamsForAmaral] Found amaralType:', amaralType);
+    if (!amaralType) {
+      console.log('[findBeamsForAmaral] No matching amaralType found');
+      return [];
+    }
+    
+    // Get the expected קרן gear_id prefix (e.g., "NYX", "IDO")
+    const expectedBeamId = AMARAL_TO_BEAM_MAP[amaralType];
+    console.log('[findBeamsForAmaral] Expected beam ID:', expectedBeamId);
+    if (!expectedBeamId) {
+      console.log('[findBeamsForAmaral] No expectedBeamId in map');
+      return [];
+    }
+    
+    const beamPrefix = expectedBeamId.split('-')[0];
+    console.log('[findBeamsForAmaral] Beam prefix:', beamPrefix);
+    console.log('[findBeamsForAmaral] Available gear:', localUnassignedGear.length, 'items');
+    console.log('[findBeamsForAmaral] Soldier division:', soldier?.division_name);
+    
+    // Find all matching קרנות in unassigned gear that:
+    // 1. Match the prefix (e.g., "NYX-001", "NYX-002", etc.)
+    // 2. Belong to the same division (or have no division)
+    // 3. Are unassigned (already filtered in localUnassignedGear)
+    const matchingBeams = localUnassignedGear.filter(gear => {
+      if (!gear.gear_id) return false;
+      
+      // Check if gear_id starts with the prefix (e.g., "NYX-001" or "NYX-001-...")
+      const matchesPrefix = gear.gear_id.startsWith(beamPrefix + '-');
+      if (!matchesPrefix) return false;
+      
+      // Check division match - must match soldier's division or have no division
+      const matchesDivision = !gear.division_name || gear.division_name === soldier?.division_name;
+      
+      if (matchesPrefix && matchesDivision) {
+        console.log('[findBeamsForAmaral] Found matching beam:', gear.gear_id, gear.gear_type, 'division:', gear.division_name);
+      }
+      
+      return matchesPrefix && matchesDivision;
+    });
+    
+    console.log('[findBeamsForAmaral] Final result:', matchingBeams.length, 'beams found');
+    return matchingBeams;
+  }, [localUnassignedGear]);
+
   // Helper function to find paired weapon for קנס"פ weapons
   // Defined before weaponOptions to avoid hoisting issues
   const findPairedWeapon = useCallback((weapon, includeSelected = false) => {
@@ -351,7 +460,18 @@ export default function UnifiedAssignmentDialog({
         .filter(Boolean)
     );
 
+    // Get all קרן prefixes (NYX, IDO, MICRON, SHAHAM) to filter them out
+    const beamPrefixes = Object.values(AMARAL_TO_BEAM_MAP).map(beamId => beamId.split('-')[0]);
+
     return localUnassignedGear.filter(gearItem => {
+      // Filter out קרנות - they can only be assigned through the אמר"ל dialog
+      if (gearItem.gear_id) {
+        const isBeam = beamPrefixes.some(prefix => gearItem.gear_id.startsWith(prefix + '-'));
+        if (isBeam) {
+          return false;
+        }
+      }
+
       const matchesDivision = !gearItem.division_name || gearItem.division_name === soldier.division_name;
       const notSelected = !selectedGearIds.includes(gearItem.id);
       const typeNotOwned = !alreadyOwnedTypes.has(gearItem.gear_type); // Block types soldier already owns
@@ -394,9 +514,13 @@ export default function UnifiedAssignmentDialog({
 
   // Selection handlers
   const selectItem = (type, item) => {
+    console.log('[selectItem] ===== FUNCTION CALLED =====', type, item);
     if (type === 'weapon') {
+      console.log('[selectItem] Weapon selected:', item.weapon_type, item.weapon_id);
+      
       // Check if this is a machine gun that needs קנס"פ attachment
       if (isMachineGun(item)) {
+        console.log('[selectItem] Machine gun detected, opening קנס"פ dialog');
         const kansapPairs = findKansapPairs(item);
         // Always show dialog for machine guns, even if no pairs available
         setSelectedMachineGun(item);
@@ -404,6 +528,8 @@ export default function UnifiedAssignmentDialog({
         setShowKansapDialog(true);
         return; // Don't add the weapon yet, wait for user to select קנס"פ pair or cancel
       }
+      
+      // Note: אמר"לים are gear, not weapons, so we don't check weapons here
       
       // Regular weapon selection
       const newIds = [item.id];
@@ -413,6 +539,23 @@ export default function UnifiedAssignmentDialog({
         return [...new Set(combined)];
       });
     } else if (type === 'gear') {
+      console.log('[selectItem] Gear selected:', item.gear_type, item.gear_id);
+      
+      // Check if this is an אמר"ל that needs קרן
+      const isAmaral = isAmaralNeedingBeam(item);
+      console.log('[selectItem] Checking if gear is אמר"ל:', isAmaral, 'gear_type:', item.gear_type);
+      if (isAmaral) {
+        console.log('[selectItem] אמר"ל gear detected, opening קרן dialog');
+        const beams = findBeamsForAmaral(item, soldier);
+        console.log('[selectItem] Found beams:', beams.length, beams);
+        // Always show dialog for אמר"לים, even if no קרן available
+        setSelectedAmaral(item);
+        setAvailableBeams(beams);
+        setShowBeamDialog(true);
+        console.log('[selectItem] Dialog state set to true');
+        return; // Don't add the gear yet, wait for user to select קרן or cancel
+      }
+      
       setSelectedGearIds(prev => [...prev, item.id]);
     } else if (type === 'droneSet') {
       setSelectedDroneSetIds(prev => [...prev, item.id]);
@@ -446,6 +589,38 @@ export default function UnifiedAssignmentDialog({
     setShowKansapDialog(false);
     setSelectedMachineGun(null);
     setAvailableKansapPairs([]);
+  };
+
+  // Handle קרן selection for אמר"ל
+  const handleBeamSelect = (beam) => {
+    if (!selectedAmaral) return;
+    
+    // Validate: must have either קרן or correct code
+    const codeValid = beamCode.trim() === "8520";
+    if (!beam && !codeValid) {
+      showToast("You must select a קרן or enter the correct code (8520) to continue without קרן.", "destructive");
+      return;
+    }
+    
+    // אמר"לים are gear, not weapons
+    setSelectedGearIds(prev => {
+      const combined = [...prev, selectedAmaral.id];
+      return [...new Set(combined)];
+    });
+    
+    // Add the קרן gear only if selected (not using code bypass)
+    if (beam) {
+      setSelectedGearIds(prev => {
+        const combined = [...prev, beam.id];
+        return [...new Set(combined)];
+      });
+    }
+    
+    // Close dialog and reset state
+    setShowBeamDialog(false);
+    setSelectedAmaral(null);
+    setAvailableBeams([]);
+    setBeamCode("");
   };
 
   const handleRemoveItem = (type, id) => {
@@ -566,9 +741,54 @@ export default function UnifiedAssignmentDialog({
         }
       } else {
         // Regular weapon - just remove this one
+        // Note: אמר"לים are gear, not weapons
         setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id));
       }
     } else if (type === 'gear') {
+      // Find the gear item
+      const gearItem = localUnassignedGear.find(g => g.id === id);
+      
+      if (!gearItem) {
+        setSelectedGearIds(prev => prev.filter(gearId => gearId !== id));
+        return;
+      }
+      
+      // Check if this is an אמר"ל that needs קרן
+      if (isAmaralNeedingBeam(gearItem)) {
+        // This is an אמר"ל - find and remove all its קרנות that are selected
+        const beams = findBeamsForAmaral(gearItem, soldier);
+        const beamIds = beams.map(b => b.id).filter(beamId => selectedGearIds.includes(beamId));
+        
+        // Remove the אמר"ל and all its selected קרנות
+        setSelectedGearIds(prev => prev.filter(gearId => gearId !== id && !beamIds.includes(gearId)));
+        return;
+      }
+      
+      // Check if this is a קרן that belongs to an אמר"ל
+      if (gearItem.gear_id) {
+        // Check if this gear_id matches any of the קרן IDs
+        const beamPrefixes = Object.values(AMARAL_TO_BEAM_MAP).map(beamId => beamId.split('-')[0]);
+        const isBeam = beamPrefixes.some(prefix => gearItem.gear_id.startsWith(prefix + '-'));
+        
+        if (isBeam) {
+          // Find the matching אמר"ל that has this קרן selected
+          const matchingAmaralGearId = selectedGearIds.find(gearId => {
+            if (gearId === id) return false; // Don't match itself
+            const gear = localUnassignedGear.find(g => g.id === gearId);
+            if (!gear || !isAmaralNeedingBeam(gear)) return false;
+            const beams = findBeamsForAmaral(gear, soldier);
+            return beams.some(beam => beam.id === id);
+          });
+          
+          if (matchingAmaralGearId) {
+            // Remove both the קרן and its matching אמר"ל
+            setSelectedGearIds(prev => prev.filter(gearId => gearId !== id && gearId !== matchingAmaralGearId));
+            return;
+          }
+        }
+      }
+      
+      // Regular gear - just remove this one
       setSelectedGearIds(prev => prev.filter(gearId => gearId !== id));
     } else if (type === 'droneSet') {
       setSelectedDroneSetIds(prev => prev.filter(setId => setId !== id));
@@ -778,15 +998,33 @@ export default function UnifiedAssignmentDialog({
 
         // Serialized items (Weapons, Gear, Drones) - Simple assignment update
         for (const item of selectedWeapons) {
-            promises.push(Weapon.update(item.weapon_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
+            promises.push(Weapon.update(item.weapon_id, {
+                assigned_to: soldier.soldier_id,
+                division_name: soldier.division_name,
+                last_signed_by: `${soldier.first_name} ${soldier.last_name}`,
+                armory_status: 'with_soldier',
+                deposit_location: null
+            }));
         }
 
         for (const item of selectedGear) {
-            promises.push(SerializedGear.update(item.gear_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
+            promises.push(SerializedGear.update(item.gear_id, {
+                assigned_to: soldier.soldier_id,
+                division_name: soldier.division_name,
+                last_signed_by: `${soldier.first_name} ${soldier.last_name}`,
+                armory_status: 'with_soldier',
+                deposit_location: null
+            }));
         }
 
         for (const item of selectedDroneSets) {
-            promises.push(DroneSet.update(item.drone_set_id, { assigned_to: soldier.soldier_id, division_name: soldier.division_name, last_signed_by: `${soldier.first_name} ${soldier.last_name}` }));
+            promises.push(DroneSet.update(item.drone_set_id, {
+                assigned_to: soldier.soldier_id,
+                division_name: soldier.division_name,
+                last_signed_by: `${soldier.first_name} ${soldier.last_name}`,
+                armory_status: 'with_soldier',
+                deposit_location: null
+            }));
         }
 
         // FIXED LOGIC for non-serialized equipment
@@ -1824,6 +2062,97 @@ export default function UnifiedAssignmentDialog({
                 }}
               >
                 Continue Without קנס"פ
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* קרן Dialog for אמר"לים */}
+      <Dialog open={showBeamDialog} onOpenChange={setShowBeamDialog}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target className="w-5 h-5" />
+              Select קרן for {selectedAmaral?.gear_type} ({selectedAmaral?.gear_id})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-900">
+                <strong>Selected:</strong> {selectedAmaral?.gear_type} - {selectedAmaral?.gear_id}
+              </p>
+              <p className="text-xs text-blue-700 mt-2">
+                Please select the קרן that fits this אמר"ל, or enter the code to continue without קרן
+              </p>
+            </div>
+            
+            {availableBeams.length > 0 ? (
+              <ScrollArea className="h-64 border rounded-md">
+                <div className="p-2 space-y-2">
+                  {availableBeams.map((beam) => (
+                    <div
+                      key={beam.id}
+                      onClick={() => handleBeamSelect(beam)}
+                      className="p-3 hover:bg-blue-50 cursor-pointer rounded border border-blue-100 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{beam.gear_type}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              {beam.gear_id}
+                            </Badge>
+                          </div>
+                        </div>
+                        <Button size="sm" className="ml-2">
+                          Select
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="p-4 text-center text-slate-500">
+                <p>No קרן available</p>
+                <p className="text-xs mt-2">Enter the code below to continue without קרן</p>
+              </div>
+            )}
+
+            {/* Code input section */}
+            <div className="p-4 border rounded-md space-y-2">
+              <Label htmlFor="beam-code" className="text-sm font-medium">
+                Code to continue without קרן (optional)
+              </Label>
+              <Input
+                id="beam-code"
+                type="text"
+                placeholder="Enter code"
+                value={beamCode}
+                onChange={(e) => setBeamCode(e.target.value)}
+                className="max-w-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBeamDialog(false);
+                setSelectedAmaral(null);
+                setAvailableBeams([]);
+                setBeamCode("");
+              }}
+            >
+              Cancel
+            </Button>
+            {/* Show button to continue without קרן only if code is correct */}
+            {beamCode.trim() === "8520" && (
+              <Button
+                onClick={() => handleBeamSelect(null)}
+              >
+                Continue Without קרן
               </Button>
             )}
           </DialogFooter>

@@ -180,13 +180,13 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
   };
 
   const handleDepositClick = (soldier) => {
-    // Permission checks added
-    if (activeTab === 'deposit' && !currentUser?.permissions?.['operations.deposit']) {
-      alert("You do not have permission to deposit equipment.");
+    // Permission checks - only admin can deposit or release
+    if (activeTab === 'deposit' && currentUser?.role !== 'admin') {
+      alert("Only administrators can deposit equipment.");
       return;
     }
-    if (activeTab === 'release' && !currentUser?.permissions?.['operations.release']) {
-      alert("You do not have permission to release equipment.");
+    if (activeTab === 'release' && currentUser?.role !== 'admin') {
+      alert("Only administrators can release equipment.");
       return;
     }
     setSelectedSoldier(soldier);
@@ -198,6 +198,14 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
   const handleFinalize = async ({ soldier, weaponIds, gearIds, droneSetIds, signature, action: mode, depositLocation }) => {
     try {
       const currentUser = await User.me();
+      if (mode === 'deposit' && currentUser?.role !== 'admin') {
+        alert("Only administrators can deposit equipment.");
+        return;
+      }
+      if (mode === 'release' && currentUser?.role !== 'admin') {
+        alert("Only administrators can release equipment.");
+        return;
+      }
       const armoryStatus = mode === 'deposit' ? 'in_deposit' : 'with_soldier';
 
       const updatePromises = [];
@@ -279,6 +287,12 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
     try {
       console.log('[DepositUnassigned] Starting with:', { weaponIds, gearIds, droneSetIds, depositLocation });
       const currentUser = await User.me();
+      
+      // Only admin can deposit unassigned items
+      if (currentUser?.role !== 'admin') {
+        alert("Only administrators can deposit equipment.");
+        return;
+      }
 
       // Update each item, preserving its division_name to satisfy security rules
       for (const weaponId of weaponIds) {
@@ -353,6 +367,12 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
     try {
       console.log('[ReleaseUnassigned] Starting with:', { weaponIds, gearIds, droneSetIds });
       const currentUser = await User.me();
+
+      // Only admin can release unassigned items
+      if (currentUser?.role !== 'admin') {
+        alert("Only administrators can release equipment.");
+        return;
+      }
 
       // Update each item, preserving its division_name to satisfy security rules
       for (const weaponId of weaponIds) {
@@ -489,19 +509,19 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2">
-          {currentUser?.permissions?.['operations.deposit'] && (
+          {currentUser?.role === 'admin' && (
             <TabsTrigger value="deposit" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700">
               <Package className="w-4 h-4 mr-2"/>
               Deposit into Armory
             </TabsTrigger>
           )}
-          {currentUser?.permissions?.['operations.release'] && (
+          {currentUser?.role === 'admin' && (
             <TabsTrigger value="release" className="data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
               <PackageOpen className="w-4 h-4 mr-2"/>
               Release from Armory
             </TabsTrigger>
           )}
-          {currentUser?.custom_role !== 'team_leader' && (
+          {currentUser?.role === 'admin' && (
             <>
               <TabsTrigger value="unassigned" className="data-[state=active]:bg-amber-100 data-[state=active]:text-amber-700">
                 <ArchiveRestore className="w-4 h-4 mr-2"/>
@@ -544,8 +564,8 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
                         <Button
                           onClick={() => handleDepositClick(soldier)}
                           className="w-full bg-blue-600 hover:bg-blue-700"
-                          // Disable button based on permissions
-                          disabled={!currentUser?.permissions?.['operations.deposit']}
+                          // Disable button - only admin can deposit
+                          disabled={currentUser?.role !== 'admin'}
                         >
                           Select for Deposit
                         </Button>
@@ -587,8 +607,8 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
                         <Button
                           onClick={() => handleDepositClick(soldier)}
                           className="w-full bg-green-600 hover:bg-green-700"
-                          // Disable button based on permissions
-                          disabled={!currentUser?.permissions?.['operations.release']}
+                          // Disable button - only admin can release
+                          disabled={currentUser?.role !== 'admin'}
                         >
                           Select for Release
                         </Button>

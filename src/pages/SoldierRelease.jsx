@@ -39,6 +39,69 @@ import {
 import AssignedItemsList from "../components/release/AssignedItemsList";
 import SignatureCanvas from "../components/soldiers/SignatureCanvas"; // Import signature canvas
 
+// אמר"ל types that need קרן (beam)
+const AMARAL_TYPES = [
+  'אמר"ל דו עיני;עידו',
+  'אמר"ל דו עיני;MICRON',
+  'אמר"ל דו עיני NYX',
+  'אמר"ל חד עיני - שח"מ'
+];
+
+// Mapping from אמר"ל type to קרן gear_id prefix
+const AMARAL_TO_BEAM_MAP = {
+  'אמר"ל דו עיני;עידו': 'IDO-001',
+  'אמר"ל דו עיני;MICRON': 'MICRON-001',
+  'אמר"ל דו עיני NYX': 'NYX-001',
+  'אמר"ל חד עיני - שח"מ': 'SHAHAM-001'
+};
+
+// Helper function to check if a gear item is an אמר"ל that needs קרן
+const isAmaralNeedingBeam = (gearItem) => {
+  if (!gearItem || !gearItem.gear_type) return false;
+  return AMARAL_TYPES.some(type => gearItem.gear_type.includes(type));
+};
+
+// Helper function to check if a gear item is a קרן
+const isBeam = (gearItem) => {
+  if (!gearItem || !gearItem.gear_id) return false;
+  const beamPrefixes = Object.values(AMARAL_TO_BEAM_MAP).map(beamId => beamId.split('-')[0]);
+  return beamPrefixes.some(prefix => gearItem.gear_id.startsWith(prefix + '-'));
+};
+
+// Helper function to find matching קרן for an אמר"ל
+const findBeamForAmaral = (amaral, allGear) => {
+  if (!amaral || !amaral.gear_type) return null;
+  const amaralType = AMARAL_TYPES.find(type => amaral.gear_type.includes(type));
+  if (!amaralType) return null;
+  const expectedBeamId = AMARAL_TO_BEAM_MAP[amaralType];
+  const beamPrefix = expectedBeamId.split('-')[0];
+  return allGear.find(gear => 
+    gear.gear_id && 
+    gear.gear_id.startsWith(beamPrefix + '-') &&
+    gear.assigned_to === amaral.assigned_to // Same soldier
+  );
+};
+
+// Helper function to find matching אמר"ל for a קרן
+const findAmaralForBeam = (beam, allGear) => {
+  if (!beam || !beam.gear_id) return null;
+  const beamPrefixes = Object.values(AMARAL_TO_BEAM_MAP).map(beamId => beamId.split('-')[0]);
+  const matchingPrefix = beamPrefixes.find(prefix => beam.gear_id.startsWith(prefix + '-'));
+  if (!matchingPrefix) return null;
+  
+  // Find the אמר"ל type that matches this prefix
+  const amaralType = Object.entries(AMARAL_TO_BEAM_MAP).find(
+    ([_, beamId]) => beamId.startsWith(matchingPrefix)
+  )?.[0];
+  if (!amaralType) return null;
+  
+  return allGear.find(gear => 
+    gear.gear_type && 
+    gear.gear_type.includes(amaralType) &&
+    gear.assigned_to === beam.assigned_to // Same soldier
+  );
+};
+
 export default function SoldierReleasePage() {
   const [soldiers, setSoldiers] = useState([]);
   const [assignedWeapons, setAssignedWeapons] = useState([]);
@@ -370,6 +433,31 @@ export default function SoldierReleasePage() {
           // If paired weapon is selected, also add the paired weapon
           expandedSelectedItems.add(item.pairedId);
         }
+        // Handle אמר"ל and קרן pairing
+        if (item.itemType === 'Gear' && selectedSerializedItems.includes(item.id)) {
+          const gearItem = assignedGear.find(g => g.gear_id === item.displayId);
+          if (gearItem) {
+            if (isAmaralNeedingBeam(gearItem)) {
+              // If אמר"ל is selected, also add its קרן
+              const matchingBeam = findBeamForAmaral(gearItem, assignedGear);
+              if (matchingBeam) {
+                const beamItem = assignedSerialized.find(si => si.itemType === 'Gear' && si.displayId === matchingBeam.gear_id);
+                if (beamItem) {
+                  expandedSelectedItems.add(beamItem.id);
+                }
+              }
+            } else if (isBeam(gearItem)) {
+              // If קרן is selected, also add its אמר"ל
+              const matchingAmaral = findAmaralForBeam(gearItem, assignedGear);
+              if (matchingAmaral) {
+                const amaralItem = assignedSerialized.find(si => si.itemType === 'Gear' && si.displayId === matchingAmaral.gear_id);
+                if (amaralItem) {
+                  expandedSelectedItems.add(amaralItem.id);
+                }
+              }
+            }
+          }
+        }
       });
       
       const itemsToUnassign = assignedSerialized.filter(item => expandedSelectedItems.has(item.id));
@@ -416,7 +504,41 @@ export default function SoldierReleasePage() {
             }
             break;
           case 'Gear':
-            await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+            // Find the gear item in assignedGear to check if it's an אמר"ל or קרן
+            const gearItem = assignedGear.find(g => g.gear_id === item.gear_id);
+            
+            if (gearItem) {
+              // Check if this is an אמר"ל that needs קרן
+              if (isAmaralNeedingBeam(gearItem)) {
+                // Find and release the matching קרן as well
+                const matchingBeam = findBeamForAmaral(gearItem, assignedGear);
+                if (matchingBeam) {
+                  await Promise.all([
+                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' }),
+                    SerializedGear.update(matchingBeam.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                  ]);
+                } else {
+                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+                }
+              } else if (isBeam(gearItem)) {
+                // This is a קרן - find and release the matching אמר"ל as well
+                const matchingAmaral = findAmaralForBeam(gearItem, assignedGear);
+                if (matchingAmaral) {
+                  await Promise.all([
+                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' }),
+                    SerializedGear.update(matchingAmaral.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                  ]);
+                } else {
+                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+                }
+              } else {
+                // Regular gear - just release this one
+                await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+              }
+            } else {
+              // Fallback: if gear item not found, just release it
+              await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+            }
             break;
           case 'Drone':
             await DroneSet.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
@@ -925,8 +1047,41 @@ export default function SoldierReleasePage() {
                     }
                     break;
                 case 'Gear':
-                    // Use fieldId (gear_id) for updates with adapter
-                    promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                    // Find the gear item in assignedGear to check if it's an אמר"ל or קרן
+                    const gearItemFull = assignedGear.find(g => g.gear_id === item.fieldId);
+                    
+                    if (gearItemFull) {
+                      // Check if this is an אמר"ל that needs קרן
+                      if (isAmaralNeedingBeam(gearItemFull)) {
+                        // Find and release the matching קרן as well
+                        const matchingBeamFull = findBeamForAmaral(gearItemFull, assignedGear);
+                        if (matchingBeamFull) {
+                          promise = Promise.all([
+                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' }),
+                            SerializedGear.update(matchingBeamFull.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                          ]);
+                        } else {
+                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                        }
+                      } else if (isBeam(gearItemFull)) {
+                        // This is a קרן - find and release the matching אמר"ל as well
+                        const matchingAmaralFull = findAmaralForBeam(gearItemFull, assignedGear);
+                        if (matchingAmaralFull) {
+                          promise = Promise.all([
+                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' }),
+                            SerializedGear.update(matchingAmaralFull.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                          ]);
+                        } else {
+                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                        }
+                      } else {
+                        // Regular gear - just release this one
+                        promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                      }
+                    } else {
+                      // Fallback: if gear item not found, just release it
+                      promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                    }
                     break;
                 case 'Drone':
                     // Use fieldId (drone_set_id) for updates with adapter

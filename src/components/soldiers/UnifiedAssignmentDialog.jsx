@@ -83,6 +83,11 @@ export default function UnifiedAssignmentDialog({
   const [initialGearData, setInitialGearData] = useState(null);
   const [initialDroneSetData, setInitialDroneSetData] = useState(null);
 
+  // קנס"פ dialog state
+  const [showKansapDialog, setShowKansapDialog] = useState(false);
+  const [selectedMachineGun, setSelectedMachineGun] = useState(null);
+  const [availableKansapPairs, setAvailableKansapPairs] = useState([]);
+
   useEffect(() => {
     // Fetch current user for permissions
     const fetchUser = async () => {
@@ -143,6 +148,115 @@ export default function UnifiedAssignmentDialog({
     return filtered;
   }, [equipment, soldier]);
 
+  // Machine gun types that can have קנס"פ attachments
+  const MACHINE_GUN_TYPES = [
+    'מקלע קל נגב 7.62',
+    'מקלע קל נגב דגם ב',
+    'מקלע אחיד מאג 7.62',
+    'מקלע נגב קומנדו'
+  ];
+
+  // Helper function to check if a weapon is a machine gun
+  const isMachineGun = useCallback((weapon) => {
+    if (!weapon || !weapon.weapon_type) return false;
+    return MACHINE_GUN_TYPES.some(type => weapon.weapon_type.includes(type));
+  }, []);
+
+  // Helper function to find matching קנס"פ pairs for a machine gun
+  const findKansapPairs = useCallback((machineGun) => {
+    if (!machineGun || !machineGun.weapon_id || !machineGun.weapon_type) return [];
+    
+    // Find all קנס"פ weapons that match the type (not just ID pattern)
+    // Show all available קנס"פ pairs that match the machine gun type
+    const matchingKansap = localUnassignedWeapons.filter(weapon => {
+      if (!weapon.weapon_type || !weapon.weapon_id) return false;
+      if (!weapon.weapon_type.includes('קנס"פ')) return false;
+      
+      // Must have -1 or -2 suffix to be a valid קנס"פ pair
+      const kansapId = weapon.weapon_id;
+      const hasValidSuffix = kansapId.includes('-1') || kansapId.includes('-2');
+      if (!hasValidSuffix) return false;
+      
+      // Check if קנס"פ type matches the machine gun type
+      // Extract key words from machine gun type to match with קנס"פ
+      let typeMatches = false;
+      const machineGunType = machineGun.weapon_type;
+      const kansapType = weapon.weapon_type;
+      
+      // Match patterns:
+      // "מקלע קל נגב 7.62" -> קנס"פ - נגב 7.62 (specific match required)
+      // "מקלע קל נגב דגם ב" -> קנס"פ - נגב (only, not קנס"פ - נגב דגם ב)
+      // "מקלע אחיד מאג 7.62" -> קנס"פ - מאג or קנס"פ - מאג 7.62 (all matching types)
+      // "מקלע נגב קומנדו" -> קנס"פ - נגב קומנדו (specific match required)
+      
+      if (machineGunType.includes('נגב קומנדו')) {
+        // For "מקלע נגב קומנדו", only match "קנס"פ - נגב קומנדו"
+        typeMatches = kansapType.includes('נגב קומנדו');
+      } else if (machineGunType.includes('דגם ב')) {
+        // For "מקלע קל נגב דגם ב", only match "קנס"פ - נגב" (not "קנס"פ - נגב דגם ב")
+        typeMatches = kansapType.includes('נגב') && !kansapType.includes('דגם ב') && !kansapType.includes('קומנדו') && !kansapType.includes('7.62');
+      } else if (machineGunType.includes('7.62') && machineGunType.includes('נגב')) {
+        // For "מקלע קל נגב 7.62", only match "קנס"פ - נגב 7.62"
+        typeMatches = kansapType.includes('נגב 7.62') || (kansapType.includes('נגב') && kansapType.includes('7.62'));
+      } else if (machineGunType.includes('נגב')) {
+        // For other נגב machine guns, match any קנס"פ with נגב (but not קומנדו, דגם ב, or 7.62 specific ones)
+        typeMatches = kansapType.includes('נגב') && !kansapType.includes('קומנדו') && !kansapType.includes('דגם ב') && !kansapType.includes('7.62');
+      } else if (machineGunType.includes('מאג')) {
+        // For מאג machine guns, match any קנס"פ with מאג
+        typeMatches = kansapType.includes('מאג');
+      }
+      
+      return typeMatches;
+    });
+    
+    // Group into pairs
+    const pairs = [];
+    const processed = new Set();
+    
+    matchingKansap.forEach(weapon => {
+      if (processed.has(weapon.id)) return;
+      
+      const weaponId = weapon.weapon_id;
+      const baseId = weaponId.replace(/-[12]$/, '');
+      const suffix = weaponId.endsWith('-1') ? '1' : weaponId.endsWith('-2') ? '2' : null;
+      
+      if (!suffix) return;
+      
+      const otherSuffix = suffix === '1' ? '2' : '1';
+      const otherWeaponId = `${baseId}-${otherSuffix}`;
+      const otherWeapon = matchingKansap.find(w => w.weapon_id === otherWeaponId);
+      
+      if (otherWeapon) {
+        // Extract display name (e.g., "קנס"פ - נגב")
+        const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+        const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+        
+        pairs.push({
+          id: `${weapon.id}-${otherWeapon.id}`,
+          weapon1: weapon,
+          weapon2: otherWeapon,
+          displayName: displayName
+        });
+        processed.add(weapon.id);
+        processed.add(otherWeapon.id);
+      } else {
+        // Only one weapon found, still add it
+        const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+        const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+        
+        pairs.push({
+          id: weapon.id,
+          weapon1: weapon,
+          weapon2: null,
+          displayName: displayName
+        });
+        processed.add(weapon.id);
+      }
+    });
+    
+    return pairs;
+  }, [localUnassignedWeapons]);
+
   // Helper function to find paired weapon for קנס"פ weapons
   // Defined before weaponOptions to avoid hoisting issues
   const findPairedWeapon = useCallback((weapon, includeSelected = false) => {
@@ -192,7 +306,15 @@ export default function UnifiedAssignmentDialog({
         .filter(Boolean)
     );
 
-    return localUnassignedWeapons.filter(weapon => {
+    const filtered = localUnassignedWeapons.filter(weapon => {
+      if (!weapon) return false;
+
+      // FIRST: Filter out קנס"פ weapons from options - they will be attached automatically via machine gun dialog
+      // Simply check if the weapon_type contains the word קנס"פ
+      if (weapon.weapon_type && typeof weapon.weapon_type === 'string' && weapon.weapon_type.includes('קנס"פ')) {
+        return false;
+      }
+
       const matchesDivision = !weapon.division_name || weapon.division_name === soldier.division_name;
       const notSelected = !selectedWeaponIds.includes(weapon.id);
       const typeNotOwned = !alreadyOwnedTypes.has(weapon.weapon_type); // Block types soldier already owns
@@ -201,19 +323,15 @@ export default function UnifiedAssignmentDialog({
          (weapon.weapon_type && weapon.weapon_type.toLowerCase().includes(weaponSearch.toLowerCase())) ||
          (weapon.weapon_id && weapon.weapon_id.toLowerCase().includes(weaponSearch.toLowerCase()));
 
-      // For קנס"פ weapons, hide this weapon if its pair is already selected
-      let isPairedWeaponHidden = false;
-      if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ') && selectedWeaponIds.length > 0) {
-        // Check if the paired weapon is already selected - if so, hide this one
-        const pairedWeapon = findPairedWeapon(weapon, true);
-        if (pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id)) {
-          isPairedWeaponHidden = true;
-        }
-      }
-
-      return weapon && matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch && !isPairedWeaponHidden;
+      return matchesDivision && notSelected && typeNotOwned && typeNotSelected && matchesSearch;
     });
-  }, [localUnassignedWeapons, weaponSearch, selectedWeaponIds, soldier, weapons, findPairedWeapon]);
+
+    // Double-check: ensure no קנס"פ weapons slipped through
+    return filtered.filter(weapon => {
+      if (!weapon || !weapon.weapon_type) return true;
+      return !weapon.weapon_type.includes('קנס"פ');
+    });
+  }, [localUnassignedWeapons, weaponSearch, selectedWeaponIds, soldier, weapons]);
 
   const gearOptions = useMemo(() => {
     if (!Array.isArray(localUnassignedGear) || !soldier) return [];
@@ -277,14 +395,18 @@ export default function UnifiedAssignmentDialog({
   // Selection handlers
   const selectItem = (type, item) => {
     if (type === 'weapon') {
-      const newIds = [item.id];
-      
-      // Check if this is a קנס"פ weapon and find its pair
-      const pairedWeapon = findPairedWeapon(item);
-      if (pairedWeapon) {
-        newIds.push(pairedWeapon.id);
+      // Check if this is a machine gun that needs קנס"פ attachment
+      if (isMachineGun(item)) {
+        const kansapPairs = findKansapPairs(item);
+        // Always show dialog for machine guns, even if no pairs available
+        setSelectedMachineGun(item);
+        setAvailableKansapPairs(kansapPairs);
+        setShowKansapDialog(true);
+        return; // Don't add the weapon yet, wait for user to select קנס"פ pair or cancel
       }
       
+      // Regular weapon selection
+      const newIds = [item.id];
       setSelectedWeaponIds(prev => {
         const combined = [...prev, ...newIds];
         // Remove duplicates
@@ -300,20 +422,146 @@ export default function UnifiedAssignmentDialog({
     }
   };
 
+  // Handle קנס"פ pair selection
+  const handleKansapPairSelect = (pair) => {
+    if (!selectedMachineGun) return;
+    
+    // Add the machine gun
+    const newIds = [selectedMachineGun.id];
+    
+    // Add the קנס"פ pair weapons
+    if (pair.weapon1) {
+      newIds.push(pair.weapon1.id);
+    }
+    if (pair.weapon2) {
+      newIds.push(pair.weapon2.id);
+    }
+    
+    setSelectedWeaponIds(prev => {
+      const combined = [...prev, ...newIds];
+      return [...new Set(combined)];
+    });
+    
+    // Close dialog and reset state
+    setShowKansapDialog(false);
+    setSelectedMachineGun(null);
+    setAvailableKansapPairs([]);
+  };
+
   const handleRemoveItem = (type, id) => {
     if (type === 'weapon') {
-      // Find the weapon to check if it's part of a קנס"פ pair
+      // Find the weapon to check if it's a machine gun or קנס"פ
       const weapon = localUnassignedWeapons.find(w => w.id === id);
       
-      if (weapon && weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
-        // This is a קנס"פ weapon - find its pair
-        const pairedWeapon = findPairedWeapon(weapon, true);
+      if (!weapon) {
+        setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id));
+        return;
+      }
+
+      // Check if this is a machine gun - if so, find and remove its קנס"פ pairs
+      if (isMachineGun(weapon)) {
+        const kansapIds = [];
+        selectedWeaponIds.forEach(otherId => {
+          if (otherId === id) return;
+          const otherWeapon = localUnassignedWeapons.find(w => w.id === otherId);
+          if (otherWeapon && otherWeapon.weapon_type && otherWeapon.weapon_type.includes('קנס"פ')) {
+            // Check if this קנס"פ matches the machine gun (type matching only, no ID matching)
+            const machineGunType = weapon.weapon_type;
+            const kansapType = otherWeapon.weapon_type;
+            
+            // Match type based on key words (same logic as findKansapPairs)
+            let typeMatches = false;
+            if (machineGunType.includes('נגב קומנדו')) {
+              typeMatches = kansapType.includes('נגב קומנדו');
+            } else if (machineGunType.includes('דגם ב')) {
+              typeMatches = kansapType.includes('נגב') && !kansapType.includes('דגם ב') && !kansapType.includes('קומנדו') && !kansapType.includes('7.62');
+            } else if (machineGunType.includes('7.62') && machineGunType.includes('נגב')) {
+              typeMatches = kansapType.includes('נגב 7.62') || (kansapType.includes('נגב') && kansapType.includes('7.62'));
+            } else if (machineGunType.includes('נגב')) {
+              typeMatches = kansapType.includes('נגב') && !kansapType.includes('קומנדו') && !kansapType.includes('דגם ב') && !kansapType.includes('7.62');
+            } else if (machineGunType.includes('מאג')) {
+              typeMatches = kansapType.includes('מאג');
+            }
+            
+            if (typeMatches) {
+              kansapIds.push(otherId);
+            }
+          }
+        });
         
+        // Remove machine gun and all its קנס"פ pairs
+        setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id && !kansapIds.includes(weaponId)));
+      } else if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+        // This is a קנס"פ weapon - find its machine gun and remove both
+        const machineGunId = selectedWeaponIds.find(otherId => {
+          if (otherId === id) return false;
+          const otherWeapon = localUnassignedWeapons.find(w => w.id === otherId);
+          if (!otherWeapon || !isMachineGun(otherWeapon)) return false;
+          
+          // Check if this קנס"פ matches the machine gun (type matching only, not ID)
+          const machineGunType = otherWeapon.weapon_type;
+          const kansapType = weapon.weapon_type;
+          
+          // Match type based on key words (same logic as findKansapPairs)
+          let typeMatches = false;
+          if (machineGunType.includes('נגב קומנדו')) {
+            typeMatches = kansapType.includes('נגב קומנדו');
+          } else if (machineGunType.includes('דגם ב')) {
+            typeMatches = kansapType.includes('נגב') && !kansapType.includes('דגם ב') && !kansapType.includes('קומנדו') && !kansapType.includes('7.62');
+          } else if (machineGunType.includes('7.62') && machineGunType.includes('נגב')) {
+            typeMatches = kansapType.includes('נגב 7.62') || (kansapType.includes('נגב') && kansapType.includes('7.62'));
+          } else if (machineGunType.includes('נגב')) {
+            typeMatches = kansapType.includes('נגב') && !kansapType.includes('קומנדו') && !kansapType.includes('דגם ב') && !kansapType.includes('7.62');
+          } else if (machineGunType.includes('מאג')) {
+            typeMatches = kansapType.includes('מאג');
+          }
+          
+          return typeMatches;
+        });
+        
+        if (machineGunId) {
+          // Find all קנס"פ pairs for this machine gun
+          const machineGun = localUnassignedWeapons.find(w => w.id === machineGunId);
+          if (machineGun) {
+            const kansapIds = [];
+            selectedWeaponIds.forEach(otherId => {
+              if (otherId === machineGunId) return;
+              const otherWeapon = localUnassignedWeapons.find(w => w.id === otherId);
+              if (otherWeapon && otherWeapon.weapon_type && otherWeapon.weapon_type.includes('קנס"פ')) {
+                const machineGunType = machineGun.weapon_type;
+                const kansapType = otherWeapon.weapon_type;
+                
+                // Match type based on key words (same logic as findKansapPairs, no ID matching)
+                let typeMatches = false;
+                if (machineGunType.includes('נגב קומנדו')) {
+                  typeMatches = kansapType.includes('נגב קומנדו');
+                } else if (machineGunType.includes('דגם ב')) {
+                  typeMatches = kansapType.includes('נגב') && !kansapType.includes('דגם ב') && !kansapType.includes('קומנדו') && !kansapType.includes('7.62');
+                } else if (machineGunType.includes('7.62') && machineGunType.includes('נגב')) {
+                  typeMatches = kansapType.includes('נגב 7.62') || (kansapType.includes('נגב') && kansapType.includes('7.62'));
+                } else if (machineGunType.includes('נגב')) {
+                  typeMatches = kansapType.includes('נגב') && !kansapType.includes('קומנדו') && !kansapType.includes('דגם ב') && !kansapType.includes('7.62');
+                } else if (machineGunType.includes('מאג')) {
+                  typeMatches = kansapType.includes('מאג');
+                }
+                
+                if (typeMatches) {
+                  kansapIds.push(otherId);
+                }
+              }
+            });
+            
+            // Remove machine gun and all its קנס"פ pairs
+            setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== machineGunId && weaponId !== id && !kansapIds.includes(weaponId)));
+            return;
+          }
+        }
+        
+        // Fallback: if it's a קנס"פ weapon, find its pair
+        const pairedWeapon = findPairedWeapon(weapon, true);
         if (pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id)) {
-          // Both weapons are selected - remove both
           setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id && weaponId !== pairedWeapon.id));
         } else {
-          // Only this weapon is selected - remove just this one
           setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== id));
         }
       } else {
@@ -880,7 +1128,7 @@ export default function UnifiedAssignmentDialog({
                     <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-red-700"><Target className="w-4 h-4" />Weapons</CardTitle></CardHeader>
                     <CardContent className="space-y-3">
                       {selectedWeaponIds.length > 0 && (() => {
-                        // Group קנס"פ weapons together
+                        // Group weapons: machine guns with קנס"פ pairs, and קנס"פ pairs together
                         const groupedWeapons = [];
                         const processedIds = new Set();
                         
@@ -890,31 +1138,68 @@ export default function UnifiedAssignmentDialog({
                           const weapon = getSelectedItemDetails('weapon', id);
                           if (!weapon) return;
                           
-                          // Check if this is a קנס"פ weapon
-                          if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
-                            const pairedWeapon = findPairedWeapon(weapon, true);
-                            const pairedId = pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id) ? pairedWeapon.id : null;
+                          // Check if this is a machine gun - if so, find its קנס"פ pairs
+                          if (isMachineGun(weapon)) {
+                            const kansapIds = [];
+                            selectedWeaponIds.forEach(otherId => {
+                              if (otherId === id || processedIds.has(otherId)) return;
+                              const otherWeapon = getSelectedItemDetails('weapon', otherId);
+                              if (otherWeapon && otherWeapon.weapon_type && otherWeapon.weapon_type.includes('קנס"פ')) {
+                                // Check if this קנס"פ matches the machine gun
+                                const machineGunId = weapon.weapon_id;
+                                const last4Digits = machineGunId.slice(-4);
+                                const machineGunType = weapon.weapon_type;
+                                
+                                const kansapId = otherWeapon.weapon_id;
+                                const idMatches = kansapId.includes(last4Digits) && (kansapId.includes('-1') || kansapId.includes('-2'));
+                                
+                                // Match type based on key words
+                                let typeMatches = false;
+                                const kansapType = otherWeapon.weapon_type;
+                                if (machineGunType.includes('נגב קומנדו')) {
+                                  // For "מקלע נגב קומנדו", only match "קנס"פ - נגב קומנדו"
+                                  typeMatches = kansapType.includes('נגב קומנדו');
+                                } else if (machineGunType.includes('דגם ב')) {
+                                  // For "מקלע קל נגב דגם ב", only match "קנס"פ - נגב" (not "קנס"פ - נגב דגם ב")
+                                  typeMatches = kansapType.includes('נגב') && !kansapType.includes('דגם ב') && !kansapType.includes('קומנדו') && !kansapType.includes('7.62');
+                                } else if (machineGunType.includes('7.62') && machineGunType.includes('נגב')) {
+                                  // For "מקלע קל נגב 7.62", only match "קנס"פ - נגב 7.62"
+                                  typeMatches = kansapType.includes('נגב 7.62') || (kansapType.includes('נגב') && kansapType.includes('7.62'));
+                                } else if (machineGunType.includes('נגב')) {
+                                  // For other נגב machine guns, match any קנס"פ with נגב (but not קומנדו, דגם ב, or 7.62)
+                                  typeMatches = kansapType.includes('נגב') && !kansapType.includes('קומנדו') && !kansapType.includes('דגם ב') && !kansapType.includes('7.62');
+                                } else if (machineGunType.includes('מאג')) {
+                                  // For מאג machine guns, match any קנס"פ with מאג
+                                  typeMatches = kansapType.includes('מאג');
+                                }
+                                
+                                if (idMatches && typeMatches) {
+                                  kansapIds.push(otherId);
+                                }
+                              }
+                            });
                             
-                            if (pairedId) {
-                              // Group both weapons together
-                              const pairedWeaponObj = getSelectedItemDetails('weapon', pairedId);
-                              processedIds.add(id);
-                              processedIds.add(pairedId);
+                            if (kansapIds.length > 0) {
+                              // Group machine gun with its קנס"פ pairs
+                              const kansapWeapons = kansapIds.map(kid => getSelectedItemDetails('weapon', kid)).filter(Boolean);
+                              const kansapDisplay = kansapWeapons.map(k => {
+                                const nameMatch = k.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+                                return nameMatch ? nameMatch[1].trim() : k.weapon_type.replace('קנס"פ', '').trim();
+                              }).join(', ');
                               
-                              // Extract the name part after "קנס"פ" (e.g., "קנס"פ-נגב" or "קנס"פ - נגב" -> "קנס"פ - נגב")
-                              const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
-                              const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+                              processedIds.add(id);
+                              kansapIds.forEach(kid => processedIds.add(kid));
                               
                               groupedWeapons.push({
                                 id: id,
-                                pairedId: pairedId,
-                                displayName: displayName,
+                                kansapIds: kansapIds,
+                                displayName: `${weapon.weapon_type} + קנס"פ (${kansapDisplay})`,
                                 weapon1: weapon,
-                                weapon2: pairedWeaponObj,
-                                isPaired: true
+                                kansapWeapons: kansapWeapons,
+                                isMachineGunWithKansap: true
                               });
                             } else {
-                              // Only one of the pair is selected
+                              // Machine gun without קנס"פ
                               processedIds.add(id);
                               groupedWeapons.push({
                                 id: id,
@@ -922,6 +1207,46 @@ export default function UnifiedAssignmentDialog({
                                 weapon1: weapon,
                                 isPaired: false
                               });
+                            }
+                          } else if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+                            // Check if this קנס"פ is already grouped with a machine gun
+                            let isGrouped = false;
+                            groupedWeapons.forEach(group => {
+                              if (group.isMachineGunWithKansap && group.kansapIds && group.kansapIds.includes(id)) {
+                                isGrouped = true;
+                              }
+                            });
+                            
+                            if (!isGrouped) {
+                              // Standalone קנס"פ weapon - check for pair
+                              const pairedWeapon = findPairedWeapon(weapon, true);
+                              const pairedId = pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id) ? pairedWeapon.id : null;
+                              
+                              if (pairedId) {
+                                const pairedWeaponObj = getSelectedItemDetails('weapon', pairedId);
+                                processedIds.add(id);
+                                processedIds.add(pairedId);
+                                
+                                const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+                                const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+                                
+                                groupedWeapons.push({
+                                  id: id,
+                                  pairedId: pairedId,
+                                  displayName: displayName,
+                                  weapon1: weapon,
+                                  weapon2: pairedWeaponObj,
+                                  isPaired: true
+                                });
+                              } else {
+                                processedIds.add(id);
+                                groupedWeapons.push({
+                                  id: id,
+                                  displayName: weapon.weapon_type,
+                                  weapon1: weapon,
+                                  isPaired: false
+                                });
+                              }
                             }
                           } else {
                             // Regular weapon
@@ -942,7 +1267,14 @@ export default function UnifiedAssignmentDialog({
                               <div key={group.id} className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded">
                                 <div className="flex-1">
                                   <p className="font-medium text-sm">{group.displayName}</p>
-                                  {group.isPaired ? (
+                                  {group.isMachineGunWithKansap ? (
+                                    <div className="text-xs text-red-600 space-y-1">
+                                      <p>{group.weapon1.weapon_id}</p>
+                                      {group.kansapWeapons && group.kansapWeapons.map((k, idx) => (
+                                        <p key={idx} className="text-red-500">קנס"פ {idx + 1}: {k.weapon_id}</p>
+                                      ))}
+                                    </div>
+                                  ) : group.isPaired ? (
                                     <p className="text-xs text-red-600">
                                       {group.weapon1.weapon_id}, {group.weapon2?.weapon_id}
                                     </p>
@@ -954,12 +1286,8 @@ export default function UnifiedAssignmentDialog({
                                   variant="ghost" 
                                   size="sm" 
                                   onClick={() => {
-                                    // If it's a paired weapon, remove both
-                                    if (group.isPaired && group.pairedId) {
-                                      setSelectedWeaponIds(prev => prev.filter(weaponId => weaponId !== group.id && weaponId !== group.pairedId));
-                                    } else {
-                                      handleRemoveItem('weapon', group.id);
-                                    }
+                                    // Always use handleRemoveItem which handles machine gun + קנס"פ removal
+                                    handleRemoveItem('weapon', group.id);
                                   }} 
                                   className="h-6 w-6 p-0 text-red-600 hover:bg-red-100"
                                 >
@@ -979,72 +1307,18 @@ export default function UnifiedAssignmentDialog({
                       </div>
                       <ScrollArea className="h-32 border rounded-md">
                         <div className="p-2 space-y-1">
-                          {weaponOptions.length > 0 ? (() => {
-                            // Group קנס"פ weapons together in the options list
-                            const groupedOptions = [];
-                            const processedIds = new Set();
-                            
-                            weaponOptions.forEach(weapon => {
-                              if (processedIds.has(weapon.id)) return;
-                              
-                              // Check if this is a קנס"פ weapon
-                              if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
-                                const pairedWeapon = findPairedWeapon(weapon, false);
-                                
-                                if (pairedWeapon && weaponOptions.find(w => w.id === pairedWeapon.id)) {
-                                  // Both weapons are available - group them
-                                  processedIds.add(weapon.id);
-                                  processedIds.add(pairedWeapon.id);
-                                  
-                                  // Extract the name part after "קנס"פ" (e.g., "קנס"פ-נגב" or "קנס"פ - נגב" -> "קנס"פ - נגב")
-                                  const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
-                                  const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
-                                  
-                                  groupedOptions.push({
-                                    id: weapon.id,
-                                    pairedId: pairedWeapon.id,
-                                    displayName: displayName,
-                                    weapon1: weapon,
-                                    weapon2: pairedWeapon,
-                                    isPaired: true
-                                  });
-                                } else {
-                                  // Only one is available - show it normally
-                                  processedIds.add(weapon.id);
-                                  groupedOptions.push({
-                                    id: weapon.id,
-                                    displayName: weapon.weapon_type,
-                                    weapon1: weapon,
-                                    isPaired: false
-                                  });
-                                }
-                              } else {
-                                // Regular weapon - show it normally
-                                processedIds.add(weapon.id);
-                                groupedOptions.push({
-                                  id: weapon.id,
-                                  displayName: weapon.weapon_type,
-                                  weapon1: weapon,
-                                  isPaired: false
-                                });
-                              }
-                            });
-                            
-                            return groupedOptions.map(group => (
+                          {weaponOptions.length > 0 ? (
+                            weaponOptions.map(weapon => (
                               <div 
-                                key={group.id} 
-                                onClick={() => selectItem('weapon', group.weapon1)} 
+                                key={weapon.id} 
+                                onClick={() => selectItem('weapon', weapon)} 
                                 className="p-2 hover:bg-red-50 cursor-pointer rounded border border-red-100"
                               >
-                                <p className="font-medium text-sm">{group.displayName}</p>
-                                {group.isPaired ? (
-                                  <p className="text-xs text-red-600">{group.weapon1.weapon_id}, {group.weapon2.weapon_id}</p>
-                                ) : (
-                                  <p className="text-xs text-red-600">{group.weapon1.weapon_id}</p>
-                                )}
+                                <p className="font-medium text-sm">{weapon.weapon_type}</p>
+                                <p className="text-xs text-red-600">{weapon.weapon_id}</p>
                               </div>
-                            ));
-                          })() : weaponSearch.length > 0 ? (
+                            ))
+                          ) : weaponSearch.length > 0 ? (
                             <div className="p-4 text-center text-slate-500 text-sm">
                               <p className="mb-2">No weapons found matching "{weaponSearch}"</p>
                               {(currentUser?.permissions?.['equipment.create'] || currentUser?.role === 'admin') && (
@@ -1309,7 +1583,7 @@ export default function UnifiedAssignmentDialog({
                     <div>
                       <p className="font-medium text-slate-700 mb-1">Weapons ({selectedWeaponIds.length})</p>
                       {(() => {
-                        // Group קנס"פ weapons for display
+                        // Group weapons: machine guns with קנס"פ pairs, and קנס"פ pairs together
                         const groupedWeapons = [];
                         const processedIds = new Set();
                         
@@ -1319,23 +1593,93 @@ export default function UnifiedAssignmentDialog({
                           const weapon = getSelectedItemDetails('weapon', id);
                           if (!weapon) return;
                           
-                          if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
-                            const pairedWeapon = findPairedWeapon(weapon, true);
-                            const pairedId = pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id) ? pairedWeapon.id : null;
+                          // Check if this is a machine gun - if so, find its קנס"פ pairs
+                          if (isMachineGun(weapon)) {
+                            const kansapIds = [];
+                            selectedWeaponIds.forEach(otherId => {
+                              if (otherId === id || processedIds.has(otherId)) return;
+                              const otherWeapon = getSelectedItemDetails('weapon', otherId);
+                              if (otherWeapon && otherWeapon.weapon_type && otherWeapon.weapon_type.includes('קנס"פ')) {
+                                const machineGunId = weapon.weapon_id;
+                                const last4Digits = machineGunId.slice(-4);
+                                const machineGunType = weapon.weapon_type;
+                                const kansapType = otherWeapon.weapon_type;
+                                
+                                const kansapId = otherWeapon.weapon_id;
+                                const idMatches = kansapId.includes(last4Digits) && (kansapId.includes('-1') || kansapId.includes('-2'));
+                                
+                                // Match type based on key words
+                                let typeMatches = false;
+                                if (machineGunType.includes('נגב קומנדו')) {
+                                  // For "מקלע נגב קומנדו", only match "קנס"פ - נגב קומנדו"
+                                  typeMatches = kansapType.includes('נגב קומנדו');
+                                } else if (machineGunType.includes('דגם ב')) {
+                                  // For "מקלע קל נגב דגם ב", only match "קנס"פ - נגב" (not "קנס"פ - נגב דגם ב")
+                                  typeMatches = kansapType.includes('נגב') && !kansapType.includes('דגם ב') && !kansapType.includes('קומנדו') && !kansapType.includes('7.62');
+                                } else if (machineGunType.includes('7.62') && machineGunType.includes('נגב')) {
+                                  // For "מקלע קל נגב 7.62", only match "קנס"פ - נגב 7.62"
+                                  typeMatches = kansapType.includes('נגב 7.62') || (kansapType.includes('נגב') && kansapType.includes('7.62'));
+                                } else if (machineGunType.includes('נגב')) {
+                                  // For other נגב machine guns, match any קנס"פ with נגב (but not קומנדו, דגם ב, or 7.62)
+                                  typeMatches = kansapType.includes('נגב') && !kansapType.includes('קומנדו') && !kansapType.includes('דגם ב') && !kansapType.includes('7.62');
+                                } else if (machineGunType.includes('מאג')) {
+                                  // For מאג machine guns, match any קנס"פ with מאג
+                                  typeMatches = kansapType.includes('מאג');
+                                }
+                                
+                                if (idMatches && typeMatches) {
+                                  kansapIds.push(otherId);
+                                }
+                              }
+                            });
                             
-                            if (pairedId) {
+                            if (kansapIds.length > 0) {
+                              const kansapWeapons = kansapIds.map(kid => getSelectedItemDetails('weapon', kid)).filter(Boolean);
+                              const kansapDisplay = kansapWeapons.map(k => {
+                                const nameMatch = k.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+                                return nameMatch ? nameMatch[1].trim() : k.weapon_type.replace('קנס"פ', '').trim();
+                              }).join(', ');
+                              
                               processedIds.add(id);
-                              processedIds.add(pairedId);
-                              const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
-                              const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+                              kansapIds.forEach(kid => processedIds.add(kid));
+                              
                               groupedWeapons.push(
-                                <Badge key={id} variant="outline" className="mr-1 mb-1">{displayName}</Badge>
+                                <Badge key={id} variant="outline" className="mr-1 mb-1">
+                                  {weapon.weapon_type} + קנס"פ ({kansapDisplay})
+                                </Badge>
                               );
                             } else {
                               processedIds.add(id);
                               groupedWeapons.push(
                                 <Badge key={id} variant="outline" className="mr-1 mb-1">{weapon.weapon_type}</Badge>
                               );
+                            }
+                          } else if (weapon.weapon_type && weapon.weapon_type.includes('קנס"פ')) {
+                            // Check if this קנס"פ is already grouped with a machine gun
+                            let isGrouped = false;
+                            groupedWeapons.forEach(() => {
+                              // Check if already processed in machine gun grouping
+                              if (processedIds.has(id)) isGrouped = true;
+                            });
+                            
+                            if (!isGrouped) {
+                              const pairedWeapon = findPairedWeapon(weapon, true);
+                              const pairedId = pairedWeapon && selectedWeaponIds.includes(pairedWeapon.id) ? pairedWeapon.id : null;
+                              
+                              if (pairedId) {
+                                processedIds.add(id);
+                                processedIds.add(pairedId);
+                                const nameMatch = weapon.weapon_type.match(/קנס"פ\s*-?\s*(.+)/);
+                                const displayName = nameMatch ? `קנס"פ - ${nameMatch[1].trim()}` : weapon.weapon_type;
+                                groupedWeapons.push(
+                                  <Badge key={id} variant="outline" className="mr-1 mb-1">{displayName}</Badge>
+                                );
+                              } else {
+                                processedIds.add(id);
+                                groupedWeapons.push(
+                                  <Badge key={id} variant="outline" className="mr-1 mb-1">{weapon.weapon_type}</Badge>
+                                );
+                              }
                             }
                           } else {
                             processedIds.add(id);
@@ -1396,6 +1740,93 @@ export default function UnifiedAssignmentDialog({
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* קנס"פ Selection Dialog */}
+      <Dialog open={showKansapDialog} onOpenChange={setShowKansapDialog}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target className="w-5 h-5" />
+              Select קנס"פ for {selectedMachineGun?.weapon_type} ({selectedMachineGun?.weapon_id})
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-900">
+                <strong>Selected:</strong> {selectedMachineGun?.weapon_type} - {selectedMachineGun?.weapon_id}
+              </p>
+              <p className="text-xs text-blue-700 mt-2">
+                Please select the קנס"פ pair that fits this machine gun
+              </p>
+            </div>
+            
+            {availableKansapPairs.length > 0 ? (
+              <ScrollArea className="h-64 border rounded-md">
+                <div className="p-2 space-y-2">
+                  {availableKansapPairs.map((pair) => (
+                    <div
+                      key={pair.id}
+                      onClick={() => handleKansapPairSelect(pair)}
+                      className="p-3 hover:bg-blue-50 cursor-pointer rounded border border-blue-100 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{pair.displayName}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              קנס"פ 1: {pair.weapon1.weapon_id}
+                            </Badge>
+                            {pair.weapon2 && (
+                              <Badge variant="outline" className="text-xs">
+                                קנס"פ 2: {pair.weapon2.weapon_id}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <Button size="sm" className="ml-2">
+                          Select
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="p-4 text-center text-slate-500">
+                <p>No קנס"פ pairs available</p>
+                <p className="text-xs mt-2">The machine gun will be selected without קנס"פ</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowKansapDialog(false);
+                setSelectedMachineGun(null);
+                setAvailableKansapPairs([]);
+              }}
+            >
+              Cancel
+            </Button>
+            {availableKansapPairs.length === 0 && (
+              <Button
+                onClick={() => {
+                  // Add machine gun without קנס"פ when no pairs are available
+                  if (selectedMachineGun) {
+                    setSelectedWeaponIds(prev => [...prev, selectedMachineGun.id]);
+                  }
+                  setShowKansapDialog(false);
+                  setSelectedMachineGun(null);
+                  setAvailableKansapPairs([]);
+                }}
+              >
+                Continue Without קנס"פ
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

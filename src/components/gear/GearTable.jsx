@@ -19,7 +19,7 @@ import {
 
 const SkeletonRow = () => (
   <TableRow>
-    {/* Updated SkeletonRow to match the new 9 columns */}
+    {/* Updated SkeletonRow to match the new 10 columns */}
     <TableCell className="w-12 px-4"><Skeleton className="h-4 w-4" /></TableCell> {/* Checkbox */}
     <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Gear ID */}
     <TableCell><Skeleton className="h-4 w-32" /></TableCell> {/* Type */}
@@ -28,6 +28,7 @@ const SkeletonRow = () => (
     <TableCell><Skeleton className="h-4 w-28" /></TableCell> {/* Division */}
     <TableCell><Skeleton className="h-4 w-20" /></TableCell> {/* Armory Status */}
     <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Last Signed By */}
+    <TableCell><Skeleton className="h-4 w-40" /></TableCell> {/* Comments */}
     <TableCell className="text-center pr-4"><Skeleton className="h-8 w-8 rounded-full mx-auto" /></TableCell> {/* Actions */}
   </TableRow>
 );
@@ -73,6 +74,7 @@ export default function GearTable({
             <TableHead>Division</TableHead>
             <TableHead>Armory Status</TableHead>
             <TableHead>Last Signed By</TableHead>
+            <TableHead>Comments</TableHead>
             <TableHead className="text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -81,7 +83,7 @@ export default function GearTable({
             Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
           ) : !Array.isArray(gear) || gear.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="text-center h-24 text-slate-500">
+              <TableCell colSpan={10} className="text-center h-24 text-slate-500">
                 No gear found.
               </TableCell>
             </TableRow>
@@ -128,13 +130,33 @@ export default function GearTable({
                     )}
                   </TableCell>
                   <TableCell>{gearItem.last_signed_by || 'N/A'}</TableCell>
+                  <TableCell className="max-w-xs">
+                    {gearItem.comments ? (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="truncate text-sm text-slate-700"
+                          title={gearItem.comments}
+                        >
+                          {gearItem.comments}
+                        </span>
+                        {typeof onViewComment === 'function' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onViewComment(gearItem)}
+                            className="h-8 w-8"
+                            aria-label="View full comment"
+                          >
+                            <MessageSquare className="w-4 h-4 text-blue-600" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-1">
-                      {gearItem.comments && (
-                        <Button variant="ghost" size="icon" onClick={() => onViewComment(gearItem)}>
-                          <MessageSquare className="w-4 h-4 text-blue-600" />
-                        </Button>
-                      )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">

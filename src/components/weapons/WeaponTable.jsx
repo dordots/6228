@@ -44,6 +44,7 @@ export default function WeaponTable({
       <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Status */}
       <TableCell><Skeleton className="h-4 w-32" /></TableCell> {/* Last Signed By */}
       <TableCell><Skeleton className="h-4 w-20" /></TableCell> {/* Armory Status */}
+      <TableCell><Skeleton className="h-4 w-40" /></TableCell> {/* Comments */}
       <TableCell className="text-center"><Skeleton className="h-8 w-8" /></TableCell> {/* Actions */}
     </TableRow>
   );
@@ -67,6 +68,7 @@ export default function WeaponTable({
             <TableHead className="w-32">Status</TableHead>
             <TableHead className="w-40">Last Signed By</TableHead>
             <TableHead className="w-32">Armory Status</TableHead>
+            <TableHead className="w-60">Comments</TableHead>
             <TableHead className="w-20 text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -75,7 +77,7 @@ export default function WeaponTable({
             Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
           ) : !Array.isArray(weapons) || weapons.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center h-24 text-slate-500">
+              <TableCell colSpan={10} className="text-center h-24 text-slate-500">
                 No weapons found.
               </TableCell>
             </TableRow>
@@ -119,13 +121,33 @@ export default function WeaponTable({
                       <span className="text-slate-500">Unknown</span>
                     )}
                   </TableCell>
+                  <TableCell className="max-w-xs">
+                    {weapon.comments ? (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="truncate text-sm text-slate-700"
+                          title={weapon.comments}
+                        >
+                          {weapon.comments}
+                        </span>
+                        {typeof onViewComment === 'function' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onViewComment(weapon)}
+                            className="h-8 w-8"
+                            aria-label="View full comment"
+                          >
+                            <MessageSquare className="w-4 h-4 text-blue-600" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center pr-4">
                     <div className="flex items-center justify-center gap-1"> {/* Added flex container for actions */}
-                      {weapon.comments && ( // Conditionally render comments button
-                        <Button variant="ghost" size="icon" onClick={() => onViewComment(weapon)}>
-                          <MessageSquare className="w-4 h-4 text-blue-600" />
-                        </Button>
-                      )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">

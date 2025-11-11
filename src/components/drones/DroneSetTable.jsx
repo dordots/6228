@@ -41,6 +41,7 @@ export default function DroneSetTable({
       <TableCell className="w-48"><Skeleton className="h-4 w-3/4" /></TableCell> {/* For Division */}
       <TableCell className="w-36"><Skeleton className="h-4 w-1/2" /></TableCell> {/* For Status */}
       <TableCell className="w-40"><Skeleton className="h-4 w-2/3" /></TableCell> {/* For Armory Status */}
+      <TableCell className="w-48"><Skeleton className="h-4 w-3/4" /></TableCell> {/* For Comments */}
       <TableCell className="w-20 text-right pr-4">
         <div className="flex justify-end gap-1">
           <Skeleton className="h-8 w-8 rounded-full" />
@@ -68,6 +69,7 @@ export default function DroneSetTable({
           <TableHead className="sticky top-0 z-20 bg-slate-50">Division</TableHead>
           <TableHead className="sticky top-0 z-20 bg-slate-50">Status</TableHead>
           <TableHead className="sticky top-0 z-20 bg-slate-50">Armory Status</TableHead>
+          <TableHead className="sticky top-0 z-20 bg-slate-50">Comments</TableHead>
           <TableHead className="text-right sticky top-0 z-20 bg-slate-50">Actions</TableHead>
         </TableRow>
       </TableHeader>
@@ -76,7 +78,7 @@ export default function DroneSetTable({
           Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
         ) : !Array.isArray(droneSets) || droneSets.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={8} className="text-center h-24 text-slate-500">
+            <TableCell colSpan={9} className="text-center h-24 text-slate-500">
               No drone sets found.
             </TableCell>
           </TableRow>
@@ -92,21 +94,7 @@ export default function DroneSetTable({
                   />
                 </TableCell>
                 <TableCell className="font-mono text-xs sticky left-12 z-10 bg-white group-hover:bg-slate-50">
-                  <div className="flex items-center gap-2">
-                    <span>{droneSet.set_serial_number}</span>
-                    {droneSet.comments && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="flex items-center justify-center">
-                            <MessageSquare className="w-4 h-4 text-blue-500 hover:text-blue-600" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64">
-                          <p className="text-sm">{droneSet.comments}</p>
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </div>
+                  <span>{droneSet.set_serial_number}</span>
                 </TableCell>
                 <TableCell>{droneSet.set_type}</TableCell>
                 <TableCell>
@@ -126,6 +114,26 @@ export default function DroneSetTable({
                     <Badge variant="outline" className="text-xs font-normal text-green-800 bg-green-50 border-green-200">
                       With Soldier
                     </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="max-w-xs">
+                  {droneSet.comments ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex w-full min-w-0 items-center gap-2 text-left text-sm text-slate-700 hover:text-slate-900"
+                        >
+                          <span className="truncate">{droneSet.comments}</span>
+                          <MessageSquare className="w-4 h-4 shrink-0 text-blue-500" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72">
+                        <p className="text-sm whitespace-pre-wrap">{droneSet.comments}</p>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <span className="text-slate-400">—</span>
                   )}
                 </TableCell>
                 <TableCell className="text-right pr-4">

@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Shield, Search, Filter, Clock, FileText, Download } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
@@ -26,6 +27,16 @@ export default function VerificationHistoryPage() {
   const [soldiers, setSoldiers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("soldier-history");
+  const [unassignedFilters, setUnassignedFilters] = useState({
+    dateRange: "week",
+    division: "all",
+    verifiedBy: "all",
+    search: "",
+    startDate: "",
+    endDate: "",
+  });
+  const [reportContext, setReportContext] = useState("soldier");
   
   const [filters, setFilters] = useState({
     dateRange: "week", // week, month, all, custom
@@ -100,6 +111,10 @@ export default function VerificationHistoryPage() {
 
     // Apply filters
     let filtered = verifications.filter(verification => {
+      if (!verification?.soldier_id) {
+        return false;
+      }
+
       // Division filter
       if (filters.division !== "all" && verification.division_name !== filters.division) {
         return false;
@@ -115,11 +130,14 @@ export default function VerificationHistoryPage() {
         const searchLower = filters.search.toLowerCase();
         const soldier = soldiers.find(s => s.soldier_id === verification.soldier_id);
         const soldierName = soldier ? `${soldier.first_name} ${soldier.last_name}`.toLowerCase() : '';
+        const soldierId = verification.soldier_id ? verification.soldier_id.toLowerCase() : '';
+        const verifiedByLower = verification.verified_by_user_name ? verification.verified_by_user_name.toLowerCase() : '';
+        const divisionLower = verification.division_name ? verification.division_name.toLowerCase() : '';
         const searchMatch = 
-          verification.soldier_id.toLowerCase().includes(searchLower) ||
+          soldierId.includes(searchLower) ||
           soldierName.includes(searchLower) ||
-          verification.verified_by_user_name.toLowerCase().includes(searchLower) ||
-          verification.division_name.toLowerCase().includes(searchLower);
+          verifiedByLower.includes(searchLower) ||
+          divisionLower.includes(searchLower);
         
         if (!searchMatch) return false;
       }
@@ -191,6 +209,129 @@ export default function VerificationHistoryPage() {
     return soldier ? `${soldier.first_name} ${soldier.last_name}` : 'Unknown';
   };
 
+  const unassignedVerifications = useMemo(() => {
+    if (!Array.isArray(verifications)) return [];
+
+    const buildTimestamp = (verification) => {
+      if (verification.verification_timestamp) {
+        const parsed = new Date(verification.verification_timestamp);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      if (verification.created_at?.seconds) {
+        return new Date(verification.created_at.seconds * 1000);
+      }
+      if (verification.created_date) {
+        const parsed = new Date(verification.created_date);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+      return null;
+    };
+
+    return verifications
+      .filter(v => !v?.soldier_id)
+      .map(v => {
+        const weaponId = Array.isArray(v?.weapons_checked) && v.weapons_checked.length > 0 ? v.weapons_checked[0] : null;
+        const gearId = Array.isArray(v?.gear_checked) && v.gear_checked.length > 0 ? v.gear_checked[0] : null;
+        const type = v?.item_type || (weaponId ? 'weapon' : gearId ? 'gear' : 'unknown');
+        const itemId = v?.item_id || weaponId || gearId || '—';
+        const timestamp = buildTimestamp(v);
+        const verificationDate = v?.verification_date || (timestamp ? format(timestamp, 'yyyy-MM-dd') : '');
+        return {
+          id: v?.id || `${type}:${itemId}:${v?.verification_timestamp || v?.created_date || ''}`,
+          type,
+          itemId,
+          status: v?.status || 'verified',
+          verifiedBy: v?.verified_by_user_name || v?.verified_by || '—',
+          divisionName: v?.division_name || '—',
+          verificationDate,
+          timestamp,
+        };
+      })
+      .sort((a, b) => {
+        if (a.timestamp && b.timestamp) return b.timestamp.getTime() - a.timestamp.getTime();
+        if (a.timestamp) return -1;
+        if (b.timestamp) return 1;
+        return (b.verificationDate || '').localeCompare(a.verificationDate || '');
+      });
+  }, [verifications]);
+
+  const {
+    filteredUnassignedVerifications,
+    unassignedDivisions,
+    unassignedVerifiers,
+  } = useMemo(() => {
+    const divisionsSet = new Set();
+    const verifiersSet = new Set();
+
+    unassignedVerifications.forEach(entry => {
+      if (entry.divisionName && entry.divisionName !== '—') divisionsSet.add(entry.divisionName);
+      if (entry.verifiedBy && entry.verifiedBy !== '—') verifiersSet.add(entry.verifiedBy);
+    });
+
+    const matches = unassignedVerifications.filter(entry => {
+      if (unassignedFilters.division !== 'all' && entry.divisionName !== unassignedFilters.division) {
+        return false;
+      }
+
+      if (unassignedFilters.verifiedBy !== 'all' && entry.verifiedBy !== unassignedFilters.verifiedBy) {
+        return false;
+      }
+
+      if (unassignedFilters.search) {
+        const searchLower = unassignedFilters.search.toLowerCase();
+        const text = [entry.type, entry.itemId, entry.verifiedBy, entry.divisionName]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!text.includes(searchLower)) {
+          return false;
+        }
+      }
+
+      if (unassignedFilters.dateRange !== 'all') {
+        const verificationDate = entry.verificationDate;
+        if (!verificationDate) {
+          return false;
+        }
+
+        if (unassignedFilters.dateRange === 'custom') {
+          if (unassignedFilters.startDate && verificationDate < unassignedFilters.startDate) {
+            return false;
+          }
+          if (unassignedFilters.endDate && verificationDate > unassignedFilters.endDate) {
+            return false;
+          }
+        } else {
+          const verificationDateObj = new Date(verificationDate);
+          const now = new Date();
+          let startDate;
+          let endDate;
+          if (unassignedFilters.dateRange === 'week') {
+            startDate = startOfWeek(now, { weekStartsOn: 0 });
+            endDate = endOfWeek(now, { weekStartsOn: 0 });
+          } else if (unassignedFilters.dateRange === 'month') {
+            startDate = startOfMonth(now);
+            endDate = endOfMonth(now);
+          }
+
+          if (startDate && endDate) {
+            if (verificationDateObj < startDate || verificationDateObj > endDate) {
+              return false;
+            }
+          }
+        }
+      }
+
+      return true;
+    });
+
+    return {
+      filteredUnassignedVerifications: matches,
+      unassignedDivisions: Array.from(divisionsSet).sort(),
+      unassignedVerifiers: Array.from(verifiersSet).sort(),
+    };
+  }, [unassignedVerifications, unassignedFilters]);
+
   // CSV generation and download functions
   const convertToCSV = (data, headers) => {
     const BOM = '\uFEFF'; // UTF-8 Byte Order Mark for proper Hebrew support
@@ -229,7 +370,9 @@ export default function VerificationHistoryPage() {
   };
 
   const handleGenerateReport = async () => {
-    if (!reportParams.division) {
+    const isUnassignedReport = reportContext === "unassigned";
+
+    if (!reportParams.division && !isUnassignedReport) {
       return;
     }
 
@@ -243,113 +386,212 @@ export default function VerificationHistoryPage() {
 
     setIsGeneratingReport(true);
     try {
-      // Filter verifications based on report parameters
-      let filtered = verifications.filter(verification => {
-        // Division filter - "all" means all divisions (admin only)
-        if (reportParams.division !== "all" && verification.division_name !== reportParams.division) {
-          return false;
-        }
-
-        // Date filter
-        const verificationDate = verification.verification_date; // Already in YYYY-MM-DD format
-        
-        if (reportParams.dateType === "all") {
-          // No date filtering - include all dates
-        } else if (reportParams.dateType === "thisWeek") {
-          const verificationDateObj = new Date(verificationDate);
-          const now = new Date();
-          const weekStart = startOfWeek(now, { weekStartsOn: 0 }); // Sunday
-          const weekEnd = endOfWeek(now, { weekStartsOn: 0 });
-          if (verificationDateObj < weekStart || verificationDateObj > weekEnd) {
+      if (isUnassignedReport) {
+        let filtered = unassignedVerifications.filter(entry => {
+          if (reportParams.division && reportParams.division !== "all" && entry.divisionName !== reportParams.division) {
             return false;
           }
+
+          const verificationDate = entry.verificationDate;
+          if (!verificationDate) {
+            return false;
+          }
+
+          if (reportParams.dateType === "all") {
+            return true;
+          }
+
+          if (reportParams.dateType === "single") {
+            return verificationDate === reportParams.singleDate;
+          }
+
+          if (reportParams.dateType === "range") {
+            if (reportParams.startDate && verificationDate < reportParams.startDate) {
+              return false;
+            }
+            if (reportParams.endDate && verificationDate > reportParams.endDate) {
+              return false;
+            }
+            return true;
+          }
+
+          const verificationDateObj = new Date(verificationDate);
+          const now = new Date();
+          let startDate;
+          let endDate;
+          if (reportParams.dateType === "thisWeek") {
+            startDate = startOfWeek(now, { weekStartsOn: 0 });
+            endDate = endOfWeek(now, { weekStartsOn: 0 });
+          } else if (reportParams.dateType === "thisMonth") {
+            startDate = startOfMonth(now);
+            endDate = endOfMonth(now);
+          }
+
+          if (startDate && endDate) {
+            return verificationDateObj >= startDate && verificationDateObj <= endDate;
+          }
+
+          return true;
+        });
+
+        filtered.sort((a, b) => {
+          if (a.timestamp && b.timestamp) return b.timestamp.getTime() - a.timestamp.getTime();
+          if (a.timestamp) return -1;
+          if (b.timestamp) return 1;
+          return (b.verificationDate || '').localeCompare(a.verificationDate || '');
+        });
+
+        const reportData = filtered.map(entry => ({
+          Date: entry.verificationDate ? format(new Date(entry.verificationDate), 'MMM dd, yyyy') : 'N/A',
+          Type: entry.type.toUpperCase(),
+          'Item ID': entry.itemId,
+          Status: entry.status,
+          Division: entry.divisionName || '',
+          'Verified By': entry.verifiedBy || '',
+          Time: entry.timestamp ? format(new Date(entry.timestamp), 'HH:mm') : 'N/A',
+        }));
+
+        const headers = ['Date', 'Type', 'Item ID', 'Status', 'Division', 'Verified By', 'Time'];
+        const csvContent = convertToCSV(reportData, headers);
+        let filename = `Unassigned_Verification_Report_${reportParams.division === 'all' ? 'All_Divisions' : reportParams.division.replace(/\s+/g, '_')}`;
+        if (reportParams.dateType === "thisWeek") {
+          filename += `_This_Week`;
         } else if (reportParams.dateType === "thisMonth") {
-          const verificationDateObj = new Date(verificationDate);
-          const now = new Date();
-          const monthStart = startOfMonth(now);
-          const monthEnd = endOfMonth(now);
-          if (verificationDateObj < monthStart || verificationDateObj > monthEnd) {
-            return false;
-          }
+          filename += `_This_Month`;
         } else if (reportParams.dateType === "single") {
-          if (verificationDate !== reportParams.singleDate) {
-            return false;
-          }
+          filename += `_${reportParams.singleDate}`;
         } else if (reportParams.dateType === "range") {
-          // Date range
-          if (reportParams.startDate && verificationDate < reportParams.startDate) {
-            return false;
-          }
-          if (reportParams.endDate && verificationDate > reportParams.endDate) {
-            return false;
-          }
+          filename += `_${reportParams.startDate}_to_${reportParams.endDate}`;
+        } else if (reportParams.dateType === "all") {
+          filename += `_All_Time`;
         }
 
-        return true;
-      });
+        downloadCSV(csvContent, filename);
+      } else {
+        // Soldier report
+        let filtered = verifications.filter(verification => {
+          if (!verification?.soldier_id) {
+            return false;
+          }
 
-      // Sort by date and time
-      filtered.sort((a, b) => {
-        const dateA = a.verification_date || '';
-        const dateB = b.verification_date || '';
-        if (dateA !== dateB) {
-          return dateB.localeCompare(dateA); // Newest first
+          if (reportParams.division !== "all" && verification.division_name !== reportParams.division) {
+            return false;
+          }
+      
+          if (filters.verifiedBy !== "all" && verification.verified_by_user_name !== filters.verifiedBy) {
+            return false;
+          }
+      
+          if (filters.search) {
+            const searchLower = filters.search.toLowerCase();
+            const soldier = soldiers.find(s => s.soldier_id === verification.soldier_id);
+            const soldierName = soldier ? `${soldier.first_name} ${soldier.last_name}`.toLowerCase() : '';
+            const soldierId = verification.soldier_id ? verification.soldier_id.toLowerCase() : '';
+            const verifiedByLower = verification.verified_by_user_name ? verification.verified_by_user_name.toLowerCase() : '';
+            const divisionLower = verification.division_name ? verification.division_name.toLowerCase() : '';
+            const searchMatch = 
+              soldierId.includes(searchLower) ||
+              soldierName.includes(searchLower) ||
+              verifiedByLower.includes(searchLower) ||
+              divisionLower.includes(searchLower);
+            
+            if (!searchMatch) return false;
+          }
+      
+          if (filters.dateRange !== "all") {
+            const verificationDate = verification.verification_date;
+            if (!verificationDate) {
+              return false;
+            }
+
+            if (filters.dateRange === "custom") {
+              if (filters.startDate && verificationDate < filters.startDate) {
+                return false;
+              }
+              if (filters.endDate && verificationDate > filters.endDate) {
+                return false;
+              }
+            } else {
+              const verificationDateObj = new Date(verificationDate);
+              const now = new Date();
+
+              let startDate, endDate;
+              if (filters.dateRange === "week") {
+                startDate = startOfWeek(now, { weekStartsOn: 0 }); // Sunday
+                endDate = endOfWeek(now, { weekStartsOn: 0 });
+              } else if (filters.dateRange === "month") {
+                startDate = startOfMonth(now);
+                endDate = endOfMonth(now);
+              }
+
+              if (startDate && endDate) {
+                if (verificationDateObj < startDate || verificationDateObj > endDate) {
+                  return false;
+                }
+              }
+            }
+          }
+          
+          return true;
+        });
+
+        filtered.sort((a, b) => {
+          const dateA = a.verification_date || '';
+          const dateB = b.verification_date || '';
+          if (dateA !== dateB) {
+            return dateB.localeCompare(dateA);
+          }
+          const timeA = a.verification_timestamp || a.created_date || '';
+          const timeB = b.verification_timestamp || b.created_date || '';
+          return timeB.localeCompare(timeA);
+        });
+
+        const reportData = filtered.map(verification => {
+          const soldier = soldiers.find(s => s.soldier_id === verification.soldier_id);
+          const soldierName = soldier ? `${soldier.first_name} ${soldier.last_name}` : 'Unknown';
+          const time = verification.verification_timestamp
+            ? format(new Date(verification.verification_timestamp), 'HH:mm')
+            : verification.created_date
+            ? format(new Date(verification.created_date), 'HH:mm')
+            : 'N/A';
+
+          return {
+            'Date': verification.verification_date
+              ? format(new Date(verification.verification_date), 'MMM dd, yyyy')
+              : 'N/A',
+            'Soldier Name': soldierName,
+            'Soldier ID': verification.soldier_id || '',
+            'Division': verification.division_name || '',
+            'Verified By': verification.verified_by_user_name || '',
+            'Time': time,
+          };
+        });
+
+        const headers = ['Date', 'Soldier Name', 'Soldier ID', 'Division', 'Verified By', 'Time'];
+        const csvContent = convertToCSV(reportData, headers);
+        let filename = `Verification_Report_${reportParams.division === "all" ? "All_Divisions" : reportParams.division.replace(/\s+/g, '_')}`;
+        if (reportParams.dateType === "thisWeek") {
+          filename += `_This_Week`;
+        } else if (reportParams.dateType === "thisMonth") {
+          filename += `_This_Month`;
+        } else if (reportParams.dateType === "single") {
+          filename += `_${reportParams.singleDate}`;
+        } else if (reportParams.dateType === "range") {
+          filename += `_${reportParams.startDate}_to_${reportParams.endDate}`;
+        } else if (reportParams.dateType === "all") {
+          filename += `_All_Time`;
         }
-        const timeA = a.verification_timestamp || a.created_date || '';
-        const timeB = b.verification_timestamp || b.created_date || '';
-        return timeB.localeCompare(timeA);
-      });
 
-      // Prepare data for CSV
-      const reportData = filtered.map(verification => {
-        const soldier = soldiers.find(s => s.soldier_id === verification.soldier_id);
-        const soldierName = soldier ? `${soldier.first_name} ${soldier.last_name}` : 'Unknown';
-        const time = verification.verification_timestamp 
-          ? format(new Date(verification.verification_timestamp), 'HH:mm')
-          : verification.created_date 
-          ? format(new Date(verification.created_date), 'HH:mm')
-          : 'N/A';
-
-        return {
-          'Date': verification.verification_date 
-            ? format(new Date(verification.verification_date), 'MMM dd, yyyy')
-            : 'N/A',
-          'Soldier Name': soldierName,
-          'Soldier ID': verification.soldier_id || '',
-          'Division': verification.division_name || '',
-          'Verified By': verification.verified_by_user_name || '',
-          'Time': time
-        };
-      });
-
-      // Generate CSV
-      const headers = ['Date', 'Soldier Name', 'Soldier ID', 'Division', 'Verified By', 'Time'];
-      const csvContent = convertToCSV(reportData, headers);
-
-      // Generate filename
-      let filename = `Verification_Report_${reportParams.division === "all" ? "All_Divisions" : reportParams.division.replace(/\s+/g, '_')}`;
-      if (reportParams.dateType === "thisWeek") {
-        filename += `_This_Week`;
-      } else if (reportParams.dateType === "thisMonth") {
-        filename += `_This_Month`;
-      } else if (reportParams.dateType === "single") {
-        filename += `_${reportParams.singleDate}`;
-      } else if (reportParams.dateType === "range") {
-        filename += `_${reportParams.startDate}_to_${reportParams.endDate}`;
-      } else if (reportParams.dateType === "all") {
-        filename += `_All_Time`;
+        downloadCSV(csvContent, filename);
       }
 
-      downloadCSV(csvContent, filename);
       setShowReportDialog(false);
-      
-      // Reset form
       setReportParams({
-        division: "",
+        division: reportContext === 'unassigned' ? 'all' : '',
         dateType: "thisWeek",
         singleDate: "",
         startDate: "",
-        endDate: ""
+        endDate: "",
       });
     } catch (error) {
       console.error('Error generating report:', error);
@@ -357,6 +599,85 @@ export default function VerificationHistoryPage() {
       setIsGeneratingReport(false);
     }
   };
+
+  const unassignedHistorySection = (
+    <Card>
+      <CardHeader>
+        <CardTitle>Unassigned Equipment Records</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-auto max-h-[70vh]">
+          <Table>
+            <TableHeader className="sticky top-0 bg-slate-50">
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Item ID</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Division</TableHead>
+                <TableHead>Verified By</TableHead>
+                <TableHead>Time</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                Array(10).fill(0).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                  </TableRow>
+                ))
+              ) : filteredUnassignedVerifications.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                    No unassigned equipment records found matching your filters.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredUnassignedVerifications.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell className="font-medium">
+                      {entry.verificationDate ? format(new Date(entry.verificationDate), 'MMM dd, yyyy') : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="flex items-center gap-1 uppercase">
+                        <FileText className="w-3 h-3" />
+                        {entry.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{entry.itemId}</TableCell>
+                    <TableCell>
+                      <Badge variant={entry.status === 'verified' ? 'secondary' : 'outline'} className="uppercase">
+                        {entry.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{entry.divisionName}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-slate-400" />
+                        {entry.verifiedBy}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-slate-500">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {entry.timestamp ? format(new Date(entry.timestamp), 'HH:mm') : 'N/A'}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -366,7 +687,21 @@ export default function VerificationHistoryPage() {
           <p className="text-slate-600">Review all daily equipment verification records.</p>
         </div>
         <Button
-          onClick={() => setShowReportDialog(true)}
+          onClick={() => {
+            const context = activeTab === "unassigned-history" ? "unassigned" : "soldier";
+            setReportContext(context);
+            const defaultDivision = context === "unassigned"
+              ? (unassignedDivisions[0] || "all")
+              : (divisions[0] || (currentUser?.role === 'admin' ? 'all' : ''));
+            setReportParams({
+              division: defaultDivision,
+              dateType: "thisWeek",
+              singleDate: "",
+              startDate: "",
+              endDate: "",
+            });
+            setShowReportDialog(true);
+          }}
           className="flex items-center gap-2"
         >
           <FileText className="w-4 h-4" />
@@ -374,183 +709,289 @@ export default function VerificationHistoryPage() {
         </Button>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Total Verifications</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{filteredVerifications.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Unique Days</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{dateRangeStats.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Divisions Involved</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{divisions.length}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="w-fit">
+          <TabsTrigger value="soldier-history">Soldier Records</TabsTrigger>
+          <TabsTrigger value="unassigned-history">Unassigned Equipment</TabsTrigger>
+        </TabsList>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="w-5 h-5" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <Select value={filters.dateRange} onValueChange={(value) => setFilters(prev => ({ ...prev, dateRange: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Date Range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="custom">Custom Range</SelectItem>
-              <SelectItem value="all">All Time</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {filters.dateRange === "custom" && (
-            <>
-              <Input
-                type="date"
-                placeholder="Start Date"
-                value={filters.startDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                className="w-full"
-              />
-              <Input
-                type="date"
-                placeholder="End Date"
-                value={filters.endDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                className="w-full"
-              />
-            </>
-          )}
-
-          <Select value={filters.division} onValueChange={(value) => setFilters(prev => ({ ...prev, division: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Division" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Divisions</SelectItem>
-              {divisions.map(division => (
-                <SelectItem key={division} value={division}>{division}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={filters.verifiedBy} onValueChange={(value) => setFilters(prev => ({ ...prev, verifiedBy: value }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Verified By" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Verifiers</SelectItem>
-              {verifiers.map(verifier => (
-                <SelectItem key={verifier} value={verifier}>{verifier}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <Input
-              placeholder="Search soldier, verifier..."
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-              className="pl-10"
-            />
+        <TabsContent value="soldier-history" className="space-y-6 focus:outline-none">
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">Total Verifications</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-900">{filteredVerifications.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">Unique Days</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-900">{dateRangeStats.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">Divisions Involved</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-900">{divisions.length}</div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Verification Records Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Verification Records</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-auto max-h-[70vh]">
-            <Table>
-              <TableHeader className="sticky top-0 bg-slate-50">
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Soldier</TableHead>
-                  <TableHead>Division</TableHead>
-                  <TableHead>Verified By</TableHead>
-                  <TableHead>Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array(10).fill(0).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+          {/* Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="w-5 h-5" />
+                Filters
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <Select value={filters.dateRange} onValueChange={(value) => setFilters(prev => ({ ...prev, dateRange: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Date Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {filters.dateRange === "custom" && (
+                <>
+                  <Input
+                    type="date"
+                    placeholder="Start Date"
+                    value={filters.startDate}
+                    onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full"
+                  />
+                  <Input
+                    type="date"
+                    placeholder="End Date"
+                    value={filters.endDate}
+                    onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full"
+                  />
+                </>
+              )}
+
+              <Select value={filters.division} onValueChange={(value) => setFilters(prev => ({ ...prev, division: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Division" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Divisions</SelectItem>
+                  {divisions.map(division => (
+                    <SelectItem key={division} value={division}>{division}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filters.verifiedBy} onValueChange={(value) => setFilters(prev => ({ ...prev, verifiedBy: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Verified By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Verifiers</SelectItem>
+                  {verifiers.map(verifier => (
+                    <SelectItem key={verifier} value={verifier}>{verifier}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <Input
+                  placeholder="Search soldier, verifier..."
+                  value={filters.search}
+                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="pl-10"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Verification Records Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Verification Records</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-auto max-h-[70vh]">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-slate-50">
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Soldier</TableHead>
+                      <TableHead>Division</TableHead>
+                      <TableHead>Verified By</TableHead>
+                      <TableHead>Time</TableHead>
                     </TableRow>
-                  ))
-                ) : filteredVerifications.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-slate-500">
-                      No verification records found matching your filters.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredVerifications.map((verification) => (
-                    <TableRow key={verification.id}>
-                      <TableCell className="font-medium">
-                        {verification.verification_date ? format(new Date(verification.verification_date), 'MMM dd, yyyy') : 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{getSoldierName(verification.soldier_id)}</span>
-                          <span className="text-xs text-slate-500">ID: {verification.soldier_id}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="flex items-center gap-1">
-                          <Shield className="w-3 h-3" />
-                          {verification.division_name}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-slate-400" />
-                          {verification.verified_by_user_name}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-slate-500">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {verification.verification_timestamp ? format(new Date(verification.verification_timestamp), 'HH:mm') :
-                           verification.created_date ? format(new Date(verification.created_date), 'HH:mm') : 'N/A'}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      Array(10).fill(0).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : filteredVerifications.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center text-slate-500">
+                          No verification records found matching your filters.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredVerifications.map((verification) => (
+                        <TableRow key={verification.id}>
+                          <TableCell className="font-medium">
+                            {verification.verification_date ? format(new Date(verification.verification_date), 'MMM dd, yyyy') : 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{getSoldierName(verification.soldier_id)}</span>
+                              <span className="text-xs text-slate-500">ID: {verification.soldier_id}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <Shield className="w-3 h-3" />
+                              {verification.division_name}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-slate-400" />
+                              {verification.verified_by_user_name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-500">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {verification.verification_timestamp ? format(new Date(verification.verification_timestamp), 'HH:mm') :
+                               verification.created_date ? format(new Date(verification.created_date), 'HH:mm') : 'N/A'}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="unassigned-history" className="space-y-6 focus:outline-none">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-slate-600">Total Unassigned Verifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-slate-900">{unassignedVerifications.length}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="w-5 h-5" />
+                Filters
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              <Select
+                value={unassignedFilters.dateRange}
+                onValueChange={(value) => setUnassignedFilters(prev => ({ ...prev, dateRange: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Date Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {unassignedFilters.dateRange === "custom" && (
+                <>
+                  <Input
+                    type="date"
+                    placeholder="Start Date"
+                    value={unassignedFilters.startDate}
+                    onChange={(e) => setUnassignedFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full"
+                  />
+                  <Input
+                    type="date"
+                    placeholder="End Date"
+                    value={unassignedFilters.endDate}
+                    onChange={(e) => setUnassignedFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full"
+                  />
+                </>
+              )}
+
+              <Select
+                value={unassignedFilters.division}
+                onValueChange={(value) => setUnassignedFilters(prev => ({ ...prev, division: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Division" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Divisions</SelectItem>
+                  {unassignedDivisions.map(division => (
+                    <SelectItem key={division} value={division}>{division}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={unassignedFilters.verifiedBy}
+                onValueChange={(value) => setUnassignedFilters(prev => ({ ...prev, verifiedBy: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Verified By" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Verifiers</SelectItem>
+                  {unassignedVerifiers.map(verifier => (
+                    <SelectItem key={verifier} value={verifier}>{verifier}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <Input
+                  placeholder="Search type, item, verifier..."
+                  value={unassignedFilters.search}
+                  onChange={(e) => setUnassignedFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="pl-10"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {unassignedHistorySection}
+        </TabsContent>
+      </Tabs>
 
       {/* Report Generation Dialog */}
       <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
@@ -561,12 +1002,12 @@ export default function VerificationHistoryPage() {
               Generate Verification Report
             </DialogTitle>
             <DialogDescription>
-              Generate a CSV report of verifications for a division (or all divisions for admins) and selected date period.
+              Generate a CSV report of verifications for a division (or all divisions if available) and selected date period.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="report-division">Division *</Label>
+              <Label htmlFor="report-division">Division{reportContext === 'unassigned' ? '' : ' *'}</Label>
               <Select
                 value={reportParams.division}
                 onValueChange={(value) => setReportParams(prev => ({ ...prev, division: value }))}
@@ -575,10 +1016,10 @@ export default function VerificationHistoryPage() {
                   <SelectValue placeholder="Select division" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(currentUser?.role === 'admin') && (
+                  {(reportContext === 'unassigned' || currentUser?.role === 'admin') && (
                     <SelectItem value="all">All Divisions</SelectItem>
                   )}
-                  {divisions.map(division => (
+                  {(reportContext === 'unassigned' ? unassignedDivisions : divisions).map(division => (
                     <SelectItem key={division} value={division}>{division}</SelectItem>
                   ))}
                 </SelectContent>
@@ -649,9 +1090,12 @@ export default function VerificationHistoryPage() {
             </Button>
             <Button
               onClick={handleGenerateReport}
-              disabled={isGeneratingReport || !reportParams.division || 
+              disabled={
+                isGeneratingReport ||
+                (!reportParams.division && reportContext !== 'unassigned') ||
                 (reportParams.dateType === "single" && !reportParams.singleDate) ||
-                (reportParams.dateType === "range" && (!reportParams.startDate || !reportParams.endDate))}
+                (reportParams.dateType === "range" && (!reportParams.startDate || !reportParams.endDate))
+              }
               className="flex items-center gap-2"
             >
               {isGeneratingReport ? (

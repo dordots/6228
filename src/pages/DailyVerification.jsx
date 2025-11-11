@@ -6,10 +6,14 @@ import { SerializedGear } from "@/api/entities";
 import { DailyVerification } from "@/api/entities";
 import { User } from "@/api/entities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Shield, ClipboardCheck, Users, Loader2, Search, CheckSquare, Square } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Shield, ClipboardCheck, Users, Loader2, Search, CheckSquare } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import SoldierVerificationCard from "../components/verification/SoldierVerificationCard";
@@ -33,7 +37,23 @@ export default function DailyVerificationPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSoldiers, setSelectedSoldiers] = useState(new Set());
 
+  const [activeTab, setActiveTab] = useState("soldiers");
+  const [selectedUnassignedItems, setSelectedUnassignedItems] = useState(() => new Set());
+  const [weaponSearchTerm, setWeaponSearchTerm] = useState("");
+  const [gearSearchTerm, setGearSearchTerm] = useState("");
+  const [verifyingWeaponIds, setVerifyingWeaponIds] = useState(() => new Set());
+  const [verifyingGearIds, setVerifyingGearIds] = useState(() => new Set());
+  const [undoingWeaponIds, setUndoingWeaponIds] = useState(() => new Set());
+  const [undoingGearIds, setUndoingGearIds] = useState(() => new Set());
+
   const [isLoading, setIsLoading] = useState(true);
+
+  const formatArmoryStatus = (status) => {
+    if (!status) return "Unknown";
+    if (status === "in_deposit") return "In Deposit";
+    if (status === "with_soldier") return "With Soldier";
+    return String(status).replace(/_/g, " ");
+  };
 
   // Calculate today's date - this will be recalculated on each component mount (page load/refresh)
   const today = useMemo(() => {
@@ -301,6 +321,512 @@ export default function DailyVerificationPage() {
     return filtered;
   }, [displayedSoldiers, selectedTeam, searchTerm, isSoldier]);
 
+  const unassignedWeapons = useMemo(() => {
+    return displayedWeapons.filter(weapon => {
+      if (!weapon) return false;
+      const hasAssignee = Boolean(weapon.assigned_to);
+      return !hasAssignee && weapon.armory_status !== "in_deposit";
+    });
+  }, [displayedWeapons]);
+
+  const unassignedGear = useMemo(() => {
+    return displayedGear.filter(gear => {
+      if (!gear) return false;
+      const hasAssignee = Boolean(gear.assigned_to);
+      return !hasAssignee && gear.armory_status !== "in_deposit";
+    });
+  }, [displayedGear]);
+
+  const verifiedUnassignedWeaponMap = useMemo(() => {
+    const map = new Map();
+    displayedVerifications.forEach(verification => {
+      if (!verification || verification.created_date !== today) return;
+      if (verification.soldier_id) return;
+      const checkedWeapons = Array.isArray(verification.weapons_checked) ? verification.weapons_checked : [];
+      checkedWeapons.forEach(id => {
+        if (id) {
+          map.set(id, verification);
+        }
+      });
+    });
+    return map;
+  }, [displayedVerifications, today]);
+
+  const verifiedUnassignedGearMap = useMemo(() => {
+    const map = new Map();
+    displayedVerifications.forEach(verification => {
+      if (!verification || verification.created_date !== today) return;
+      if (verification.soldier_id) return;
+      const checkedGear = Array.isArray(verification.gear_checked) ? verification.gear_checked : [];
+      checkedGear.forEach(id => {
+        if (id) {
+          map.set(id, verification);
+        }
+      });
+    });
+    return map;
+  }, [displayedVerifications, today]);
+
+  const unassignedItems = useMemo(() => {
+    const items = [];
+    unassignedWeapons.forEach(weapon => {
+      const weaponId = weapon?.weapon_id || weapon?.id;
+      if (!weaponId) return;
+      items.push({
+        key: `weapon:${weaponId}`,
+        id: weaponId,
+        type: "weapon",
+        name: weapon.weapon_type || "Weapon",
+        status: weapon.status,
+        armory_status: weapon.armory_status,
+        last_signed_by: weapon.last_signed_by,
+        division_name: weapon.division_name,
+        record: weapon,
+        verificationRecord: verifiedUnassignedWeaponMap.get(weaponId) || null,
+      });
+    });
+    unassignedGear.forEach(gear => {
+      const gearId = gear?.gear_id || gear?.id;
+      if (!gearId) return;
+      items.push({
+        key: `gear:${gearId}`,
+        id: gearId,
+        type: "gear",
+        name: gear.gear_type || "Gear",
+        status: gear.status,
+        armory_status: gear.armory_status,
+        last_signed_by: gear.last_signed_by,
+        division_name: gear.division_name,
+        record: gear,
+        verificationRecord: verifiedUnassignedGearMap.get(gearId) || null,
+      });
+    });
+    return items;
+  }, [unassignedWeapons, unassignedGear, verifiedUnassignedWeaponMap, verifiedUnassignedGearMap]);
+
+  const unassignedItemMap = useMemo(() => {
+    const map = new Map();
+    unassignedItems.forEach(item => {
+      map.set(item.key, item);
+    });
+    return map;
+  }, [unassignedItems]);
+
+  const filteredUnassignedWeapons = useMemo(() => {
+    const term = weaponSearchTerm.trim().toLowerCase();
+    return unassignedItems.filter(item => {
+      if (item.type !== "weapon") return false;
+      if (!term) return true;
+      const haystack = [
+        item.name,
+        item.id,
+        item.status,
+        item.armory_status,
+        item.last_signed_by,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [unassignedItems, weaponSearchTerm]);
+
+  const filteredUnassignedGear = useMemo(() => {
+    const term = gearSearchTerm.trim().toLowerCase();
+    return unassignedItems.filter(item => {
+      if (item.type !== "gear") return false;
+      if (!term) return true;
+      const haystack = [
+        item.name,
+        item.id,
+        item.status,
+        item.armory_status,
+        item.last_signed_by,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [unassignedItems, gearSearchTerm]);
+
+  const displayedWeaponKeys = useMemo(
+    () => filteredUnassignedWeapons.map(item => item.key),
+    [filteredUnassignedWeapons]
+  );
+
+  const displayedGearKeys = useMemo(
+    () => filteredUnassignedGear.map(item => item.key),
+    [filteredUnassignedGear]
+  );
+
+  const weaponsHeaderChecked = filteredUnassignedWeapons.length === 0
+    ? false
+    : filteredUnassignedWeapons.every(item => selectedUnassignedItems.has(item.key))
+      ? true
+      : filteredUnassignedWeapons.some(item => selectedUnassignedItems.has(item.key))
+        ? "indeterminate"
+        : false;
+
+  const gearHeaderChecked = filteredUnassignedGear.length === 0
+    ? false
+    : filteredUnassignedGear.every(item => selectedUnassignedItems.has(item.key))
+      ? true
+      : filteredUnassignedGear.some(item => selectedUnassignedItems.has(item.key))
+        ? "indeterminate"
+        : false;
+
+  useEffect(() => {
+    setSelectedUnassignedItems(prev => {
+      const allowed = new Set(unassignedItems.map(item => item.key));
+      let changed = false;
+      const next = new Set();
+      prev.forEach(key => {
+        if (allowed.has(key)) {
+          next.add(key);
+        } else {
+          changed = true;
+        }
+      });
+      if (!changed && next.size === prev.size) {
+        return prev;
+      }
+      return next;
+    });
+  }, [unassignedItems]);
+
+  const totalUnassignedItems = unassignedItems.length;
+  const verifiedUnassignedCount = unassignedItems.filter(item => item.verificationRecord).length;
+  const unassignedProgress = totalUnassignedItems > 0 ? (verifiedUnassignedCount / totalUnassignedItems) * 100 : 0;
+  const unassignedPendingCount = totalUnassignedItems - verifiedUnassignedCount;
+
+  const verifierDisplayName = useMemo(() => {
+    return currentUser?.full_name ||
+      currentUser?.displayName ||
+      currentUser?.name ||
+      currentUser?.email ||
+      "Unknown";
+  }, [currentUser]);
+
+  const verifiedByUserId = useMemo(() => currentUser?.id || currentUser?.uid || null, [currentUser]);
+
+  const toggleUnassignedSelection = (key) => {
+    if (!key) return;
+    setSelectedUnassignedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const selectAllUnassigned = () => {
+    setSelectedUnassignedItems(new Set(unassignedItems.map(item => item.key)));
+  };
+
+  const selectAllPendingUnassigned = () => {
+    const pendingKeys = unassignedItems.filter(item => !item.verificationRecord).map(item => item.key);
+    setSelectedUnassignedItems(new Set(pendingKeys));
+  };
+
+  const selectAllVerifiedUnassigned = () => {
+    const verifiedKeys = unassignedItems.filter(item => item.verificationRecord).map(item => item.key);
+    setSelectedUnassignedItems(new Set(verifiedKeys));
+  };
+
+  const clearUnassignedSelection = () => {
+    setSelectedUnassignedItems(new Set());
+  };
+
+  const selectedUnassignedPendingCount = useMemo(() => {
+    let count = 0;
+    selectedUnassignedItems.forEach(key => {
+      const item = unassignedItemMap.get(key);
+      if (item && !item.verificationRecord) {
+        count += 1;
+      }
+    });
+    return count;
+  }, [selectedUnassignedItems, unassignedItemMap]);
+
+  const selectedUnassignedVerifiedCount = useMemo(() => {
+    let count = 0;
+    selectedUnassignedItems.forEach(key => {
+      const item = unassignedItemMap.get(key);
+      if (item && item.verificationRecord) {
+        count += 1;
+      }
+    });
+    return count;
+  }, [selectedUnassignedItems, unassignedItemMap]);
+
+  const allUnassignedSelected = useMemo(() => {
+    return totalUnassignedItems > 0 && selectedUnassignedItems.size === totalUnassignedItems;
+  }, [totalUnassignedItems, selectedUnassignedItems]);
+
+  const someUnassignedSelected = useMemo(() => {
+    return selectedUnassignedItems.size > 0 && !allUnassignedSelected;
+  }, [selectedUnassignedItems, allUnassignedSelected]);
+
+  const handleVerifyUnassignedWeapon = async (weapon) => {
+    if (!currentUser || !weapon) return;
+    const weaponId = weapon.weapon_id || weapon.id;
+    if (!weaponId) return;
+    if (verifiedUnassignedWeaponMap.has(weaponId)) return;
+
+    setVerifyingWeaponIds(prev => {
+      const next = new Set(prev);
+      next.add(weaponId);
+      return next;
+    });
+
+    try {
+      const now = new Date().toISOString();
+      await DailyVerification.create({
+        soldier_id: null,
+        soldier_name: null,
+        division_name: weapon.division_name || selectedDivision || currentUser?.division || null,
+        verification_date: today,
+        created_date: today,
+        verification_timestamp: now,
+        verified_by_user_id: verifiedByUserId,
+        verified_by_user_name: verifierDisplayName,
+        verified_by: verifierDisplayName,
+        status: "verified",
+        unassigned: true,
+        item_type: "weapon",
+        item_id: weaponId,
+        weapons_checked: [weaponId],
+        equipment_checked: [],
+        gear_checked: [],
+        drone_sets_checked: [],
+      });
+    } catch (error) {
+      // Ignore errors and refresh data to sync state
+    } finally {
+      setVerifyingWeaponIds(prev => {
+        const next = new Set(prev);
+        next.delete(weaponId);
+        return next;
+      });
+      await loadData();
+    }
+  };
+
+  const handleUndoUnassignedWeapon = async (verificationRecord, weaponId) => {
+    if (!currentUser || !verificationRecord?.id || !weaponId) return;
+
+    setUndoingWeaponIds(prev => {
+      const next = new Set(prev);
+      next.add(weaponId);
+      return next;
+    });
+
+    try {
+      await DailyVerification.delete(verificationRecord.id);
+    } catch (error) {
+      // Ignore errors for smoother UX; data reload will correct the view
+    } finally {
+      setUndoingWeaponIds(prev => {
+        const next = new Set(prev);
+        next.delete(weaponId);
+        return next;
+      });
+      await loadData();
+    }
+  };
+
+  const handleVerifyUnassignedGear = async (gear) => {
+    if (!currentUser || !gear) return;
+    const gearId = gear.gear_id || gear.id;
+    if (!gearId) return;
+    if (verifiedUnassignedGearMap.has(gearId)) return;
+
+    setVerifyingGearIds(prev => {
+      const next = new Set(prev);
+      next.add(gearId);
+      return next;
+    });
+
+    try {
+      const now = new Date().toISOString();
+      await DailyVerification.create({
+        soldier_id: null,
+        soldier_name: null,
+        division_name: gear.division_name || selectedDivision || currentUser?.division || null,
+        verification_date: today,
+        created_date: today,
+        verification_timestamp: now,
+        verified_by_user_id: verifiedByUserId,
+        verified_by_user_name: verifierDisplayName,
+        verified_by: verifierDisplayName,
+        status: "verified",
+        unassigned: true,
+        item_type: "gear",
+        item_id: gearId,
+        weapons_checked: [],
+        equipment_checked: [],
+        gear_checked: [gearId],
+        drone_sets_checked: [],
+      });
+    } catch (error) {
+      // Ignore errors and rely on data reload to reconcile state
+    } finally {
+      setVerifyingGearIds(prev => {
+        const next = new Set(prev);
+        next.delete(gearId);
+        return next;
+      });
+      await loadData();
+    }
+  };
+
+  const handleUndoUnassignedGear = async (verificationRecord, gearId) => {
+    if (!currentUser || !verificationRecord?.id || !gearId) return;
+
+    setUndoingGearIds(prev => {
+      const next = new Set(prev);
+      next.add(gearId);
+      return next;
+    });
+
+    try {
+      await DailyVerification.delete(verificationRecord.id);
+    } catch (error) {
+      // Ignore errors and refresh the data to align with backend state
+    } finally {
+      setUndoingGearIds(prev => {
+        const next = new Set(prev);
+        next.delete(gearId);
+        return next;
+      });
+      await loadData();
+    }
+  };
+
+  const handleBulkVerifyUnassigned = async () => {
+    if (!currentUser) return;
+    const itemsToVerify = unassignedItems.filter(
+      item => selectedUnassignedItems.has(item.key) && !item.verificationRecord && item.id
+    );
+    if (itemsToVerify.length === 0) return;
+
+    const now = new Date().toISOString();
+
+    setVerifyingWeaponIds(prev => {
+      const next = new Set(prev);
+      itemsToVerify
+        .filter(item => item.type === "weapon")
+        .forEach(item => next.add(item.id));
+      return next;
+    });
+
+    setVerifyingGearIds(prev => {
+      const next = new Set(prev);
+      itemsToVerify
+        .filter(item => item.type === "gear")
+        .forEach(item => next.add(item.id));
+      return next;
+    });
+
+    try {
+      await Promise.all(
+        itemsToVerify.map(item => {
+          const divisionName = item.record?.division_name || selectedDivision || currentUser?.division || null;
+          return DailyVerification.create({
+            soldier_id: null,
+            soldier_name: null,
+            division_name: divisionName,
+            verification_date: today,
+            created_date: today,
+            verification_timestamp: now,
+            verified_by_user_id: verifiedByUserId,
+            verified_by_user_name: verifierDisplayName,
+            verified_by: verifierDisplayName,
+            status: "verified",
+            unassigned: true,
+            item_type: item.type,
+            item_id: item.id,
+            weapons_checked: item.type === "weapon" ? [item.id] : [],
+            equipment_checked: [],
+            gear_checked: item.type === "gear" ? [item.id] : [],
+            drone_sets_checked: [],
+          });
+        })
+      );
+    } catch (error) {
+      // Ignore errors; data reload will reconcile the UI
+    } finally {
+      setVerifyingWeaponIds(prev => {
+        const next = new Set(prev);
+        itemsToVerify
+          .filter(item => item.type === "weapon")
+          .forEach(item => next.delete(item.id));
+        return next;
+      });
+      setVerifyingGearIds(prev => {
+        const next = new Set(prev);
+        itemsToVerify
+          .filter(item => item.type === "gear")
+          .forEach(item => next.delete(item.id));
+        return next;
+      });
+      setSelectedUnassignedItems(new Set());
+      await loadData();
+    }
+  };
+
+  const handleBulkUndoUnassigned = async () => {
+    if (!currentUser) return;
+    const itemsToUndo = unassignedItems.filter(
+      item => selectedUnassignedItems.has(item.key) && item.verificationRecord?.id
+    );
+    if (itemsToUndo.length === 0) return;
+
+    setUndoingWeaponIds(prev => {
+      const next = new Set(prev);
+      itemsToUndo
+        .filter(item => item.type === "weapon" && item.id)
+        .forEach(item => next.add(item.id));
+      return next;
+    });
+
+    setUndoingGearIds(prev => {
+      const next = new Set(prev);
+      itemsToUndo
+        .filter(item => item.type === "gear" && item.id)
+        .forEach(item => next.add(item.id));
+      return next;
+    });
+
+    try {
+      await Promise.all(
+        itemsToUndo.map(item => DailyVerification.delete(item.verificationRecord.id))
+      );
+    } catch (error) {
+      // Ignore errors; reload will sync UI
+    } finally {
+      setUndoingWeaponIds(prev => {
+        const next = new Set(prev);
+        itemsToUndo
+          .filter(item => item.type === "weapon" && item.id)
+          .forEach(item => next.delete(item.id));
+        return next;
+      });
+      setUndoingGearIds(prev => {
+        const next = new Set(prev);
+        itemsToUndo
+          .filter(item => item.type === "gear" && item.id)
+          .forEach(item => next.delete(item.id));
+        return next;
+      });
+      setSelectedUnassignedItems(new Set());
+      await loadData();
+    }
+  };
 
   const handleVerify = async (soldier) => {
     if (!currentUser || !soldier) return;
@@ -537,6 +1063,505 @@ export default function DailyVerificationPage() {
     );
   }
 
+  const soldierManagerControls = !isSoldier ? (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Verification Progress for {selectedDivision}{selectedTeam !== 'all' ? ` - ${selectedTeam}` : ''}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <Progress value={verificationProgress} className="w-full" />
+            <span className="font-bold text-slate-700 whitespace-nowrap">
+              {verifiedCount} / {finalDisplayedSoldiers.length} Verified
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {finalDisplayedSoldiers.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button onClick={selectAll} variant="outline" size="sm">
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Select All ({finalDisplayedSoldiers.length})
+              </Button>
+              <Button
+                onClick={selectAllUnverified}
+                variant="outline"
+                size="sm"
+                disabled={finalDisplayedSoldiers.filter(s => !verifiedSoldierIds.has(s.soldier_id)).length === 0}
+              >
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Select All Unverified ({finalDisplayedSoldiers.filter(s => !verifiedSoldierIds.has(s.soldier_id)).length})
+              </Button>
+              <Button
+                onClick={selectAllVerified}
+                variant="outline"
+                size="sm"
+                disabled={finalDisplayedSoldiers.filter(s => verifiedSoldierIds.has(s.soldier_id)).length === 0}
+              >
+                <CheckSquare className="w-4 h-4 mr-2" />
+                Select All Verified ({finalDisplayedSoldiers.filter(s => verifiedSoldierIds.has(s.soldier_id)).length})
+              </Button>
+              {selectedSoldiers.size > 0 && (
+                <>
+                  <Button onClick={clearSelection} variant="outline" size="sm">
+                    Clear Selection
+                  </Button>
+                  {selectedUnverifiedCount > 0 && (
+                    <Button onClick={handleBulkVerify} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                      Verify Selected ({selectedUnverifiedCount})
+                    </Button>
+                  )}
+                  {selectedVerifiedCount > 0 && (
+                    <Button onClick={handleBulkUnverify} size="sm" className="bg-orange-600 hover:bg-orange-700 text-white">
+                      Unverify Selected ({selectedVerifiedCount})
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </>
+  ) : null;
+
+  const soldierListSection = finalDisplayedSoldiers.length === 0 ? (
+    <Card>
+      <CardContent className="p-8 text-center">
+        <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+        <h3 className="text-xl font-medium text-slate-700">
+          {isSoldier ? "No Soldier Record Found" : "No Soldiers to Verify"}
+        </h3>
+        <p className="text-slate-500">
+          {isSoldier
+            ? "Your soldier record could not be found. Please contact an administrator."
+            : `There are no soldiers marked as 'Arrived' in ${selectedDivision || "this division"}${selectedTeam !== 'all' ? ` for team ${selectedTeam}` : ''} matching your criteria.`}
+        </p>
+      </CardContent>
+    </Card>
+  ) : (
+    <div className={`grid gap-6 ${isSoldier ? 'grid-cols-1 max-w-2xl mx-auto' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+      {finalDisplayedSoldiers.map(soldier => {
+        const assignedWeapons = displayedWeapons.filter(w => w.assigned_to === soldier.soldier_id);
+        const assignedGear = displayedGear.filter(g => g.assigned_to === soldier.soldier_id);
+
+        const verificationRecord = displayedVerifications.find(v =>
+          v.soldier_id === soldier.soldier_id &&
+          v.created_date === today
+        );
+
+        const isVerified = verificationRecord != null;
+
+        return (
+          <SoldierVerificationCard
+            key={soldier.id}
+            soldier={soldier}
+            assignedWeapons={assignedWeapons}
+            assignedGear={assignedGear}
+            isVerified={isVerified}
+            verificationRecord={verificationRecord}
+            onVerify={() => handleVerify(soldier)}
+            onUndoVerify={() => handleUndoVerify(verificationRecord?.id)}
+            isSelected={!isSoldier && selectedSoldiers.has(soldier.soldier_id)}
+            onToggleSelect={!isSoldier ? () => toggleSoldierSelection(soldier.soldier_id) : undefined}
+          />
+        );
+      })}
+    </div>
+  );
+
+  const unassignedSection = !isManagerOrAdmin ? null : (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Unassigned Equipment Verification</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <Progress value={unassignedProgress} className="w-full" />
+            <span className="font-bold text-slate-700 whitespace-nowrap">
+              {verifiedUnassignedCount} / {totalUnassignedItems} Verified
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {totalUnassignedItems === 0 ? (
+        <Card>
+          <CardContent className="p-6 text-center text-slate-500">
+            No unassigned weapons or serialized gear currently outside the armory deposit.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button onClick={selectAllUnassigned} variant="outline" size="sm">
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                  Select All ({totalUnassignedItems})
+                </Button>
+                <Button
+                  onClick={selectAllPendingUnassigned}
+                  variant="outline"
+                  size="sm"
+                  disabled={unassignedPendingCount === 0}
+                >
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                  Select All Unverified ({unassignedPendingCount})
+                </Button>
+                <Button
+                  onClick={selectAllVerifiedUnassigned}
+                  variant="outline"
+                  size="sm"
+                  disabled={verifiedUnassignedCount === 0}
+                >
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                  Select All Verified ({verifiedUnassignedCount})
+                </Button>
+                {selectedUnassignedItems.size > 0 && (
+                  <>
+                    <Button onClick={clearUnassignedSelection} variant="outline" size="sm">
+                      Clear Selection
+                    </Button>
+                    {selectedUnassignedPendingCount > 0 && (
+                      <Button
+                        onClick={handleBulkVerifyUnassigned}
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        Verify Selected ({selectedUnassignedPendingCount})
+                      </Button>
+                    )}
+                    {selectedUnassignedVerifiedCount > 0 && (
+                      <Button
+                        onClick={handleBulkUndoUnassigned}
+                        size="sm"
+                        className="bg-orange-600 hover:bg-orange-700 text-white"
+                      >
+                        Unverify Selected ({selectedUnassignedVerifiedCount})
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-8">
+            <section className="space-y-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <h3 className="text-lg font-semibold text-slate-800">Unassigned Weapons</h3>
+                <div className="relative w-full md:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    value={weaponSearchTerm}
+                    onChange={(e) => setWeaponSearchTerm(e.target.value)}
+                    placeholder="Search weapons by type, ID or status..."
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-md border bg-white">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 px-4">
+                        <Checkbox
+                          checked={weaponsHeaderChecked}
+                          onCheckedChange={(checked) => {
+                            setSelectedUnassignedItems(prev => {
+                              const next = new Set(prev);
+                              if (checked) {
+                                displayedWeaponKeys.forEach(key => next.add(key));
+                              } else {
+                                displayedWeaponKeys.forEach(key => next.delete(key));
+                              }
+                              return next;
+                            });
+                          }}
+                          aria-label="Select all unassigned weapons"
+                        />
+                      </TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Armory Status</TableHead>
+                      <TableHead>Last Signed By</TableHead>
+                      <TableHead className="text-right">Verification</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUnassignedWeapons.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-sm text-slate-500 py-6">
+                          No weapons match your search criteria.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredUnassignedWeapons.map(item => {
+                        const isSelected = selectedUnassignedItems.has(item.key);
+                        const isVerified = Boolean(item.verificationRecord);
+                        const isProcessing = verifyingWeaponIds.has(item.id) || undoingWeaponIds.has(item.id);
+                        const statusVariant = item.status === 'functioning'
+                          ? 'success'
+                          : item.status === 'not_functioning'
+                            ? 'destructive'
+                            : 'secondary';
+                        const statusLabel = item.status
+                          ? item.status.replace(/_/g, ' ').toUpperCase()
+                          : 'UNKNOWN';
+                        const armoryStatus = item.armory_status;
+
+                        const handleVerifyAction = () => handleVerifyUnassignedWeapon(item.record);
+                        const handleUndoAction = () => {
+                          if (item.verificationRecord?.id) {
+                            handleUndoUnassignedWeapon(item.verificationRecord, item.id);
+                          }
+                        };
+
+                        return (
+                          <TableRow key={item.key}>
+                            <TableCell className="w-12 px-4">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleUnassignedSelection(item.key)}
+                                aria-label={`Select weapon ${item.id}`}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium text-sm text-slate-800">
+                              {item.name}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-slate-700">
+                              {item.id}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={statusVariant} className="text-xs font-semibold">
+                                {statusLabel}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs font-normal ${armoryStatus === 'with_soldier'
+                                  ? 'text-green-800 bg-green-50 border-green-200'
+                                  : 'text-slate-700 bg-slate-100 border-slate-200'
+                                }`}
+                              >
+                                {formatArmoryStatus(armoryStatus)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-slate-600">
+                              {item.last_signed_by || <span className="text-slate-400">—</span>}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Badge
+                                  variant={isVerified ? 'secondary' : 'outline'}
+                                  className={`text-xs font-medium ${isVerified
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : 'text-amber-700 border-amber-200'
+                                  }`}
+                                >
+                                  {isVerified ? 'Verified Today' : 'Pending'}
+                                </Badge>
+                                {isVerified ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleUndoAction}
+                                    disabled={isProcessing}
+                                  >
+                                    {isProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                    Undo
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={handleVerifyAction}
+                                    disabled={isProcessing}
+                                  >
+                                    {isProcessing ? (
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <ClipboardCheck className="w-4 h-4 mr-2" />
+                                    )}
+                                    Mark Verified
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <h3 className="text-lg font-semibold text-slate-800">Unassigned Serialized Gear</h3>
+                <div className="relative w-full md:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    value={gearSearchTerm}
+                    onChange={(e) => setGearSearchTerm(e.target.value)}
+                    placeholder="Search gear by type, ID or status..."
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-md border bg-white">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 px-4">
+                        <Checkbox
+                          checked={gearHeaderChecked}
+                          onCheckedChange={(checked) => {
+                            setSelectedUnassignedItems(prev => {
+                              const next = new Set(prev);
+                              if (checked) {
+                                displayedGearKeys.forEach(key => next.add(key));
+                              } else {
+                                displayedGearKeys.forEach(key => next.delete(key));
+                              }
+                              return next;
+                            });
+                          }}
+                          aria-label="Select all unassigned gear"
+                        />
+                      </TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Armory Status</TableHead>
+                      <TableHead>Last Signed By</TableHead>
+                      <TableHead className="text-right">Verification</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUnassignedGear.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-sm text-slate-500 py-6">
+                          No serialized gear matches your search criteria.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredUnassignedGear.map(item => {
+                        const isSelected = selectedUnassignedItems.has(item.key);
+                        const isVerified = Boolean(item.verificationRecord);
+                        const isProcessing = verifyingGearIds.has(item.id) || undoingGearIds.has(item.id);
+                        const statusVariant = item.status === 'functioning'
+                          ? 'success'
+                          : item.status === 'not_functioning'
+                            ? 'destructive'
+                            : 'secondary';
+                        const statusLabel = item.status
+                          ? item.status.replace(/_/g, ' ').toUpperCase()
+                          : 'UNKNOWN';
+                        const armoryStatus = item.armory_status;
+
+                        const handleVerifyAction = () => handleVerifyUnassignedGear(item.record);
+                        const handleUndoAction = () => {
+                          if (item.verificationRecord?.id) {
+                            handleUndoUnassignedGear(item.verificationRecord, item.id);
+                          }
+                        };
+
+                        return (
+                          <TableRow key={item.key}>
+                            <TableCell className="w-12 px-4">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleUnassignedSelection(item.key)}
+                                aria-label={`Select gear ${item.id}`}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium text-sm text-slate-800">
+                              {item.name}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-slate-700">
+                              {item.id}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={statusVariant} className="text-xs font-semibold">
+                                {statusLabel}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs font-normal ${armoryStatus === 'with_soldier'
+                                  ? 'text-green-800 bg-green-50 border-green-200'
+                                  : 'text-slate-700 bg-slate-100 border-slate-200'
+                                }`}
+                              >
+                                {formatArmoryStatus(armoryStatus)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-slate-600">
+                              {item.last_signed_by || <span className="text-slate-400">—</span>}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Badge
+                                  variant={isVerified ? 'secondary' : 'outline'}
+                                  className={`text-xs font-medium ${isVerified
+                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                    : 'text-amber-700 border-amber-200'
+                                  }`}
+                                >
+                                  {isVerified ? 'Verified Today' : 'Pending'}
+                                </Badge>
+                                {isVerified ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleUndoAction}
+                                    disabled={isProcessing}
+                                  >
+                                    {isProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                    Undo
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={handleVerifyAction}
+                                    disabled={isProcessing}
+                                  >
+                                    {isProcessing ? (
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <ClipboardCheck className="w-4 h-4 mr-2" />
+                                    )}
+                                    Mark Verified
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </section>
+          </div>
+        </>
+      )}
+    </>
+  );
+
   return (
     <div className="p-6 space-y-6">
       <div className="space-y-2">
@@ -599,122 +1624,27 @@ export default function DailyVerificationPage() {
         </Card>
       )}
 
-      {!isSoldier && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Verification Progress for {selectedDivision}{selectedTeam !== 'all' ? ` - ${selectedTeam}` : ''}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <Progress value={verificationProgress} className="w-full" />
-                <span className="font-bold text-slate-700 whitespace-nowrap">
-                  {verifiedCount} / {finalDisplayedSoldiers.length} Verified
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {finalDisplayedSoldiers.length > 0 && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <Button
-                    onClick={selectAll}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <CheckSquare className="w-4 h-4 mr-2" />
-                    Select All ({finalDisplayedSoldiers.length})
-                  </Button>
-                  <Button
-                    onClick={selectAllUnverified}
-                    variant="outline"
-                    size="sm"
-                    disabled={finalDisplayedSoldiers.filter(s => !verifiedSoldierIds.has(s.soldier_id)).length === 0}
-                  >
-                    <CheckSquare className="w-4 h-4 mr-2" />
-                    Select All Unverified ({finalDisplayedSoldiers.filter(s => !verifiedSoldierIds.has(s.soldier_id)).length})
-                  </Button>
-                  <Button
-                    onClick={selectAllVerified}
-                    variant="outline"
-                    size="sm"
-                    disabled={finalDisplayedSoldiers.filter(s => verifiedSoldierIds.has(s.soldier_id)).length === 0}
-                  >
-                    <CheckSquare className="w-4 h-4 mr-2" />
-                    Select All Verified ({finalDisplayedSoldiers.filter(s => verifiedSoldierIds.has(s.soldier_id)).length})
-                  </Button>
-                  {selectedSoldiers.size > 0 && (
-                    <>
-                      <Button onClick={clearSelection} variant="outline" size="sm">
-                        Clear Selection
-                      </Button>
-                      {selectedUnverifiedCount > 0 && (
-                        <Button onClick={handleBulkVerify} size="sm" className="bg-green-600 hover:bg-green-700">
-                          Verify Selected ({selectedUnverifiedCount})
-                        </Button>
-                      )}
-                      {selectedVerifiedCount > 0 && (
-                        <Button onClick={handleBulkUnverify} size="sm" className="bg-orange-600 hover:bg-orange-700">
-                          Unverify Selected ({selectedVerifiedCount})
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
-
-      {finalDisplayedSoldiers.length === 0 ? (
-        <Card>
-            <CardContent className="p-8 text-center">
-                <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-xl font-medium text-slate-700">
-                  {isSoldier ? "No Soldier Record Found" : "No Soldiers to Verify"}
-                </h3>
-                <p className="text-slate-500">
-                  {isSoldier 
-                    ? "Your soldier record could not be found. Please contact an administrator."
-                    : `There are no soldiers marked as 'Arrived' in ${selectedDivision || "this division"}${selectedTeam !== 'all' ? ` for team ${selectedTeam}` : ''} matching your criteria.`
-                  }
-                </p>
-            </CardContent>
-        </Card>
+      {isManagerOrAdmin ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="w-fit">
+            <TabsTrigger value="soldiers">Soldier Verification</TabsTrigger>
+            <TabsTrigger value="unassigned">Unassigned Equipment</TabsTrigger>
+          </TabsList>
+          <TabsContent value="soldiers" className="space-y-6 focus:outline-none">
+            {soldierManagerControls}
+            {soldierListSection}
+          </TabsContent>
+          <TabsContent value="unassigned" className="space-y-6 focus:outline-none">
+            {unassignedSection}
+          </TabsContent>
+        </Tabs>
       ) : (
-        <div className={`grid gap-6 ${isSoldier ? 'grid-cols-1 max-w-2xl mx-auto' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
-          {finalDisplayedSoldiers.map(soldier => {
-            const assignedWeapons = displayedWeapons.filter(w => w.assigned_to === soldier.soldier_id);
-            const assignedGear = displayedGear.filter(g => g.assigned_to === soldier.soldier_id);
-            
-            // Check daily_verifications table: if created_date === today AND soldier_id === current soldier_id, soldier is verified
-            const verificationRecord = displayedVerifications.find(v => 
-              v.soldier_id === soldier.soldier_id && 
-              v.created_date === today
-            );
-            
-            const isVerified = verificationRecord != null;
-
-            return (
-              <SoldierVerificationCard
-                key={soldier.id}
-                soldier={soldier}
-                assignedWeapons={assignedWeapons}
-                assignedGear={assignedGear}
-                isVerified={isVerified}
-                verificationRecord={verificationRecord}
-                onVerify={() => handleVerify(soldier)}
-                onUndoVerify={() => handleUndoVerify(verificationRecord?.id)}
-                isSelected={!isSoldier && selectedSoldiers.has(soldier.soldier_id)}
-                onToggleSelect={!isSoldier ? () => toggleSoldierSelection(soldier.soldier_id) : undefined}
-              />
-            );
-          })}
+        <div className="space-y-6">
+          {soldierManagerControls}
+          {soldierListSection}
         </div>
       )}
+
     </div>
   );
 }

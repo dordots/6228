@@ -50,4 +50,6 @@ module.exports = {
   setAdminByPhone: userFunctions.setAdminByPhone,
   onUserCreate: userFunctions.onUserCreate,
   syncUserOnSignIn: userFunctions.syncUserOnSignIn,
+  getRolePermissionsConfig: userFunctions.getRolePermissionsConfig,
+  updateRolePermissionsConfig: userFunctions.updateRolePermissionsConfig,
 };

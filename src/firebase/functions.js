@@ -83,4 +83,8 @@ export const firebaseFunctions = {
   deleteAllSoldiers: createFunction('deleteAllSoldiers'),
   deleteAllWeapons: createFunction('deleteAllWeapons'),
   deleteAllSerializedGear: createFunction('deleteAllSerializedGear'),
+
+  // Role permission configuration
+  getRolePermissionsConfig: createFunction('getRolePermissionsConfig'),
+  updateRolePermissionsConfig: createFunction('updateRolePermissionsConfig'),
 };

@@ -161,6 +161,101 @@ export default function UnifiedAssignmentDialog({
     return filtered;
   }, [equipment, soldier]);
 
+  const soldierFullName = useMemo(() => {
+    if (!soldier) return '';
+    const first = typeof soldier.first_name === 'string' ? soldier.first_name.trim() : '';
+    const last = typeof soldier.last_name === 'string' ? soldier.last_name.trim() : '';
+    return [first, last].filter(Boolean).join(' ').trim();
+  }, [soldier]);
+
+  const previousSignerRecords = useMemo(() => {
+    if (!soldier) return [];
+
+    const normalizeString = (value) => {
+      if (typeof value === 'string') return value.trim();
+      if (value == null) return '';
+      return String(value).trim();
+    };
+
+    const soldierId = soldier.soldier_id;
+    const normalizedFullName = soldierFullName.toLowerCase();
+    const records = [];
+
+    const isRelevantRecord = (item) => {
+      if (!item) return false;
+      const signer = normalizeString(item.last_signed_by);
+      if (!signer) return false;
+
+      const assignedToSoldier = item.assigned_to && String(item.assigned_to) === String(soldierId);
+      const matchesSoldierName = normalizedFullName && signer.toLowerCase() === normalizedFullName;
+      return assignedToSoldier || matchesSoldierName;
+    };
+
+    const collectFrom = (collection, type, idField, labelField) => {
+      if (!Array.isArray(collection)) return;
+      collection.forEach((item) => {
+        if (!isRelevantRecord(item)) return;
+        const signer = normalizeString(item.last_signed_by);
+        if (!signer) return;
+
+        const identifier = normalizeString(item?.[idField]);
+        const label = normalizeString(item?.[labelField]) || identifier || type;
+
+        records.push({
+          type,
+          identifier,
+          label,
+          lastSignedBy: signer,
+        });
+      });
+    };
+
+    collectFrom(weapons, 'Weapon', 'weapon_id', 'weapon_type');
+    collectFrom(gear, 'Serialized Gear', 'gear_id', 'gear_type');
+    collectFrom(drones, 'Drone Set', 'drone_set_id', 'set_type');
+    collectFrom(equipment, 'Equipment', 'equipment_id', 'equipment_type');
+
+    return records;
+  }, [soldier, weapons, gear, drones, equipment, soldierFullName]);
+
+  const previousSigners = useMemo(() => {
+    const summaryMap = new Map();
+
+    previousSignerRecords.forEach((record) => {
+      const signer = record.lastSignedBy;
+      if (!signer) return;
+
+      if (!summaryMap.has(signer)) {
+        summaryMap.set(signer, {
+          name: signer,
+          count: 0,
+          items: [],
+          itemKeys: new Set(),
+        });
+      }
+
+      const entry = summaryMap.get(signer);
+      entry.count += 1;
+
+      const itemKey = [record.type, record.identifier || record.label].filter(Boolean).join('::');
+      if (!entry.itemKeys.has(itemKey)) {
+        entry.items.push({
+          type: record.type,
+          label: record.label,
+          identifier: record.identifier,
+        });
+        entry.itemKeys.add(itemKey);
+      }
+    });
+
+    return Array.from(summaryMap.values())
+      .map(({ itemKeys, ...rest }) => ({
+        ...rest,
+        itemCount: rest.items.length,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
+  }, [previousSignerRecords]);
+
   // Machine gun types that can have קנס"פ attachments
   const MACHINE_GUN_TYPES = [
     'מקלע קל נגב 7.62',
@@ -1347,6 +1442,46 @@ export default function UnifiedAssignmentDialog({
                       <p className="font-medium text-blue-700">Email</p>
                       <p className="text-blue-900">{soldier.email}</p>
                       <p className="text-xs text-blue-600 mt-1">📧 Signing form will be sent automatically if user is registered</p>
+                    </div>
+                  )}
+                  {previousSigners.length > 0 && (
+                    <div className="col-span-2 md:col-span-4">
+                      <p className="font-medium text-blue-700">Previous Signatures</p>
+                      <div className="mt-2 space-y-3">
+                        {previousSigners.map(({ name, itemCount, items }) => (
+                          <div
+                            key={name}
+                            className="border border-blue-200 bg-blue-100/60 rounded-md p-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className="border-blue-300 bg-blue-100 text-blue-800"
+                              >
+                                {name}
+                              </Badge>
+                              <span className="text-xs text-blue-700">
+                                {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                            <div className="mt-2 space-y-1 text-xs text-blue-900">
+                              {items.map((item, index) => (
+                                <div key={`${item.type}-${item.identifier || item.label}-${index}`}>
+                                  <span className="font-medium">{item.type}</span>
+                                  {': '}
+                                  {item.label}
+                                  {item.identifier && item.identifier !== item.label && (
+                                    <span className="text-blue-700"> — {item.identifier}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-blue-600 mt-2">
+                        This list is based on "Last signed by" values recorded before clearing assignments.
+                      </p>
                     </div>
                   )}
                 </div>

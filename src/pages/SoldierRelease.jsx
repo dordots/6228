@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Users, ChevronDown, Home, ArrowLeftCircle, Target, Package, Loader2 } from "lucide-react";
+import { Search, Users, ChevronDown, Home, ArrowLeftCircle, Target, Package, Loader2, AlertCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +36,7 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import AssignedItemsList from "../components/release/AssignedItemsList";
 import SignatureCanvas from "../components/soldiers/SignatureCanvas"; // Import signature canvas
 
@@ -314,6 +315,46 @@ export default function SoldierReleasePage() {
     if (!selectedSoldier) return [];
     return assignedEquipmentList.map(i => ({ ...i, itemType: 'Equipment', displayName: `${i.equipment_type} (x${i.quantity})`, displayId: `ID: ${i.id.slice(0,8)}` }));
   }, [selectedSoldier, assignedEquipmentList]);
+
+  const amaralBeamReminders = useMemo(() => {
+    if (!selectedSoldier || selectedSerializedItems.length === 0) return [];
+
+    const selectedIds = new Set(selectedSerializedItems);
+    const reminders = [];
+
+    assignedSerialized.forEach(item => {
+      if (!selectedIds.has(item.id) || item.itemType !== 'Gear') return;
+
+      const gearItem = assignedGear.find(g => g.gear_id === item.displayId);
+      if (!gearItem || !isAmaralNeedingBeam(gearItem)) return;
+
+      const matchingBeam = findBeamForAmaral(gearItem, assignedGear);
+      const matchingBeamItem = matchingBeam
+        ? assignedSerialized.find(si => si.itemType === 'Gear' && si.displayId === matchingBeam.gear_id)
+        : null;
+      const beamSelected = !!(matchingBeamItem && selectedIds.has(matchingBeamItem.id));
+
+      const key = gearItem.gear_id || item.id;
+      reminders.push({
+        key,
+        displayName: item.displayName,
+        displayId: item.displayId,
+        beam: matchingBeam,
+        beamSelected,
+      });
+    });
+
+    const uniqueMap = new Map();
+    reminders.forEach(reminder => {
+      uniqueMap.set(reminder.key, reminder);
+    });
+
+    return Array.from(uniqueMap.values());
+  }, [selectedSoldier, selectedSerializedItems, assignedSerialized, assignedGear]);
+
+  const hasAmaralAssigned = useMemo(() => {
+    return assignedGear.some(isAmaralNeedingBeam);
+  }, [assignedGear]);
 
   // Combined list of all assigned items for a potential full release action
   const allAssignedItemsForFullRelease = useMemo(() => {
@@ -1738,6 +1779,11 @@ export default function SoldierReleasePage() {
                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                       <AlertDialogDescription>
                         This will unassign ALL equipment from {selectedSoldier.first_name} {selectedSoldier.last_name}. Please provide a signature to confirm.
+                        {hasAmaralAssigned && (
+                          <div className="mt-2 text-sm text-amber-700">
+                            Reminder: Release the matching beams for any night-vision goggles in this soldier&apos;s kit.
+                          </div>
+                        )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="space-y-2">
@@ -1769,7 +1815,31 @@ export default function SoldierReleasePage() {
               <DialogHeader className="p-6 pb-0">
                 <DialogTitle>Un-assign Weapons, Gear & Drones</DialogTitle>
               </DialogHeader>
-              <div className="p-6 border-t">
+              <div className="p-6 border-t space-y-4">
+                {amaralBeamReminders.length > 0 && (
+                  <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+                    <AlertCircle className="h-5 w-5 text-amber-600" />
+                    <AlertTitle>Beam Reminder</AlertTitle>
+                    <AlertDescription>
+                      Please also release the matching beam for the selected goggles:
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        {amaralBeamReminders.map((reminder) => (
+                          <li key={reminder.key}>
+                            {reminder.displayName} ({reminder.displayId})
+                            {reminder.beam ? (
+                              <>
+                                {' '}— select beam {reminder.beam.gear_id}
+                                {reminder.beamSelected ? ' (already selected)' : ' to keep records aligned'}
+                              </>
+                            ) : (
+                              ' — no matching beam is currently assigned.'
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <AssignedItemsList
                   items={assignedSerialized}
                   selectedItems={selectedSerializedItems}
@@ -1791,6 +1861,11 @@ export default function SoldierReleasePage() {
                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                       <AlertDialogDescription>
                         This will un-assign {selectedSerializedItems.length} items from {selectedSoldier.first_name} {selectedSoldier.last_name}. Please provide a signature to confirm.
+                        {amaralBeamReminders.length > 0 && (
+                          <div className="mt-2 text-sm text-amber-700">
+                            Reminder: Release the matching beams for the selected goggles before completing this action.
+                          </div>
+                        )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                      <div className="space-y-2">

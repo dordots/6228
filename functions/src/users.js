@@ -1,6 +1,191 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
+const ROLE_KEYS = ['admin', 'division_manager', 'team_leader', 'soldier'];
+
+const PERMISSION_KEYS = [
+  'equipment.assign_components',
+  'equipment.create',
+  'equipment.delete',
+  'equipment.update',
+  'equipment.view',
+  'operations.deposit',
+  'operations.maintain',
+  'operations.release',
+  'operations.sign',
+  'operations.transfer',
+  'operations.verify',
+  'personnel.create',
+  'personnel.delete',
+  'personnel.update',
+  'personnel.view',
+  'system.export',
+  'system.history',
+  'system.import',
+  'system.reports',
+  'system.users',
+];
+
+const createBasePermissionTemplate = () => {
+  return PERMISSION_KEYS.reduce((acc, key) => {
+    acc[key] = false;
+    return acc;
+  }, {});
+};
+
+const createAdminPermissions = () => {
+  const permissions = createBasePermissionTemplate();
+  PERMISSION_KEYS.forEach((key) => {
+    permissions[key] = true;
+  });
+  return permissions;
+};
+
+const createDivisionManagerPermissions = () => {
+  const permissions = createBasePermissionTemplate();
+  permissions['personnel.view'] = true;
+  permissions['personnel.update'] = true;
+  permissions['equipment.view'] = true;
+  permissions['equipment.update'] = true;
+  permissions['operations.sign'] = true;
+  permissions['operations.transfer'] = true;
+  permissions['operations.verify'] = true;
+  permissions['operations.maintain'] = true;
+  permissions['system.reports'] = true;
+  permissions['system.history'] = true;
+  permissions['system.export'] = true;
+  return permissions;
+};
+
+const createTeamLeaderPermissions = () => {
+  const permissions = createBasePermissionTemplate();
+  permissions['personnel.view'] = true;
+  permissions['personnel.update'] = true;
+  permissions['equipment.view'] = true;
+  permissions['equipment.update'] = true;
+  permissions['operations.sign'] = true;
+  permissions['operations.verify'] = true;
+  permissions['system.reports'] = true;
+  permissions['system.history'] = true;
+  return permissions;
+};
+
+const createSoldierPermissions = () => {
+  const permissions = createBasePermissionTemplate();
+  permissions['personnel.view'] = true;
+  permissions['equipment.view'] = true;
+  permissions['system.history'] = true;
+  return permissions;
+};
+
+const DEFAULT_ROLE_PERMISSIONS = {
+  admin: {
+    scope: 'global',
+    permissions: createAdminPermissions(),
+  },
+  division_manager: {
+    scope: 'division',
+    permissions: createDivisionManagerPermissions(),
+  },
+  team_leader: {
+    scope: 'team',
+    permissions: createTeamLeaderPermissions(),
+  },
+  soldier: {
+    scope: 'self',
+    permissions: createSoldierPermissions(),
+  },
+};
+
+let cachedRolePermissions = null;
+let cachedRolePermissionsMeta = null;
+let cachedRolePermissionsTimestamp = 0;
+const ROLE_PERMISSIONS_CACHE_TTL = 60 * 1000; // 1 minute
+
+const normalizeRolePermissions = (rolesData = {}) => {
+  const normalized = {};
+
+  ROLE_KEYS.forEach((roleKey) => {
+    const defaultRole = DEFAULT_ROLE_PERMISSIONS[roleKey] || {
+      scope: 'self',
+      permissions: createBasePermissionTemplate(),
+    };
+
+    const incomingRole = rolesData[roleKey] || {};
+    const incomingPermissions =
+      incomingRole.permissions && typeof incomingRole.permissions === 'object'
+        ? incomingRole.permissions
+        : (typeof incomingRole === 'object' ? incomingRole : {});
+
+    normalized[roleKey] = {
+      scope: incomingRole.scope || defaultRole.scope,
+      permissions: {
+        ...createBasePermissionTemplate(),
+        ...defaultRole.permissions,
+        ...incomingPermissions,
+      },
+    };
+  });
+
+  return normalized;
+};
+
+const formatTimestampToIsoString = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (value.toDate && typeof value.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+  if (value._seconds) {
+    return new Date(value._seconds * 1000).toISOString();
+  }
+  return null;
+};
+
+const loadRolePermissionsConfig = async (forceRefresh = false) => {
+  const now = Date.now();
+  if (
+    !forceRefresh &&
+    cachedRolePermissions &&
+    now - cachedRolePermissionsTimestamp < ROLE_PERMISSIONS_CACHE_TTL
+  ) {
+    return {
+      roles: cachedRolePermissions,
+      metadata: cachedRolePermissionsMeta,
+    };
+  }
+
+  const db = admin.firestore();
+  const docRef = db.collection('system').doc('role_permissions');
+  const docSnap = await docRef.get();
+  const docData = docSnap.exists ? docSnap.data() || {} : {};
+  const rawRoles = docData.roles || docData;
+
+  const normalizedRoles = normalizeRolePermissions(rawRoles);
+
+  const metadata = {
+    updatedBy: docData.updatedBy || null,
+    updatedByDisplayName: docData.updatedByDisplayName || null,
+    updatedAt: formatTimestampToIsoString(docData.updatedAt),
+  };
+
+  cachedRolePermissions = normalizedRoles;
+  cachedRolePermissionsMeta = metadata;
+  cachedRolePermissionsTimestamp = now;
+
+  return {
+    roles: normalizedRoles,
+    metadata,
+  };
+};
+
+const invalidateRolePermissionsCache = () => {
+  cachedRolePermissions = null;
+  cachedRolePermissionsMeta = null;
+  cachedRolePermissionsTimestamp = 0;
+};
+
 // Helper function to check if user is admin (checks both custom claims and Firestore)
 async function isUserAdmin(context) {
   if (!context.auth) return false;
@@ -129,7 +314,7 @@ exports.createPhoneUser = functions
 
       // Get default permissions for the role
       const roleToUse = customRole || role || 'soldier';
-      const defaultPerms = getDefaultPermissions(roleToUse);
+      const defaultPerms = await getDefaultPermissions(roleToUse);
 
       // Prepare user document data with soldier linking if found
       const userDocData = {
@@ -311,7 +496,7 @@ exports.updateUserRole = functions
       const userDoc = await userDocRef.get();
 
       // Get default permissions for the role
-      const rolePermissions = getDefaultPermissions(role);
+      const rolePermissions = await getDefaultPermissions(role);
       
       // Extract scope and create permissions object without scope
       const scope = rolePermissions.scope;
@@ -481,6 +666,168 @@ exports.updateUserPermissions = functions
         `Failed to update user assignment: ${error.message}`
       );
     }
+  });
+
+// Fetch role permission configuration for all roles
+exports.getRolePermissionsConfig = functions
+  .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
+  .https.onCall(async (data, context) => {
+    if (!(await isUserAdmin(context))) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Only admins can view the role permission configuration'
+      );
+    }
+
+    const { roles, metadata } = await loadRolePermissionsConfig(true);
+    return { roles, metadata };
+  });
+
+// Update role permission configuration and propagate to users
+exports.updateRolePermissionsConfig = functions
+  .runWith({
+    serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com",
+    timeoutSeconds: 300,
+    memory: "512MB"
+  })
+  .https.onCall(async (data, context) => {
+    if (!(await isUserAdmin(context))) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Only admins can update role permissions'
+      );
+    }
+
+    const inputRoles = (data && typeof data === 'object') ? (data.roles || data) : null;
+    if (!inputRoles || typeof inputRoles !== 'object') {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Role permissions payload is required'
+      );
+    }
+
+    const normalizedRoles = normalizeRolePermissions(inputRoles);
+    const startTime = Date.now();
+    functions.logger.info('updateRolePermissionsConfig:start', {
+      callerUid: context.auth?.uid || null,
+      roleKeys: ROLE_KEYS,
+    });
+    const storedRoles = ROLE_KEYS.reduce((acc, roleKey) => {
+      const roleConfig = normalizedRoles[roleKey];
+      acc[roleKey] = {
+        scope: roleConfig.scope,
+        permissions: { ...roleConfig.permissions },
+      };
+      return acc;
+    }, {});
+
+    const db = admin.firestore();
+    const docRef = db.collection('system').doc('role_permissions');
+
+    const updatedByDisplayName =
+      context.auth?.token?.name ||
+      context.auth?.token?.displayName ||
+      context.auth?.token?.full_name ||
+      context.auth?.token?.email ||
+      null;
+
+    await docRef.set({
+      roles: storedRoles,
+      updatedBy: context.auth?.uid || null,
+      updatedByDisplayName,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    // Update users belonging to each role with the new permissions
+    for (const roleKey of ROLE_KEYS) {
+      const roleConfig = normalizedRoles[roleKey];
+      const permissionsForRole = { ...roleConfig.permissions };
+      const scopeForRole = roleConfig.scope || DEFAULT_ROLE_PERMISSIONS[roleKey]?.scope || 'self';
+      const userRoleValue = roleKey === 'admin' ? 'admin' : 'user';
+
+      const userSnapshot = await db
+        .collection('users')
+        .where('custom_role', '==', roleKey)
+        .get();
+
+      functions.logger.info('updateRolePermissionsConfig:roleProcessing', {
+        roleKey,
+        userCount: userSnapshot.size,
+      });
+
+      if (!userSnapshot.empty) {
+        const timestamp = admin.firestore.FieldValue.serverTimestamp();
+        let batch = db.batch();
+        let counter = 0;
+        const batchCommits = [];
+
+        userSnapshot.forEach((docSnap) => {
+          batch.set(docSnap.ref, {
+            permissions: permissionsForRole,
+            scope: scopeForRole,
+            role: userRoleValue,
+            updated_at: timestamp,
+          }, { merge: true });
+          counter += 1;
+
+          if (counter >= 400) {
+            batchCommits.push(batch.commit());
+            batch = db.batch();
+            counter = 0;
+          }
+        });
+
+        if (counter > 0) {
+          batchCommits.push(batch.commit());
+        }
+
+        await Promise.all(batchCommits);
+
+        // Update custom claims for each affected user
+        for (const docSnap of userSnapshot.docs) {
+          try {
+            const authUser = await admin.auth().getUser(docSnap.id);
+            const currentClaims = authUser.customClaims || {};
+            const userData = docSnap.data() || {};
+
+            const updatedClaims = {
+              ...currentClaims,
+              role: userRoleValue,
+              custom_role: roleKey,
+              permissions: permissionsForRole,
+              scope: scopeForRole,
+              division: userData.division ?? currentClaims.division ?? null,
+              team: userData.team ?? currentClaims.team ?? null,
+              totp_enabled: currentClaims.totp_enabled ?? userData.totp_enabled ?? false,
+              totp_secret: currentClaims.totp_secret ?? null,
+              totp_temp_secret: currentClaims.totp_temp_secret ?? null,
+            };
+
+            await admin.auth().setCustomUserClaims(docSnap.id, updatedClaims);
+          } catch (authError) {
+            // Ignore errors for users that might not exist in Auth
+          }
+        }
+      }
+
+      functions.logger.info('updateRolePermissionsConfig:roleUpdated', {
+        roleKey,
+        userCount: userSnapshot.size,
+      });
+    }
+
+    invalidateRolePermissionsCache();
+    const refreshed = await loadRolePermissionsConfig(true);
+    const durationMs = Date.now() - startTime;
+    functions.logger.info('updateRolePermissionsConfig:completed', {
+      durationMs,
+      roleKeys: ROLE_KEYS,
+    });
+
+    return {
+      roles: refreshed.roles,
+      metadata: refreshed.metadata,
+    };
   });
 
 // Delete user (hard delete from both Authentication and Firestore)
@@ -682,7 +1029,7 @@ exports.setAdminByPhone = functions
       const user = await admin.auth().getUserByPhoneNumber(phoneNumber);
 
       // Get admin permissions
-      const adminPerms = getDefaultPermissions('admin');
+      const adminPerms = await getDefaultPermissions('admin');
       
       // Set admin claims with new RBAC structure
       // IMPORTANT: Preserve existing TOTP settings if they exist
@@ -726,110 +1073,16 @@ exports.setAdminByPhone = functions
   });
 
 // Helper function to get default permissions by role
-function getDefaultPermissions(role) {
-  const basePermissions = {
-    // Personnel permissions
-    'personnel.view': false,
-    'personnel.create': false,
-    'personnel.update': false,
-    'personnel.delete': false,
-    
-    // Equipment permissions (covers weapons, gear, drones, standard equipment)
-    'equipment.view': false,
-    'equipment.create': false,
-    'equipment.update': false,
-    'equipment.delete': false,
-    'equipment.assign_components': false,
-    
-    // Operations permissions
-    'operations.sign': false,
-    'operations.transfer': false,
-    'operations.deposit': false,
-    'operations.release': false,
-    'operations.verify': false,
-    'operations.maintain': false,
-    
-    // System permissions
-    'system.reports': false,
-    'system.history': false,
-    'system.import': false,
-    'system.export': false,
-    'system.users': false,
+async function getDefaultPermissions(role) {
+  const { roles } = await loadRolePermissionsConfig();
+  const normalizedRoleKey = ROLE_KEYS.includes(role) ? role : 'soldier';
+  const fallbackRole = DEFAULT_ROLE_PERMISSIONS[normalizedRoleKey] || DEFAULT_ROLE_PERMISSIONS['soldier'];
+  const roleData = roles[normalizedRoleKey] || fallbackRole;
+
+  return {
+    ...roleData.permissions,
+    scope: roleData.scope || fallbackRole.scope || 'self',
   };
-  
-  switch (role) {
-    case 'admin':
-      // Admin has all permissions with global scope
-      return {
-        ...Object.keys(basePermissions).reduce((acc, key) => ({...acc, [key]: true}), {}),
-        scope: 'global'
-      };
-      
-    case 'division_manager':
-      // Division manager has most permissions within their division
-      return {
-        ...basePermissions,
-        'personnel.view': true,
-        'personnel.create': false,  // Admin only
-        'personnel.update': true,
-        'personnel.delete': false,
-        'equipment.view': true,
-        'equipment.create': false,  // Admin only
-        'equipment.update': true,
-        'equipment.delete': false,  // Admin only
-        'equipment.assign_components': false,  // Admin only
-        'operations.sign': true,
-        'operations.transfer': true,
-        'operations.deposit': false,  // Admin only
-        'operations.release': false,  // Admin only
-        'operations.verify': true,
-        'operations.maintain': true,
-        'system.reports': true,
-        'system.history': true,
-        'system.import': false,  // Import is admin-only
-        'system.export': true,
-        'system.users': false,
-        scope: 'division'
-      };
-      
-    case 'team_leader':
-      // Team leader has limited permissions within their team
-      return {
-        ...basePermissions,
-        'personnel.view': true,
-        'personnel.update': true,
-        'equipment.view': true,
-        'equipment.update': true,
-        'equipment.assign_components': false,  // Admin only
-        'operations.sign': true,
-        'operations.deposit': false,  // Admin only
-        'operations.release': false,  // Admin only
-        'operations.verify': true,
-        'system.reports': true,
-        'system.history': true,
-        scope: 'team'
-      };
-      
-    case 'soldier':
-      // Soldier can only view their own data
-      return {
-        ...basePermissions,
-        'personnel.view': true, // Own profile only
-        'equipment.view': true, // Own equipment only
-        'system.history': true, // Own activities only
-        scope: 'self'
-      };
-      
-    default:
-      // Default to soldier permissions
-      return {
-        ...basePermissions,
-        'personnel.view': true,
-        'equipment.view': true,
-        'system.history': true,
-        scope: 'self'
-      };
-  }
 }
 
 /**
@@ -995,11 +1248,12 @@ exports.syncUserOnSignIn = functions
       }
 
       try {
+        const fallbackSoldierPerms = await getDefaultPermissions('soldier');
         const customClaims = {
           role: userData.role || 'soldier',
           custom_role: userData.custom_role || 'soldier',
-          permissions: userData.permissions || getDefaultPermissions('soldier'),
-          scope: userData.scope || 'self',
+          permissions: userData.permissions || fallbackSoldierPerms,
+          scope: userData.scope || fallbackSoldierPerms.scope || 'self',
           division: soldierData?.division_name || userData.division || null,
           team: soldierData?.team_name || userData.team || null,
           linked_soldier_id: userData.linked_soldier_id || null,
@@ -1105,7 +1359,7 @@ exports.onUserCreate = functions.auth.user().onCreate(async (user) => {
 
     // Prepare user document data
     const defaultRole = 'soldier'; // All new users default to soldier role
-    const permissions = getDefaultPermissions(defaultRole);
+    const permissions = await getDefaultPermissions(defaultRole);
 
     const userDocData = {
       custom_role: defaultRole,

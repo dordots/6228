@@ -1,15 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Filter, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
 // Multi-select button component
 function MultiSelectButton({ options, selected, onToggle, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const selectedCount = selected.length;
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm("");
+    }
+  }, [isOpen]);
+
+  const filteredOptions = useMemo(() => {
+    const lowerTerm = searchTerm.toLowerCase();
+    return options.filter(option => option.label.toLowerCase().includes(lowerTerm));
+  }, [options, searchTerm]);
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -25,20 +38,37 @@ function MultiSelectButton({ options, selected, onToggle, placeholder }) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
+        <div className="border-b border-slate-200 p-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Input
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 h-8 border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+          </div>
+        </div>
         <div className="max-h-64 overflow-y-auto">
-          {options.map((option) => (
-            <div
-              key={option.value}
-              className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer"
-              onClick={() => onToggle(option.value)}
-            >
-              <Checkbox
-                checked={selected.includes(option.value)}
-                onCheckedChange={() => onToggle(option.value)}
-              />
-              <label className="text-sm cursor-pointer flex-1">{option.label}</label>
+          {filteredOptions.length === 0 ? (
+            <div className="p-4 text-center text-sm text-slate-500">
+              No results found.
             </div>
-          ))}
+          ) : (
+            filteredOptions.map((option) => (
+              <div
+                key={option.value}
+                className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                onClick={() => onToggle(option.value)}
+              >
+                <Checkbox
+                  checked={selected.includes(option.value)}
+                  onCheckedChange={() => onToggle(option.value)}
+                />
+                <label className="text-sm cursor-pointer flex-1">{option.label}</label>
+              </div>
+            ))
+          )}
         </div>
       </PopoverContent>
     </Popover>

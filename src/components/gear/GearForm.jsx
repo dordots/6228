@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { Save, X, Calendar as CalendarIcon, Plus, Package, PackageOpen } from "lucide-react";
+import { Save, X, Calendar as CalendarIcon, Package, PackageOpen } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import ComboBox from "@/components/common/ComboBox"; // New import
 import {
@@ -52,6 +52,11 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
       .sort();
     return types;
   }, [existingGear]);
+
+  const typeOptions = useMemo(() => ([
+    ...existingTypes.map(type => ({ value: type, label: type })),
+    { value: '__custom__', label: '+ Add new type...' }
+  ]), [existingTypes]);
 
   // Get unique divisions from soldiers
   const existingDivisions = useMemo(() => {
@@ -155,10 +160,11 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
     if (value === '__custom__') {
       setShowCustomType(true);
       setCustomType('');
+      handleChange('gear_type', '');
     } else {
       setShowCustomType(false);
       setCustomType('');
-      handleChange('gear_type', value);
+      handleChange('gear_type', value || '');
     }
   };
 
@@ -222,25 +228,14 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
             <div className="space-y-2">
               <Label htmlFor="gear_type">Type *</Label>
               {!showCustomType ? (
-                <Select 
-                  value={formData.gear_type} 
-                  onValueChange={handleTypeSelect}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select gear type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {existingTypes.map(type => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                    <SelectItem value="__custom__">
-                      <div className="flex items-center gap-2">
-                        <Plus className="w-4 h-4" />
-                        Add new type...
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <ComboBox
+                  options={typeOptions}
+                  value={typeOptions.some(option => option.value === formData.gear_type) ? formData.gear_type : ''}
+                  onSelect={handleTypeSelect}
+                  placeholder="Select gear type"
+                  searchPlaceholder="Type to search gear types..."
+                  emptyText="No gear types found."
+                />
               ) : (
                 <div className="flex items-center gap-2">
                   <Input

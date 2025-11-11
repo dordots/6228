@@ -42,6 +42,7 @@ export default function WeaponTable({
       <TableCell><Skeleton className="h-4 w-40" /></TableCell> {/* Assigned To */}
       <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Division */}
       <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* Status */}
+      <TableCell><Skeleton className="h-4 w-32" /></TableCell> {/* Last Signed By */}
       <TableCell><Skeleton className="h-4 w-20" /></TableCell> {/* Armory Status */}
       <TableCell className="text-center"><Skeleton className="h-8 w-8" /></TableCell> {/* Actions */}
     </TableRow>
@@ -64,6 +65,7 @@ export default function WeaponTable({
             <TableHead className="w-48">Assigned To</TableHead>
             <TableHead className="w-48">Division</TableHead>
             <TableHead className="w-32">Status</TableHead>
+            <TableHead className="w-40">Last Signed By</TableHead>
             <TableHead className="w-32">Armory Status</TableHead>
             <TableHead className="w-20 text-center">Actions</TableHead>
           </TableRow>
@@ -103,6 +105,7 @@ export default function WeaponTable({
                       {weapon.status === 'functioning' ? 'FUNCTIONING' : 'NOT FUNCTIONING'}
                     </Badge>
                   </TableCell>
+                  <TableCell>{weapon.last_signed_by || 'N/A'}</TableCell>
                   <TableCell>
                     {weapon.armory_status === 'in_deposit' ? (
                       <Badge variant="outline" className="text-xs font-normal text-amber-800 bg-amber-50 border-amber-200">

@@ -4,6 +4,8 @@ const PDFDocument = require("pdfkit");
 const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
 const sgMail = require("@sendgrid/mail");
+const path = require("path");
+const fs = require("fs");
 
 const db = admin.firestore();
 
@@ -13,11 +15,338 @@ if (sendGridApiKey) {
   sgMail.setApiKey(sendGridApiKey);
 }
 
+const logger = functions.logger || console;
+
+const DEFAULT_FONT_PATH = path.join(__dirname, "../assets/fonts/NotoSansHebrew-Regular.ttf");
+
+const applyDefaultFont = (doc) => {
+  try {
+    if (fs.existsSync(DEFAULT_FONT_PATH)) {
+      doc.registerFont("ArmoryPrimary", DEFAULT_FONT_PATH);
+      doc.font("ArmoryPrimary");
+    } else {
+      logger.warn?.("Default PDF font not found at path:", DEFAULT_FONT_PATH);
+    }
+  } catch (error) {
+    logger.warn?.("Failed to register default font for PDF generation, falling back to standard font.", error);
+  }
+};
+
+const getItemIdentifier = (item = {}) =>
+  item.fieldId ||
+  item.displayId ||
+  item.id ||
+  item.serial_number ||
+  item.serialNumber ||
+  item.serial ||
+  item.weapon_id ||
+  item.gear_id ||
+  item.set_serial_number ||
+  item.equipment_id ||
+  item.drone_set_id ||
+  "";
+
+const formatAssignmentItemRow = (item, index, allCurrentItems = []) => {
+  const identifier = getItemIdentifier(item);
+  const fallback = allCurrentItems.find((entry) => entry.id === identifier) || {};
+
+  const resolvedType = item.type || item.itemType || fallback.type || "";
+  const resolvedName = item.name || item.displayName || fallback.name || "";
+  const resolvedId = identifier || fallback.id || "";
+  const resolvedStatus = item.status || fallback.status || "Assigned";
+  const resolvedComponents = item.components && item.components.length > 0
+    ? item.components
+    : fallback.components || [];
+
+  const mainRow = `<tr>
+    <td>${index + 1}</td>
+    <td>${resolvedType}</td>
+    <td>${resolvedName}</td>
+    <td>${resolvedId}</td>
+    <td>${resolvedStatus}</td>
+  </tr>`;
+
+  if (
+    (resolvedType === "Drone" || resolvedType === "Drone Set") &&
+    resolvedComponents.length > 0
+  ) {
+    const componentRows = resolvedComponents
+      .map(
+        (comp) => `<tr style="background-color: #f9f9f9;">
+          <td></td>
+          <td colspan="2" style="padding-right: 30px;">↳ ${comp.type || ""}</td>
+          <td>${comp.id || ""}</td>
+          <td></td>
+        </tr>`
+      )
+      .join("");
+    return mainRow + componentRows;
+  }
+
+  return mainRow;
+};
+
+const generateAssignmentFormDocument = async ({
+  soldierID,
+  assignedItems = [],
+  performerName = "System",
+  signatureData = "",
+  soldierData = null,
+}) => {
+  if (!soldierID) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Soldier ID is required"
+    );
+  }
+
+  let soldier = soldierData;
+  if (!soldier) {
+    const soldierDoc = await db.collection("soldiers").doc(soldierID).get();
+    if (!soldierDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Soldier not found"
+      );
+    }
+    soldier = soldierDoc.data();
+  }
+
+  const safeAssignedItems = Array.isArray(assignedItems) ? assignedItems : [];
+
+  const [weapons, gear, drones, equipment] = await Promise.all([
+    db.collection("weapons").where("assigned_to", "==", soldierID).get(),
+    db.collection("serialized_gear").where("assigned_to", "==", soldierID).get(),
+    db.collection("drone_sets").where("assigned_to", "==", soldierID).get(),
+    db.collection("equipment").where("assigned_to", "==", soldierID).get(),
+  ]);
+
+  const droneSetIds = drones.docs.map((doc) => doc.data().drone_set_id).filter(Boolean);
+  let droneComponents = [];
+  if (droneSetIds.length > 0) {
+    const componentPromises = [];
+    for (let i = 0; i < droneSetIds.length; i += 10) {
+      const batch = droneSetIds.slice(i, i + 10);
+      componentPromises.push(
+        db.collection("drone_components").where("drone_set_id", "in", batch).get()
+      );
+    }
+    const componentSnapshots = await Promise.all(componentPromises);
+    droneComponents = componentSnapshots.flatMap((snapshot) => snapshot.docs);
+  }
+
+  const componentsByDroneSet = {};
+  droneComponents.forEach((doc) => {
+    const comp = doc.data();
+    if (!componentsByDroneSet[comp.drone_set_id]) {
+      componentsByDroneSet[comp.drone_set_id] = [];
+    }
+    componentsByDroneSet[comp.drone_set_id].push({
+      type: comp.component_type,
+      id: comp.component_id,
+    });
+  });
+
+  const allCurrentItems = [];
+  weapons.docs.forEach((doc) => {
+    const data = doc.data();
+    allCurrentItems.push({
+      type: "Weapon",
+      name: data.weapon_type || data.weapon_name,
+      id: data.weapon_id,
+      status: data.armory_status || "assigned",
+    });
+  });
+  gear.docs.forEach((doc) => {
+    const data = doc.data();
+    allCurrentItems.push({
+      type: "Gear",
+      name: data.gear_type || data.gear_name,
+      id: data.gear_id,
+      status: data.armory_status || "assigned",
+    });
+  });
+  drones.docs.forEach((doc) => {
+    const data = doc.data();
+    const components = componentsByDroneSet[data.drone_set_id] || [];
+    allCurrentItems.push({
+      type: "Drone",
+      name: data.set_type,
+      id: data.set_serial_number,
+      components,
+      status: data.armory_status || "assigned",
+    });
+  });
+  equipment.docs.forEach((doc) => {
+    const data = doc.data();
+    allCurrentItems.push({
+      type: "Equipment",
+      name: data.equipment_type,
+      id: doc.id.slice(0, 8),
+      status: "assigned",
+    });
+  });
+
+  const newItemIds = safeAssignedItems
+    .map((item) => getItemIdentifier(item))
+    .filter(Boolean);
+  const newItemIdSet = new Set(newItemIds);
+
+  const previousItems = allCurrentItems.filter((item) => !newItemIdSet.has(item.id));
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("he-IL");
+  const timeStr = now.toLocaleTimeString("he-IL");
+  const sanitizedPerformer = performerName || "System";
+
+  const signatureHtml = signatureData
+    ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;object-fit:contain;" />`
+    : "<p><em>לא סופקה חתימה</em></p>";
+
+  let newItemsTableRows = "";
+  if (safeAssignedItems.length === 0) {
+    newItemsTableRows = "<tr><td colspan=\"5\">אין פריטים שנחתמו</td></tr>";
+  } else {
+    newItemsTableRows = safeAssignedItems
+      .map((item, index) => formatAssignmentItemRow(item, index, allCurrentItems))
+      .join("");
+  }
+
+  let previousItemsHtml = "";
+  if (previousItems.length === 0) {
+    previousItemsHtml = "<p><strong>לא היה ציוד קודם ברשות החייל.</strong></p>";
+  } else {
+    const previousItemsTableRows = previousItems
+      .map((item, index) => formatAssignmentItemRow(item, index, allCurrentItems))
+      .join("");
+    previousItemsHtml = `<table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>סוג</th>
+          <th>שם הפריט</th>
+          <th>מספר סידורי</th>
+          <th>סטטוס</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${previousItemsTableRows}
+      </tbody>
+    </table>`;
+  }
+
+  const htmlContent = `<!DOCTYPE html>
+    <html lang="he" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>Equipment Assignment Form</title>
+        <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4; margin: 0.5in; }
+            * { box-sizing: border-box; }
+            body { font-family: 'Heebo', Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #000; direction: rtl; text-align: right; margin: 0; padding: 20px; background: white; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+            .header h1 { font-size: 24px; font-weight: bold; margin: 0 0 5px 0; direction: ltr; }
+            .header h2 { font-size: 20px; font-weight: bold; margin: 0; direction: rtl; }
+            .section { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; page-break-inside: avoid; }
+            .section h3 { font-size: 16px; font-weight: bold; margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+            .info-row { margin-bottom: 8px; }
+            .info-row strong { font-weight: 600; }
+            .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            .items-table th, .items-table td { border: 1px solid #666; padding: 8px; text-align: right; font-size: 11px; vertical-align: top; }
+            .items-table th { background-color: #f5f5f5; font-weight: bold; }
+            .assigned-items { background-color: #f0fff4; }
+            .total-items { background-color: #f0f9ff; }
+            .signature-box { border: 1px solid #666; min-height: 120px; padding: 10px; margin-top: 10px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
+            .footer { margin-top: 30px; font-size: 10px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Equipment Assignment Form</h1>
+            <h2>טופס חתימה על ציוד</h2>
+        </div>
+        <div class="section">
+            <h3>פרטי הפעילות - Activity Details</h3>
+            <div class="info-row"><strong>תאריך:</strong> ${dateStr} בשעה ${timeStr}</div>
+            <div class="info-row"><strong>מאושר על ידי:</strong> ${sanitizedPerformer}</div>
+        </div>
+        <div class="section">
+            <h3>פרטי החייל - Soldier Information</h3>
+            <div class="info-row"><strong>שם:</strong> ${soldier.first_name || ""} ${soldier.last_name || ""}</div>
+            <div class="info-row"><strong>מספר אישי:</strong> ${soldier.soldier_id || ""}</div>
+            <div class="info-row"><strong>יחידה:</strong> ${soldier.division_name || "N/A"}</div>
+        </div>
+        <div class="section assigned-items">
+            <h3>ציוד שנחתם באירוע זה - Equipment Assigned in This Event (${safeAssignedItems.length} items)</h3>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>סוג</th>
+                        <th>שם הפריט</th>
+                        <th>מספר סידורי</th>
+                        <th>סטטוס</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${newItemsTableRows}
+                </tbody>
+            </table>
+        </div>
+        <div class="section total-items">
+            <h3>ציוד קודם ברשות החייל - Previously Assigned Equipment (${previousItems.length} items)</h3>
+            ${previousItemsHtml}
+        </div>
+        <div class="section">
+            <h3>חתימת החייל - Soldier Signature</h3>
+            <div class="signature-box">
+                ${signatureHtml}
+            </div>
+        </div>
+        <div class="footer">
+            <p>נוצר ב-${dateStr}, ${timeStr}</p>
+        </div>
+    </body>
+    </html>`;
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "0.5in", right: "0.5in", bottom: "0.5in", left: "0.5in" },
+    });
+    await page.close();
+    return {
+      soldier,
+      pdf_base64: pdfBuffer.toString("base64"),
+      filename: `signing_form_${soldierID}_${Date.now()}.pdf`,
+    };
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+};
+
 /**
  * Generate a signing form PDF
  */
 exports.generateSigningForm = functions
-  .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
+  .runWith({
+    serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com",
+    memory: "1GB",
+    timeoutSeconds: 60,
+  })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -26,7 +355,12 @@ exports.generateSigningForm = functions
     );
   }
 
-  const { soldierID, assignedItems = [] } = data;
+  const {
+    soldierID,
+    assignedItems = [],
+    performerName = "System",
+    signatureData = "",
+  } = data;
 
   if (!soldierID) {
     throw new functions.https.HttpsError(
@@ -36,105 +370,20 @@ exports.generateSigningForm = functions
   }
 
   try {
-    // Get soldier data
-    const soldierDoc = await db.collection("soldiers").doc(soldierID).get();
-    
-    if (!soldierDoc.exists) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Soldier not found"
-      );
-    }
-
-    const soldier = soldierDoc.data();
-
-    // Create PDF
-    const doc = new PDFDocument();
-    const chunks = [];
-    
-    doc.on("data", (chunk) => chunks.push(chunk));
-
-    // Header
-    doc.fontSize(20).text("Equipment Signing Form", { align: "center" });
-    doc.moveDown();
-    
-    // Date
-    doc.fontSize(12).text(`Date: ${new Date().toLocaleDateString()}`);
-    doc.moveDown();
-
-    // Soldier Information
-    doc.fontSize(14).text("Soldier Information", { underline: true });
-    doc.fontSize(12);
-    doc.text(`Name: ${soldier.first_name} ${soldier.last_name}`);
-    doc.text(`Soldier ID: ${soldier.soldier_id}`);
-    doc.text(`Division: ${soldier.division_name || "N/A"}`);
-    doc.text(`Team: ${soldier.team_name || "N/A"}`);
-    doc.moveDown();
-
-    // Assigned Items
-    doc.fontSize(14).text("Assigned Items", { underline: true });
-    doc.fontSize(12);
-    
-    if (assignedItems.length === 0) {
-      // Fetch items from database if not provided
-      const [weapons, gear, equipment] = await Promise.all([
-        db.collection("weapons").where("soldier_id", "==", soldierID).get(),
-        db.collection("serialized_gear").where("soldier_id", "==", soldierID).get(),
-        db.collection("equipment").where("soldier_id", "==", soldierID).get(),
-      ]);
-
-      weapons.docs.forEach((doc) => {
-        const weapon = doc.data();
-        doc.text(`• Weapon: ${weapon.weapon_name} (ID: ${weapon.weapon_id})`);
-      });
-
-      gear.docs.forEach((doc) => {
-        const item = doc.data();
-        doc.text(`• Gear: ${item.gear_name} (ID: ${item.gear_id})`);
-      });
-
-      equipment.docs.forEach((doc) => {
-        const item = doc.data();
-        doc.text(`• Equipment: ${item.equipment_name} (ID: ${item.equipment_id})`);
-      });
-    } else {
-      assignedItems.forEach((item) => {
-        doc.text(`• ${item.type}: ${item.name} (ID: ${item.id})`);
-      });
-    }
-
-    doc.moveDown(2);
-
-    // Signature Section
-    doc.fontSize(14).text("Declaration", { underline: true });
-    doc.fontSize(11);
-    doc.text("I hereby acknowledge receipt of the above listed items and understand that I am responsible for their proper care and maintenance.");
-    doc.moveDown(2);
-
-    // Signature Lines
-    doc.text("Soldier Signature: _______________________________  Date: _______________");
-    doc.moveDown();
-    doc.text("Issuing Officer: _________________________________  Date: _______________");
-
-    // Footer
-    doc.moveDown(2);
-    doc.fontSize(10).text("This document was generated electronically by the Armory Management System", {
-      align: "center",
+    const result = await generateAssignmentFormDocument({
+      soldierID,
+      assignedItems,
+      performerName,
+      signatureData,
     });
-
-    // Finalize PDF
-    doc.end();
-
-    // Convert to base64
-    const buffer = Buffer.concat(chunks);
-    const base64 = buffer.toString("base64");
 
     return {
       success: true,
-      pdf_base64: base64,
-      filename: `signing_form_${soldierID}_${Date.now()}.pdf`,
+      pdf_base64: result.pdf_base64,
+      filename: result.filename,
     };
   } catch (error) {
+    logger.error?.("generateSigningForm failed", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to generate signing form: ${error.message}`
@@ -145,95 +394,254 @@ exports.generateSigningForm = functions
 /**
  * Helper function to generate release form PDF
  */
-async function generateReleaseFormPDF(soldierID, releasedItems = [], reason = "End of Service") {
-  // Get soldier data
-  const soldierDoc = await db.collection("soldiers").doc(soldierID).get();
+const formatReleaseItemRow = (item, index, defaultStatus = "Returned") => {
+  const identifier = getItemIdentifier(item);
 
-  if (!soldierDoc.exists) {
+  const resolvedType = item.type || item.itemType || "";
+  const resolvedName = item.name || item.displayName || "";
+  const resolvedId = identifier;
+  const resolvedStatus = item.status || item.condition || defaultStatus;
+
+  return `<tr>
+    <td>${index + 1}</td>
+    <td>${resolvedType}</td>
+    <td>${resolvedName}</td>
+    <td>${resolvedId}</td>
+    <td>${resolvedStatus}</td>
+  </tr>`;
+};
+
+const generateReleaseFormDocument = async ({
+  soldierID,
+  releasedItems = [],
+  reason = "End of Service",
+  performerName = "System",
+  signatureData = "",
+  soldierData = null,
+}) => {
+  if (!soldierID) {
     throw new functions.https.HttpsError(
-      "not-found",
-      "Soldier not found"
+      "invalid-argument",
+      "Soldier ID is required"
     );
   }
 
-  const soldier = soldierDoc.data();
-
-  // Create PDF
-  const doc = new PDFDocument();
-  const chunks = [];
-
-  doc.on("data", (chunk) => chunks.push(chunk));
-
-  // Header
-  doc.fontSize(20).text("Equipment Release Form", { align: "center" });
-  doc.moveDown();
-
-  // Date and Reason
-  doc.fontSize(12);
-  doc.text(`Date: ${new Date().toLocaleDateString()}`);
-  doc.text(`Reason for Release: ${reason}`);
-  doc.moveDown();
-
-  // Soldier Information
-  doc.fontSize(14).text("Soldier Information", { underline: true });
-  doc.fontSize(12);
-  doc.text(`Name: ${soldier.first_name} ${soldier.last_name}`);
-  doc.text(`Soldier ID: ${soldier.soldier_id}`);
-  doc.text(`Division: ${soldier.division_name || "N/A"}`);
-  doc.moveDown();
-
-  // Released Items
-  doc.fontSize(14).text("Released Items", { underline: true });
-  doc.fontSize(12);
-
-  if (releasedItems.length === 0) {
-    doc.text("No items specified for release.");
-  } else {
-    releasedItems.forEach((item) => {
-      doc.text(`• ${item.type}: ${item.name} (ID: ${item.id}) - Condition: ${item.condition || "Good"}`);
-    });
+  let soldier = soldierData;
+  if (!soldier) {
+    const soldierDoc = await db.collection("soldiers").doc(soldierID).get();
+    if (!soldierDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Soldier not found"
+      );
+    }
+    soldier = soldierDoc.data();
   }
 
-  doc.moveDown(2);
+  const safeReleasedItems = Array.isArray(releasedItems) ? releasedItems : [];
 
-  // Certification
-  doc.fontSize(14).text("Certification", { underline: true });
-  doc.fontSize(11);
-  doc.text("I certify that all equipment listed above has been returned in the condition noted.");
-  doc.moveDown(2);
+  const [remainingWeapons, remainingGear, remainingDrones, remainingEquipment] =
+    await Promise.all([
+      db.collection("weapons").where("assigned_to", "==", soldierID).get(),
+      db.collection("serialized_gear").where("assigned_to", "==", soldierID).get(),
+      db.collection("drone_sets").where("assigned_to", "==", soldierID).get(),
+      db.collection("equipment").where("assigned_to", "==", soldierID).get(),
+    ]);
 
-  // Signature Lines
-  doc.text("Soldier Signature: _______________________________  Date: _______________");
-  doc.moveDown();
-  doc.text("Receiving Officer: _______________________________  Date: _______________");
-  doc.moveDown();
-  doc.text("Witness: ________________________________________  Date: _______________");
+  const releaseItemCount = safeReleasedItems.length;
 
-  // Footer
-  doc.moveDown(2);
-  doc.fontSize(10).text("This document was generated electronically by the Armory Management System", {
-    align: "center",
+  const remainingItems = [];
+
+  remainingWeapons.docs.forEach((doc) => {
+    const data = doc.data();
+    remainingItems.push({
+      type: "Weapon",
+      name: data.weapon_type || data.weapon_name,
+      id: data.weapon_id,
+      status: data.armory_status || "assigned",
+    });
+  });
+  remainingGear.docs.forEach((doc) => {
+    const data = doc.data();
+    remainingItems.push({
+      type: "Gear",
+      name: data.gear_type || data.gear_name,
+      id: data.gear_id,
+      status: data.armory_status || "assigned",
+    });
+  });
+  remainingDrones.docs.forEach((doc) => {
+    const data = doc.data();
+    remainingItems.push({
+      type: "Drone",
+      name: data.set_type,
+      id: data.set_serial_number,
+      status: data.armory_status || "assigned",
+    });
+  });
+  remainingEquipment.docs.forEach((doc) => {
+    const data = doc.data();
+    remainingItems.push({
+      type: "Equipment",
+      name: data.equipment_type,
+      id: doc.id.slice(0, 8),
+      status: "assigned",
+    });
   });
 
-  // Finalize PDF
-  doc.end();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("he-IL");
+  const timeStr = now.toLocaleTimeString("he-IL");
 
-  // Convert to base64
-  const buffer = Buffer.concat(chunks);
-  const base64 = buffer.toString("base64");
+  const signatureHtml = signatureData
+    ? `<img src="${signatureData}" alt="Soldier Signature" style="max-width:100%;max-height:100px;object-fit:contain;" />`
+    : "<p><em>לא סופקה חתימה</em></p>";
 
-  return {
-    pdf_base64: base64,
-    filename: `release_form_${soldierID}_${Date.now()}.pdf`,
-    soldier,
-  };
-}
+  let releasedItemsTableRows = "";
+  if (safeReleasedItems.length === 0) {
+    releasedItemsTableRows = "<tr><td colspan=\"5\">לא צוינו פריטים לשחרור</td></tr>";
+  } else {
+    releasedItemsTableRows = safeReleasedItems
+      .map((item, index) => formatReleaseItemRow(item, index, "Returned"))
+      .join("");
+  }
+
+  let remainingItemsHtml = "";
+  if (remainingItems.length === 0) {
+    remainingItemsHtml = "<p><strong>אין ציוד נוסף ברשות החייל לאחר השחרור.</strong></p>";
+  } else {
+    const remainingItemsTableRows = remainingItems
+      .map((item, index) => formatReleaseItemRow(item, index, "Assigned"))
+      .join("");
+    remainingItemsHtml = `<table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>סוג</th>
+          <th>שם הפריט</th>
+          <th>מספר סידורי</th>
+          <th>סטטוס</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${remainingItemsTableRows}
+      </tbody>
+    </table>`;
+  }
+
+  const htmlContent = `<!DOCTYPE html>
+    <html lang="he" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <title>Equipment Release Form</title>
+        <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            @page { size: A4; margin: 0.5in; }
+            * { box-sizing: border-box; }
+            body { font-family: 'Heebo', Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #000; direction: rtl; text-align: right; margin: 0; padding: 20px; background: white; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+            .header h1 { font-size: 24px; font-weight: bold; margin: 0 0 5px 0; direction: ltr; }
+            .header h2 { font-size: 20px; font-weight: bold; margin: 0; direction: rtl; }
+            .section { margin-bottom: 25px; border: 1px solid #ddd; padding: 15px; page-break-inside: avoid; }
+            .section h3 { font-size: 16px; font-weight: bold; margin: 0 0 10px 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+            .info-row { margin-bottom: 8px; }
+            .info-row strong { font-weight: 600; }
+            .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            .items-table th, .items-table td { border: 1px solid #666; padding: 8px; text-align: right; font-size: 11px; vertical-align: top; }
+            .items-table th { background-color: #f5f5f5; font-weight: bold; }
+            .released-items { background-color: #fff5f5; }
+            .remaining-items { background-color: #f0f9ff; }
+            .signature-box { border: 1px solid #666; min-height: 120px; padding: 10px; margin-top: 10px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
+            .footer { margin-top: 30px; font-size: 10px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 10px; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>Equipment Release Form</h1>
+            <h2>טופס שחרור ציוד</h2>
+        </div>
+        <div class="section">
+            <h3>פרטי הפעילות - Activity Details</h3>
+            <div class="info-row"><strong>תאריך:</strong> ${dateStr} בשעה ${timeStr}</div>
+            <div class="info-row"><strong>מאושר על ידי:</strong> ${performerName || "System"}</div>
+            <div class="info-row"><strong>סיבת שחרור:</strong> ${reason || "לא צוין"}</div>
+        </div>
+        <div class="section">
+            <h3>פרטי החייל - Soldier Information</h3>
+            <div class="info-row"><strong>שם:</strong> ${soldier.first_name || ""} ${soldier.last_name || ""}</div>
+            <div class="info-row"><strong>מספר אישי:</strong> ${soldier.soldier_id || ""}</div>
+            <div class="info-row"><strong>יחידה:</strong> ${soldier.division_name || "N/A"}</div>
+        </div>
+        <div class="section released-items">
+            <h3>ציוד ששוחרר באירוע זה - Equipment Released in This Event (${releaseItemCount} items)</h3>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>סוג</th>
+                        <th>שם הפריט</th>
+                        <th>מספר סידורי</th>
+                        <th>סטטוס</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${releasedItemsTableRows}
+                </tbody>
+            </table>
+        </div>
+        <div class="section remaining-items">
+            <h3>ציוד שנותר ברשות החייל - Remaining Equipment After Release (${remainingItems.length} items)</h3>
+            ${remainingItemsHtml}
+        </div>
+        <div class="section">
+            <h3>חתימת החייל - Soldier Signature</h3>
+            <div class="signature-box">
+                ${signatureHtml}
+            </div>
+        </div>
+        <div class="footer">
+            <p>נוצר ב-${dateStr}, ${timeStr}</p>
+        </div>
+    </body>
+    </html>`;
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "0.5in", right: "0.5in", bottom: "0.5in", left: "0.5in" },
+    });
+    await page.close();
+    return {
+      soldier,
+      pdf_base64: pdfBuffer.toString("base64"),
+      filename: `release_form_${soldierID}_${Date.now()}.pdf`,
+    };
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+};
 
 /**
  * Generate a release form PDF
  */
 exports.generateReleaseForm = functions
-  .runWith({ serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com" })
+  .runWith({
+    serviceAccountEmail: "project-1386902152066454120@appspot.gserviceaccount.com",
+    memory: "1GB",
+    timeoutSeconds: 60,
+  })
   .https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -242,7 +650,13 @@ exports.generateReleaseForm = functions
     );
   }
 
-  const { soldierID, releasedItems = [], reason = "End of Service" } = data;
+  const {
+    soldierID,
+    releasedItems = [],
+    reason = "End of Service",
+    performerName = "System",
+    signatureData = "",
+  } = data;
 
   if (!soldierID) {
     throw new functions.https.HttpsError(
@@ -252,13 +666,20 @@ exports.generateReleaseForm = functions
   }
 
   try {
-    const result = await generateReleaseFormPDF(soldierID, releasedItems, reason);
+    const result = await generateReleaseFormDocument({
+      soldierID,
+      releasedItems,
+      reason,
+      performerName,
+      signatureData,
+    });
     return {
       success: true,
       pdf_base64: result.pdf_base64,
       filename: result.filename,
     };
   } catch (error) {
+    logger.error?.("generateReleaseForm failed", error);
     throw new functions.https.HttpsError(
       "internal",
       `Failed to generate release form: ${error.message}`

@@ -106,25 +106,111 @@ export default function SigningHistoryDialog({ soldier, open, onOpenChange }) {
         }
     }, [soldier, open]);
 
+    const base64ToBlob = (base64, contentType = 'application/pdf') => {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: contentType });
+    };
+
+    const openBlobInNewTab = (blob, filename = 'form.pdf') => {
+        const url = window.URL.createObjectURL(blob);
+        const newWindow = window.open(url, '_blank');
+        if (newWindow) {
+            newWindow.onload = () => {
+                if (newWindow.document) {
+                    newWindow.document.title = filename;
+                }
+            };
+        }
+        setTimeout(() => window.URL.revokeObjectURL(url), 100);
+    };
+
+    const extractPdfFromResponse = (response) => {
+        if (!response) return null;
+
+        // Firebase wrapper returns { success, data: { ... } }
+        const payload = response.data ?? response;
+
+        if (!payload) return null;
+
+        const pdfBase64 = payload.pdf_base64 || payload.pdf || payload.base64;
+        const filename = payload.filename || payload.fileName || 'form.pdf';
+
+        if (pdfBase64) {
+            return {
+                blob: base64ToBlob(pdfBase64),
+                filename,
+            };
+        }
+
+        // Some providers might return raw ArrayBuffer or Blob in payload.data
+        if (payload instanceof Blob) {
+            return { blob: payload, filename };
+        }
+
+        if (payload.data instanceof Blob) {
+            return { blob: payload.data, filename };
+        }
+
+        if (payload.data instanceof ArrayBuffer) {
+            return { blob: new Blob([payload.data], { type: 'application/pdf' }), filename };
+        }
+
+        return null;
+    };
+
     const handleViewForm = async (activity) => {
         setViewingForm(activity.id);
         try {
             let response;
-            const params = { activityId: activity.id, fallback_soldier_id: soldier.soldier_id };
+            const assignedItems = activity.details?.assigned_items || activity.context?.assignedItems || [];
+            const releasedItems = activity.details?.released_items || activity.context?.releasedItems || [];
+            const reason = activity.details?.release_reason || activity.context?.reason || activity.context?.releaseReason || "End of Service";
+
+            const baseParams = {
+                soldierID: soldier.soldier_id,
+                activityId: activity.id,
+                fallback_soldier_id: soldier.soldier_id
+            };
 
             if (activity.activity_type === 'ASSIGN') {
-                response = await generateSigningForm(params);
+                response = await generateSigningForm({
+                    ...baseParams,
+                    assignedItems
+                });
             } else { // UNASSIGN or RELEASE
-                response = await generateReleaseForm(params);
+                response = await generateReleaseForm({
+                    ...baseParams,
+                    releasedItems,
+                    reason
+                });
             }
 
-            const blob = new Blob([response.data], { type: 'text/html;charset=utf-8' });
-            const url = window.URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            setTimeout(() => window.URL.revokeObjectURL(url), 100);
+            if (!response?.success && response?.error) {
+                throw new Error(response.error);
+            }
 
+            const pdfResult = extractPdfFromResponse(response);
+
+            if (pdfResult) {
+                openBlobInNewTab(pdfResult.blob, pdfResult.filename);
+            } else if (response?.data) {
+                // Fallback: treat as HTML or plain text
+                const blob = typeof response.data === 'string'
+                    ? new Blob([response.data], { type: 'text/html;charset=utf-8' })
+                    : new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+                openBlobInNewTab(blob, 'form.html');
+            } else {
+                throw new Error('Unexpected response format while generating form.');
+            }
         } catch (error) {
-            alert("Failed to generate form.");
+            console.error('Error generating form:', error);
+            const message = error?.message || "Failed to generate form. Please try again later.";
+            alert(message);
         }
         setViewingForm(null);
     };

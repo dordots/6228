@@ -29,7 +29,18 @@ const ItemRow = ({ item, isSelected, onSelect, type }) => {
             return null;
     }
 
-    const locationLabel = location === 'division_deposit' ? 'Division' : location === 'central_armory' ? 'Central' : 'Unknown';
+    const locationLabel = (() => {
+        switch (location) {
+            case 'division_deposit':
+                return 'Division';
+            case 'armory_deposit':
+                return 'Central Armory';
+            case 'naura_deposit':
+                return 'Naura';
+            default:
+                return 'Unknown';
+        }
+    })();
 
     return (
         <div className="flex items-center justify-between p-3 border border-slate-200 rounded-lg hover:bg-slate-50">

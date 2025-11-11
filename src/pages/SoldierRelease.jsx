@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"; // Import useRef
 import { Soldier } from "@/api/entities";
 import { Weapon } from "@/api/entities";
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Users, ChevronDown, Home, ArrowLeftCircle, Target, Package, Loader2, AlertCircle } from "lucide-react";
@@ -117,6 +117,8 @@ export default function SoldierReleasePage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedSoldier, setSelectedSoldier] = useState(null);
   const [lastReleasedSoldier, setLastReleasedSoldier] = useState(null); // ADD: Keep track of last soldier
+  const [sendToNauraDeposit, setSendToNauraDeposit] = useState(false);
+  const [sendAllToNauraDeposit, setSendAllToNauraDeposit] = useState(false);
 
   const [showSerializedDialog, setShowSerializedDialog] = useState(false);
   const [showEquipmentDialog, setShowEquipmentDialog] = useState(false);
@@ -467,6 +469,9 @@ export default function SoldierReleasePage() {
           } catch (e) { }
       }
 
+      const targetArmoryStatus = sendToNauraDeposit ? 'in_deposit' : 'with_soldier';
+      const depositLocationValue = sendToNauraDeposit ? 'naura_deposit' : null;
+
       // Expand paired weapons - if a paired weapon is selected, include both weapons
       const expandedSelectedItems = new Set(selectedSerializedItems);
       assignedSerialized.forEach(item => {
@@ -531,16 +536,16 @@ export default function SoldierReleasePage() {
             // Handle paired weapons - unassign both if it's a pair
             if (item.isPaired && item.weapon1 && item.weapon2) {
               await Promise.all([
-                Weapon.update(item.weapon1.weapon_id, { assigned_to: null, armory_status: 'with_soldier' }),
-                Weapon.update(item.weapon2.weapon_id, { assigned_to: null, armory_status: 'with_soldier' })
+                Weapon.update(item.weapon1.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
+                Weapon.update(item.weapon2.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
               ]);
             } else if (item.weapon_id) {
-              await Weapon.update(item.weapon_id, { assigned_to: null, armory_status: 'with_soldier' });
+              await Weapon.update(item.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
             } else {
               // Fallback: try to get weapon_id from the original weapon object
               const weapon = assignedWeapons.find(w => w.id === item.id);
               if (weapon) {
-                await Weapon.update(weapon.weapon_id, { assigned_to: null, armory_status: 'with_soldier' });
+                await Weapon.update(weapon.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
               }
             }
             break;
@@ -555,34 +560,34 @@ export default function SoldierReleasePage() {
                 const matchingBeam = findBeamForAmaral(gearItem, assignedGear);
                 if (matchingBeam) {
                   await Promise.all([
-                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' }),
-                    SerializedGear.update(matchingBeam.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
+                    SerializedGear.update(matchingBeam.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
                   ]);
                 } else {
-                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                 }
               } else if (isBeam(gearItem)) {
                 // This is a קרן - find and release the matching אמר"ל as well
                 const matchingAmaral = findAmaralForBeam(gearItem, assignedGear);
                 if (matchingAmaral) {
                   await Promise.all([
-                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' }),
-                    SerializedGear.update(matchingAmaral.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
+                    SerializedGear.update(matchingAmaral.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
                   ]);
                 } else {
-                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                 }
               } else {
                 // Regular gear - just release this one
-                await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+                await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
               }
             } else {
               // Fallback: if gear item not found, just release it
-              await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: 'with_soldier' });
+              await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
             }
             break;
           case 'Drone':
-            await DroneSet.update(item.id, { assigned_to: null, armory_status: 'with_soldier' });
+            await DroneSet.update(item.id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
             break;
           default: break;
         }
@@ -592,6 +597,10 @@ export default function SoldierReleasePage() {
       // Try to create ActivityLog and send email, but don't fail if this doesn't work
       try {
         const logContext = { unassignedItems: itemDetailsForLog };
+        if (sendToNauraDeposit) {
+          logContext.depositLocation = 'naura_deposit';
+          logContext.armoryStatus = 'in_deposit';
+        }
         if (signature) {
           logContext.signature = signature;
         }
@@ -600,11 +609,12 @@ export default function SoldierReleasePage() {
         const itemsDescription = itemDetailsForLog.map(item => {
           return `${item.name} (${item.fieldId})`;
         }).join(', ');
+        const depositSuffix = sendToNauraDeposit ? ' [Sent to Naura Deposit]' : '';
 
         const newActivityLog = await ActivityLog.create({
           activity_type: "UNASSIGN",
           entity_type: "Soldier",
-          details: `Unassigned from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
+          details: `Unassigned from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + depositSuffix + (signature ? ` [Signed]` : ''),
           user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
           user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
           client_timestamp: new Date().toISOString(),
@@ -705,7 +715,10 @@ export default function SoldierReleasePage() {
       setShowSerializedDialog(false);
       setSelectedSerializedItems([]);
       setSerializedQuantities({});
-      await loadSoldierItems(selectedSoldier); // Keep this to re-fetch remaining items if any
+      setSendToNauraDeposit(false);
+      if (selectedSoldier) {
+        await loadSoldierItems(selectedSoldier);
+      }
 
     } catch (error) {
 
@@ -732,6 +745,10 @@ export default function SoldierReleasePage() {
         });
 
         const logContext = { unassignedItems: itemDetailsForLog };
+        if (sendToNauraDeposit) {
+          logContext.depositLocation = 'naura_deposit';
+          logContext.armoryStatus = 'in_deposit';
+        }
         if (signature) {
           logContext.signature = signature;
         }
@@ -740,11 +757,12 @@ export default function SoldierReleasePage() {
         const itemsDescription = itemDetailsForLog.map(item => {
           return `${item.name} (${item.fieldId})`;
         }).join(', ');
+        const depositSuffix = sendToNauraDeposit ? ' [Sent to Naura Deposit]' : '';
 
         const newActivityLog = await ActivityLog.create({
           activity_type: "UNASSIGN",
           entity_type: "Soldier",
-          details: `Attempted to unassign from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
+          details: `Attempted to unassign from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + depositSuffix + (signature ? ` [Signed]` : ''),
           user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
           user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
           client_timestamp: new Date().toISOString(),
@@ -797,6 +815,7 @@ export default function SoldierReleasePage() {
       setShowSerializedDialog(false);
       setSelectedSerializedItems([]);
       setSerializedQuantities({});
+      setSendToNauraDeposit(false);
       if (selectedSoldier) {
         await loadSoldierItems(selectedSoldier);
       }
@@ -817,6 +836,9 @@ export default function SoldierReleasePage() {
           } catch (e) { }
       }
 
+      const targetArmoryStatus = sendToNauraDeposit ? 'in_deposit' : 'with_soldier';
+      const depositLocationValue = sendToNauraDeposit ? 'naura_deposit' : null;
+
       let logDetails = [];
 
       for (const itemId of selectedEquipmentItems) {
@@ -829,14 +851,16 @@ export default function SoldierReleasePage() {
         logDetails.push({ type: item.equipment_type, quantity: quantityToUnassign, name: item.displayName });
 
         if (remainingQuantity <= 0) {
-          await Equipment.update(itemId, { assigned_to: null });
+          await Equipment.update(itemId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
         } else {
-          await Equipment.update(itemId, { quantity: remainingQuantity });
+          await Equipment.update(itemId, { quantity: remainingQuantity, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
           const { id, ...rest } = item;
           await Equipment.create({
             ...rest,
             assigned_to: null,
             quantity: quantityToUnassign,
+            armory_status: targetArmoryStatus,
+            deposit_location: depositLocationValue
           });
         }
       }
@@ -845,6 +869,10 @@ export default function SoldierReleasePage() {
       // Try to create ActivityLog and send email, but don't fail if this doesn't work
       try {
         const logContext = { unassignedItems: logDetails };
+        if (sendToNauraDeposit) {
+          logContext.depositLocation = 'naura_deposit';
+          logContext.armoryStatus = 'in_deposit';
+        }
         if (signature) {
           logContext.signature = signature;
         }
@@ -852,7 +880,7 @@ export default function SoldierReleasePage() {
         const newActivityLog = await ActivityLog.create({
           activity_type: "UNASSIGN",
           entity_type: "Soldier",
-          details: `Unassigned ${logDetails.reduce((sum, item) => sum + item.quantity, 0)} units of equipment from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+          details: `Unassigned ${logDetails.reduce((sum, item) => sum + item.quantity, 0)} units of equipment from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (sendToNauraDeposit ? ' [Sent to Naura Deposit]' : '') + (signature ? ` Signature provided.` : ''),
           user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
           user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
           client_timestamp: new Date().toISOString(),
@@ -949,6 +977,7 @@ export default function SoldierReleasePage() {
       setShowEquipmentDialog(false);
       setSelectedEquipmentItems([]);
       setEquipmentQuantities({});
+      setSendToNauraDeposit(false);
       await loadSoldierItems(selectedSoldier); // Keep this to re-fetch remaining items if any
 
     } catch (error) {
@@ -973,6 +1002,10 @@ export default function SoldierReleasePage() {
         }
 
         const logContext = { unassignedItems: logDetails };
+        if (sendToNauraDeposit) {
+          logContext.depositLocation = 'naura_deposit';
+          logContext.armoryStatus = 'in_deposit';
+        }
         if (signature) {
           logContext.signature = signature;
         }
@@ -980,7 +1013,7 @@ export default function SoldierReleasePage() {
         const newActivityLog = await ActivityLog.create({
           activity_type: "UNASSIGN",
           entity_type: "Soldier",
-          details: `Attempted to unassign ${logDetails.reduce((sum, item) => sum + item.quantity, 0)} units of equipment from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (signature ? ` Signature provided.` : ''),
+          details: `Unassigned ${logDetails.reduce((sum, item) => sum + item.quantity, 0)} units of equipment from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}).` + (sendToNauraDeposit ? ' [Sent to Naura Deposit]' : '') + (signature ? ` Signature provided.` : ''),
           user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : currentUser.full_name,
           user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
           client_timestamp: new Date().toISOString(),
@@ -1033,6 +1066,7 @@ export default function SoldierReleasePage() {
       setShowEquipmentDialog(false);
       setSelectedEquipmentItems([]);
       setEquipmentQuantities({});
+      setSendToNauraDeposit(false);
       if (selectedSoldier) {
         await loadSoldierItems(selectedSoldier);
       }
@@ -1058,6 +1092,9 @@ export default function SoldierReleasePage() {
             } catch (e) { }
         }
 
+        const targetArmoryStatus = sendAllToNauraDeposit ? 'in_deposit' : 'with_soldier';
+        const depositLocationValue = sendAllToNauraDeposit ? 'naura_deposit' : null;
+
         const unassignPromises = [];
         const itemDetailsForLog = [];
 
@@ -1079,12 +1116,12 @@ export default function SoldierReleasePage() {
                     // Handle paired weapons - if this is a paired item, unassign both
                     if (item.isPaired && item.pairedWeaponId) {
                       promise = Promise.all([
-                        Weapon.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' }),
-                        Weapon.update(item.pairedWeaponId, { assigned_to: null, armory_status: 'with_soldier' })
+                        Weapon.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
+                        Weapon.update(item.pairedWeaponId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
                       ]);
                     } else {
                       // Use fieldId (weapon_id) for updates with adapter
-                      promise = Weapon.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                      promise = Weapon.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                     }
                     break;
                 case 'Gear':
@@ -1098,35 +1135,35 @@ export default function SoldierReleasePage() {
                         const matchingBeamFull = findBeamForAmaral(gearItemFull, assignedGear);
                         if (matchingBeamFull) {
                           promise = Promise.all([
-                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' }),
-                            SerializedGear.update(matchingBeamFull.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
+                            SerializedGear.update(matchingBeamFull.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
                           ]);
                         } else {
-                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                         }
                       } else if (isBeam(gearItemFull)) {
                         // This is a קרן - find and release the matching אמר"ל as well
                         const matchingAmaralFull = findAmaralForBeam(gearItemFull, assignedGear);
                         if (matchingAmaralFull) {
                           promise = Promise.all([
-                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' }),
-                            SerializedGear.update(matchingAmaralFull.gear_id, { assigned_to: null, armory_status: 'with_soldier' })
+                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
+                            SerializedGear.update(matchingAmaralFull.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
                           ]);
                         } else {
-                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                         }
                       } else {
                         // Regular gear - just release this one
-                        promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                        promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                       }
                     } else {
                       // Fallback: if gear item not found, just release it
-                      promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                      promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                     }
                     break;
                 case 'Drone':
                     // Use fieldId (drone_set_id) for updates with adapter
-                    promise = DroneSet.update(item.fieldId, { assigned_to: null, armory_status: 'with_soldier' });
+                    promise = DroneSet.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
                     break;
                 case 'Equipment':
                     // For full release, unassign the entire equipment instance (uses document ID)
@@ -1152,6 +1189,10 @@ export default function SoldierReleasePage() {
                 unassignedItems: itemDetailsForLog,
                 signature: signature || null // Add signature directly to context
             };
+            if (sendAllToNauraDeposit) {
+                logContext.depositLocation = 'naura_deposit';
+                logContext.armoryStatus = 'in_deposit';
+            }
 
             // Create detailed description of released items
             const itemsDescription = itemDetailsForLog.map(item => {
@@ -1160,11 +1201,12 @@ export default function SoldierReleasePage() {
                 }
                 return `${item.name} (${item.fieldId})`;
             }).join(', ');
+            const depositSuffix = sendAllToNauraDeposit ? ' [Sent to Naura Deposit]' : '';
 
             const newActivityLog = await ActivityLog.create({
                 activity_type: "RELEASE",
                 entity_type: "Soldier",
-                details: `Full release from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
+                details: `Full release from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + depositSuffix + (signature ? ` [Signed]` : ''),
                 user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : user.full_name,
                 user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
                 context: logContext,
@@ -1305,6 +1347,10 @@ export default function SoldierReleasePage() {
                 unassignedItems: itemDetailsForLog,
                 signature: signature || null
             };
+            if (sendAllToNauraDeposit) {
+                logContext.depositLocation = 'naura_deposit';
+                logContext.armoryStatus = 'in_deposit';
+            }
 
             // Create detailed description of items
             const itemsDescription = itemDetailsForLog.map(item => {
@@ -1313,11 +1359,12 @@ export default function SoldierReleasePage() {
                 }
                 return `${item.name} (${item.fieldId})`;
             }).join(', ');
+            const depositSuffix = sendAllToNauraDeposit ? ' [Sent to Naura Deposit]' : '';
 
             const newActivityLog = await ActivityLog.create({
                 activity_type: "RELEASE",
                 entity_type: "Soldier",
-                details: `Attempted full release from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + (signature ? ` [Signed]` : ''),
+                details: `Attempted full release from ${selectedSoldier.first_name} ${selectedSoldier.last_name} (${selectedSoldier.soldier_id}): ${itemsDescription}` + depositSuffix + (signature ? ` [Signed]` : ''),
                 user_full_name: performingSoldier ? `${performingSoldier.first_name} ${performingSoldier.last_name}` : user.full_name,
                 user_soldier_id: performingSoldier ? performingSoldier.soldier_id : null,
                 context: logContext,
@@ -1375,6 +1422,7 @@ export default function SoldierReleasePage() {
         loadAllData(); // Refresh the soldier list
     } finally {
         setIsReleasing(false);
+        setSendAllToNauraDeposit(false);
     }
   };
 
@@ -1755,7 +1803,7 @@ export default function SoldierReleasePage() {
                   </div>
                 </Button>
                 {/* ADD: Full release button */}
-                <AlertDialog>
+                <AlertDialog onOpenChange={(open) => { if (!open) setSendAllToNauraDeposit(false); }}>
                   <AlertDialogTrigger asChild>
                     <Button
                       disabled={isReleasing || (allAssignedItemsForFullRelease.length === 0)}
@@ -1786,6 +1834,17 @@ export default function SoldierReleasePage() {
                         )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <div className="mt-4 flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <Checkbox
+                        id="send-to-naora-full"
+                        checked={sendAllToNauraDeposit}
+                        onCheckedChange={(checked) => setSendAllToNauraDeposit(Boolean(checked))}
+                      />
+                      <label htmlFor="send-to-naora-full" className="text-sm text-slate-700 leading-tight">
+                        Send all released items to Naura deposit
+                        <span className="block text-xs text-slate-500">Armory status will change to "In Deposit".</span>
+                      </label>
+                    </div>
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Soldier's Signature</label>
                         <div className="border rounded-md bg-white">
@@ -1810,7 +1869,7 @@ export default function SoldierReleasePage() {
 
       {selectedSoldier && (
         <>
-          <Dialog open={showSerializedDialog} onOpenChange={setShowSerializedDialog}>
+          <Dialog open={showSerializedDialog} onOpenChange={(open) => { setShowSerializedDialog(open); if (!open) setSendToNauraDeposit(false); }}>
             <DialogContent className="max-w-2xl p-0">
               <DialogHeader className="p-6 pb-0">
                 <DialogTitle>Un-assign Weapons, Gear & Drones</DialogTitle>
@@ -1849,7 +1908,7 @@ export default function SoldierReleasePage() {
                 />
               </div>
               <div className="px-6 py-4 bg-slate-50 border-t flex justify-end">
-                 <AlertDialog>
+                 <AlertDialog onOpenChange={(open) => { if (!open) setSendToNauraDeposit(false); }}>
                   <AlertDialogTrigger asChild>
                     <Button disabled={selectedSerializedItems.length === 0} className="bg-red-600 hover:bg-red-700" onClick={() => signaturePadRef.current?.clear()}>
                       <ArrowLeftCircle className="w-4 h-4 mr-2" />
@@ -1868,6 +1927,17 @@ export default function SoldierReleasePage() {
                         )}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <div className="mt-4 flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <Checkbox
+                        id="send-to-naora-partial"
+                        checked={sendToNauraDeposit}
+                        onCheckedChange={(checked) => setSendToNauraDeposit(Boolean(checked))}
+                      />
+                      <label htmlFor="send-to-naora-partial" className="text-sm text-slate-700 leading-tight">
+                        Send released items to Naura deposit
+                        <span className="block text-xs text-slate-500">Armory status will change to "In Deposit".</span>
+                      </label>
+                    </div>
                      <div className="space-y-2">
                         <label className="text-sm font-medium">Soldier's Signature</label>
                         <div className="border rounded-md bg-white">
@@ -1903,7 +1973,7 @@ export default function SoldierReleasePage() {
                 />
               </div>
               <div className="px-6 py-4 bg-slate-50 border-t flex justify-end">
-                 <AlertDialog>
+                 <AlertDialog onOpenChange={(open) => { if (!open) setSendToNauraDeposit(false); }}>
                   <AlertDialogTrigger asChild>
                     <Button disabled={selectedEquipmentItems.length === 0} className="bg-red-600 hover:bg-red-700" onClick={() => signaturePadRef.current?.clear()}>
                       <ArrowLeftCircle className="w-4 h-4 mr-2" />

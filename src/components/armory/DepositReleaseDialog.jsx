@@ -44,6 +44,19 @@ export default function DepositReleaseDialog({
     }
   }, [open]);
 
+  const formatDepositName = (value) => {
+    switch (value) {
+      case 'division_deposit':
+        return 'Division Deposit';
+      case 'armory_deposit':
+        return 'Central Armory Deposit';
+      case 'naora_deposit':
+        return 'Naura Deposit';
+      default:
+        return 'Deposit';
+    }
+  };
+
   // Filter equipment based on mode and soldier assignment
   const availableWeapons = React.useMemo(() => {
     if (!Array.isArray(weapons) || !soldier) return [];
@@ -208,6 +221,15 @@ export default function DepositReleaseDialog({
                       </div>
                     </div>
                   </SelectItem>
+                  <SelectItem value="naura_deposit">
+                    <div className="flex items-center gap-2">
+                      <Package className="w-4 h-4" />
+                      <div>
+                        <div className="font-medium">Naura Deposit</div>
+                        <div className="text-xs text-slate-500">Send to Naura base deposit</div>
+                      </div>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -332,7 +354,7 @@ export default function DepositReleaseDialog({
               Please sign to confirm the {mode} of selected equipment
               {mode === 'deposit' && depositLocation && (
                 <span className="font-medium">
-                  {' '}to {depositLocation === 'division_deposit' ? 'Division Deposit' : 'Central Armory Deposit'}
+                  {' '}to {formatDepositName(depositLocation)}
                 </span>
               )}
               .

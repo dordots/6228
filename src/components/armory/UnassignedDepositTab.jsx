@@ -210,9 +210,15 @@ export default function UnassignedDepositTab({ items, isLoading, onSubmit }) {
                                         </Label>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="central_armory" id="central" />
+                                        <RadioGroupItem value="armory_deposit" id="central" />
                                         <Label htmlFor="central" className="font-normal cursor-pointer">
                                             Central Armory Deposit
+                                        </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <RadioGroupItem value="naura_deposit" id="naura" />
+                                        <Label htmlFor="naura" className="font-normal cursor-pointer">
+                                            Naura Deposit
                                         </Label>
                                     </div>
                                 </RadioGroup>

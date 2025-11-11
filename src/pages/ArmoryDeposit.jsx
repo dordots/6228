@@ -31,6 +31,19 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null); // Added currentUser state
 
+  const formatDepositLocation = useCallback((location) => {
+    switch (location) {
+      case 'division_deposit':
+        return 'Division Deposit';
+      case 'armory_deposit':
+        return 'Central Armory Deposit';
+      case 'naura_deposit':
+        return 'Naura Deposit';
+      default:
+        return 'Deposit';
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
     loadCurrentUser(); // Load current user on mount
@@ -256,7 +269,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       
       let locationText = '';
       if (mode === 'deposit' && depositLocation) {
-        locationText = ` to ${depositLocation === 'division_deposit' ? 'Division Deposit' : 'Central Armory Deposit'}`;
+        locationText = ` to ${formatDepositLocation(depositLocation)}`;
       }
 
       if (totalItemsCount > 0) {
@@ -347,7 +360,7 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
       if (gearIds.length > 0) actionItems.push(`${gearIds.length} gear item(s)`);
       if (droneSetIds.length > 0) actionItems.push(`${droneSetIds.length} drone set(s)`);
 
-      const locationText = depositLocation === 'division_deposit' ? 'Division Deposit' : 'Central Armory Deposit';
+      const locationText = formatDepositLocation(depositLocation);
 
       if (actionItems.length > 0) {
           await ActivityLog.create({

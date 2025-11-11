@@ -389,6 +389,7 @@ export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingG
                   <SelectContent>
                     <SelectItem value="division_deposit">Division Deposit</SelectItem>
                     <SelectItem value="armory_deposit">Armory Deposit</SelectItem>
+                    <SelectItem value="naura_deposit">Naura Deposit</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

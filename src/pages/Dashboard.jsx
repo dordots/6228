@@ -210,9 +210,10 @@ export default function Dashboard() {
     const assigned = safeGear.filter(g => g && g.assigned_to).length;
     const unassigned = safeGear.length - assigned;
     const notFunctioning = safeGear.filter(g => g && g.status === 'not_functioning').length;
+    const missing = safeGear.filter(g => g && g.status === 'missing').length;
     const inDeposit = safeGear.filter(g => g && g.armory_status === 'in_deposit').length;
     
-    return { assigned, unassigned, notFunctioning, inDeposit };
+    return { assigned, unassigned, notFunctioning, missing, inDeposit };
   };
 
   const getDroneStats = () => {
@@ -339,7 +340,7 @@ export default function Dashboard() {
         <div className="col-span-2 md:col-span-1">
           <StatsCard
             title="Maintenance Alerts"
-            value={equipmentStats.needsRepair + weaponStats.notFunctioning + gearStats.notFunctioning + droneStats.needMaintenance}
+            value={equipmentStats.needsRepair + weaponStats.notFunctioning + gearStats.notFunctioning + gearStats.missing + droneStats.needMaintenance}
             icon={AlertTriangle}
             color="red"
             subtitle="requires attention"

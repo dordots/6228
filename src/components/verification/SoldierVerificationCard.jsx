@@ -3,10 +3,22 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { User, Target, Binoculars, CheckCircle, ShieldCheck, Loader2, Undo2 } from "lucide-react";
+import { User, Target, Binoculars, Joystick, Cpu, CheckCircle, ShieldCheck, Loader2, Undo2 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function SoldierVerificationCard({ soldier, assignedWeapons, assignedGear, isVerified, verificationRecord, onVerify, onUndoVerify, isSelected, onToggleSelect }) {
+export default function SoldierVerificationCard({
+  soldier,
+  assignedWeapons,
+  assignedGear,
+  assignedDroneSets = [],
+  assignedDroneComponents = [],
+  isVerified,
+  verificationRecord,
+  onVerify,
+  onUndoVerify,
+  isSelected,
+  onToggleSelect
+}) {
   const [isVerifying, setIsVerifying] = React.useState(false);
   const [isUndoing, setIsUndoing] = React.useState(false);
 
@@ -76,6 +88,40 @@ export default function SoldierVerificationCard({ soldier, assignedWeapons, assi
             </div>
           ) : (
             <p className="text-sm text-slate-500 italic">No gear assigned.</p>
+          )}
+        </div>
+        <div>
+          <h4 className="font-semibold text-sm mb-2 flex items-center gap-2"><Joystick className="w-4 h-4 text-slate-500" />Drone Sets</h4>
+          {assignedDroneSets.length > 0 ? (
+            <div className="space-y-1">
+              {assignedDroneSets.map(set => (
+                <p key={set.id} className="text-sm text-slate-700">
+                  {set.set_type || 'Drone Set'}
+                  {set.set_serial_number && (
+                    <span className="text-xs text-slate-500"> (SN: {set.set_serial_number})</span>
+                  )}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500 italic">No drone sets assigned.</p>
+          )}
+        </div>
+        <div>
+          <h4 className="font-semibold text-sm mb-2 flex items-center gap-2"><Cpu className="w-4 h-4 text-slate-500" />Drone Components</h4>
+          {assignedDroneComponents.length > 0 ? (
+            <div className="space-y-1">
+              {assignedDroneComponents.map(component => (
+                <p key={component.id} className="text-sm text-slate-700">
+                  {component.component_type || 'Component'}
+                  {component.component_id && (
+                    <span className="text-xs text-slate-500"> (ID: {component.component_id})</span>
+                  )}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500 italic">No drone components assigned.</p>
           )}
         </div>
       </CardContent>

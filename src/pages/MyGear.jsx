@@ -83,7 +83,6 @@ export default function MyGearPage() {
   }
 
   const functioningCount = gear.filter(g => g.status === 'functioning').length;
-  const notFunctioningCount = gear.filter(g => g.status === 'not_functioning').length;
   const withMeCount = gear.filter(g => g.armory_status === 'with_soldier').length;
   const inDepositCount = gear.filter(g => g.armory_status === 'in_deposit').length;
 
@@ -160,13 +159,31 @@ export default function MyGearPage() {
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <Badge className={`${
-                      item.status === 'functioning' ? 
-                      'bg-green-100 text-green-800 border-green-200' : 
-                      'bg-red-100 text-red-800 border-red-200'
-                    } border`}>
-                      {item.status === 'functioning' ? 'Functioning' : 'Not Functioning'}
-                    </Badge>
+                    {(() => {
+                      const statusConfig = {
+                        functioning: {
+                          label: 'Functioning',
+                          className: 'bg-green-100 text-green-800 border-green-200'
+                        },
+                        not_functioning: {
+                          label: 'Not Functioning',
+                          className: 'bg-red-100 text-red-800 border-red-200'
+                        },
+                        missing: {
+                          label: 'Missing',
+                          className: 'bg-slate-200 text-slate-800 border-slate-300'
+                        }
+                      };
+                      const config = statusConfig[item.status] || {
+                        label: item.status ? item.status.replace('_', ' ') : 'Unknown',
+                        className: 'bg-slate-100 text-slate-700 border-slate-200'
+                      };
+                      return (
+                        <Badge className={`${config.className} border`}>
+                          {config.label}
+                        </Badge>
+                      );
+                    })()}
                     <Badge className={`${
                       item.armory_status === 'with_soldier' ? 
                       'bg-blue-100 text-blue-800 border-blue-200' : 

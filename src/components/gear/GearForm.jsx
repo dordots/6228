@@ -19,7 +19,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const CONDITIONS = ["functioning", "not_functioning"];
+const CONDITIONS = ["functioning", "not_functioning", "missing"];
 
 export default function GearForm({ gear, soldiers, onSubmit, onCancel, existingGear = [], currentUser }) {
   // Check if user is division manager

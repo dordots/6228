@@ -166,7 +166,8 @@ export default function GearFilters({ filters, onFilterChange, gear = [], soldie
 
   const conditionOptions = [
     { value: 'functioning', label: 'Functioning' },
-    { value: 'not_functioning', label: 'Not Functioning' }
+    { value: 'not_functioning', label: 'Not Functioning' },
+    { value: 'missing', label: 'Missing' }
   ];
 
   const divisionOptions = divisions.map(d => ({ value: d, label: d }));

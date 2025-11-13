@@ -10,6 +10,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 
+const DEPOSIT_LOCATION_LABELS = {
+  division_deposit: 'Division Deposit',
+  armory_deposit: 'Central Armory Deposit',
+  naura_deposit: 'Naura Deposit'
+};
+
+const formatDepositLocationLabel = (value) => {
+  if (value === 'none') {
+    return 'No Deposit Location';
+  }
+  if (!value) {
+    return 'Deposit Location';
+  }
+  return DEPOSIT_LOCATION_LABELS[value] || value.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+};
+
 // Multi-select button component
 function MultiSelectButton({ options, selected, onToggle, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -101,6 +117,31 @@ export default function WeaponFilters({ filters, onFilterChange, weapons = [], s
     handleFilterChange(key, newValues);
   };
 
+  const depositLocationOptions = useMemo(() => {
+    const safeWeapons = Array.isArray(weapons) ? weapons : [];
+    const uniqueLocations = new Set();
+    let hasNone = false;
+
+    safeWeapons.forEach((weapon) => {
+      if (!weapon) return;
+      if (weapon.deposit_location) {
+        uniqueLocations.add(weapon.deposit_location);
+      } else {
+        hasNone = true;
+      }
+    });
+
+    const options = [...uniqueLocations]
+      .sort()
+      .map((value) => ({ value, label: formatDepositLocationLabel(value) }));
+
+    if (hasNone) {
+      options.unshift({ value: 'none', label: formatDepositLocationLabel('none') });
+    }
+
+    return options;
+  }, [weapons]);
+
   const clearAllFilters = () => {
     onFilterChange({
       types: [],
@@ -108,6 +149,7 @@ export default function WeaponFilters({ filters, onFilterChange, weapons = [], s
       divisions: [],
       armory_statuses: [],
       assigned_soldiers: [],
+      deposit_locations: [],
       maintenance_check: 'all',
       date_from: null,
       date_to: null
@@ -121,6 +163,7 @@ export default function WeaponFilters({ filters, onFilterChange, weapons = [], s
     if (filters.divisions?.length > 0) count += filters.divisions.length;
     if (filters.armory_statuses?.length > 0) count += filters.armory_statuses.length;
     if (filters.assigned_soldiers?.length > 0) count += filters.assigned_soldiers.length;
+    if (filters.deposit_locations?.length > 0) count += filters.deposit_locations.length;
     if (filters.maintenance_check && filters.maintenance_check !== 'all') count++;
     if (filters.date_from || filters.date_to) count++;
     return count;
@@ -222,6 +265,17 @@ export default function WeaponFilters({ filters, onFilterChange, weapons = [], s
                 selected={filters.armory_statuses || []}
                 onToggle={(value) => handleMultiSelectToggle('armory_statuses', value)}
                 placeholder="Select armory statuses..."
+              />
+            </div>
+
+            {/* Deposit Location */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Deposit Location</Label>
+              <MultiSelectButton
+                options={depositLocationOptions}
+                selected={filters.deposit_locations || []}
+                onToggle={(value) => handleMultiSelectToggle('deposit_locations', value)}
+                placeholder="Select deposit locations..."
               />
             </div>
 

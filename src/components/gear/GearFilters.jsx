@@ -8,6 +8,22 @@ import { Filter, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
+const DEPOSIT_LOCATION_LABELS = {
+  division_deposit: 'Division Deposit',
+  armory_deposit: 'Central Armory Deposit',
+  naura_deposit: 'Naura Deposit'
+};
+
+const formatDepositLocationLabel = (value) => {
+  if (value === 'none') {
+    return 'No Deposit Location';
+  }
+  if (!value) {
+    return 'Deposit Location';
+  }
+  return DEPOSIT_LOCATION_LABELS[value] || value.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+};
+
 // Multi-select button component
 function MultiSelectButton({ options, selected, onToggle, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -99,13 +115,39 @@ export default function GearFilters({ filters, onFilterChange, gear = [], soldie
     handleFilterChange(key, newValues);
   };
 
+  const depositLocationOptions = useMemo(() => {
+    const safeGear = Array.isArray(gear) ? gear : [];
+    const uniqueLocations = new Set();
+    let hasNone = false;
+
+    safeGear.forEach((item) => {
+      if (!item) return;
+      if (item.deposit_location) {
+        uniqueLocations.add(item.deposit_location);
+      } else {
+        hasNone = true;
+      }
+    });
+
+    const options = [...uniqueLocations]
+      .sort()
+      .map((value) => ({ value, label: formatDepositLocationLabel(value) }));
+
+    if (hasNone) {
+      options.unshift({ value: 'none', label: formatDepositLocationLabel('none') });
+    }
+
+    return options;
+  }, [gear]);
+
   const clearAllFilters = () => {
     onFilterChange({
       types: [],
       conditions: [],
       divisions: [],
       armory_statuses: [],
-      assigned_soldiers: []
+      assigned_soldiers: [],
+      deposit_locations: []
     });
   };
 
@@ -116,6 +158,7 @@ export default function GearFilters({ filters, onFilterChange, gear = [], soldie
     if (filters.divisions?.length > 0) count += filters.divisions.length;
     if (filters.armory_statuses?.length > 0) count += filters.armory_statuses.length;
     if (filters.assigned_soldiers?.length > 0) count += filters.assigned_soldiers.length;
+    if (filters.deposit_locations?.length > 0) count += filters.deposit_locations.length;
     return count;
   }, [filters]);
 
@@ -215,6 +258,17 @@ export default function GearFilters({ filters, onFilterChange, gear = [], soldie
               selected={filters.armory_statuses || []}
               onToggle={(value) => handleMultiSelectToggle('armory_statuses', value)}
               placeholder="Select armory statuses..."
+            />
+          </div>
+
+          {/* Deposit Location */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Deposit Location</Label>
+            <MultiSelectButton
+              options={depositLocationOptions}
+              selected={filters.deposit_locations || []}
+              onToggle={(value) => handleMultiSelectToggle('deposit_locations', value)}
+              placeholder="Select deposit locations..."
             />
           </div>
 

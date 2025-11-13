@@ -42,7 +42,7 @@ export default function SerializedGearPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingGear, setEditingGear] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ types: [], conditions: [], divisions: [], armory_statuses: [], assigned_soldiers: [] });
+  const [filters, setFilters] = useState({ types: [], conditions: [], divisions: [], armory_statuses: [], assigned_soldiers: [], deposit_locations: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -491,9 +491,13 @@ export default function SerializedGearPage() {
       const matchesCondition = !filters.conditions || filters.conditions.length === 0 || filters.conditions.includes(gearItem.status);
       const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(gearItem.division_name);
       const matchesArmory = !filters.armory_statuses || filters.armory_statuses.length === 0 || filters.armory_statuses.includes(gearItem.armory_status || 'with_soldier');
+      const matchesDepositLocation = !filters.deposit_locations || filters.deposit_locations.length === 0 ||
+        (gearItem.deposit_location
+          ? filters.deposit_locations.includes(gearItem.deposit_location)
+          : filters.deposit_locations.includes('none'));
       const matchesAssignedTo = !filters.assigned_soldiers || filters.assigned_soldiers.length === 0 || filters.assigned_soldiers.includes(gearItem.assigned_to || 'unassigned');
 
-      return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesArmory && matchesAssignedTo;
+      return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesArmory && matchesAssignedTo && matchesDepositLocation;
     });
   }, [gear, soldiers, searchTerm, filters]);
 

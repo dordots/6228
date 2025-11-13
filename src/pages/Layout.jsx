@@ -140,8 +140,8 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
       title: "Let's Go Home",
       url: createPageUrl("SoldierRelease"),
       icon: Home,
-      permission: 'operations.release',
-      hideForRoles: ['team_leader', 'division_manager']
+    permission: 'operations.lets_go_home',
+    hideForRoles: ['team_leader']
     },
     {
       title: "Equipment Transfer",
@@ -221,8 +221,8 @@ const getNavigationItems = (permissions, userRole, linkedSoldierId) => {
     }
     // If no specific permission is required for the item, it's always visible
     if (!item.permission) return true;
-    // Special cases: operations.deposit and operations.release are admin-only
-    if (item.permission === 'operations.deposit' || item.permission === 'operations.release') {
+    // Special case: operations.deposit is admin-only
+    if (item.permission === 'operations.deposit') {
       return permissions.role === 'admin';
     }
     // Otherwise, check if the user has the required permission

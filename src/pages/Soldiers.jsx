@@ -114,6 +114,9 @@ export default function Soldiers() {
         equipmentFilter = { division_name: userDivision };
       }
 
+      console.groupCollapsed('[Soldiers] Personnel table fetch');
+      console.log('[Soldiers] Applied filter', filter);
+
       const results = await Promise.allSettled([
         Soldier.filter(filter), // Remove sort - orderBy excludes docs without the field
         Weapon.filter(equipmentFilter),
@@ -124,15 +127,30 @@ export default function Soldiers() {
 
       // Get raw soldier data from Firestore
       let soldierData = results[0].status === 'fulfilled' && Array.isArray(results[0].value) ? results[0].value : [];
+      console.log('[Soldiers] Raw soldiers returned', soldierData.length, soldierData);
 
       // Deduplicate by document ID only
       const uniqueById = new Map();
+      const duplicateEntries = [];
       soldierData.forEach(soldier => {
         if (!uniqueById.has(soldier.id)) {
           uniqueById.set(soldier.id, soldier);
+        } else {
+          duplicateEntries.push({ kept: uniqueById.get(soldier.id), ignored: soldier });
         }
       });
       const finalSoldiers = Array.from(uniqueById.values());
+
+      if (duplicateEntries.length > 0) {
+        console.warn('[Soldiers] Duplicate soldier records detected', duplicateEntries);
+      }
+      console.log('[Soldiers] Final soldiers after dedupe', finalSoldiers.length, finalSoldiers.map(s => ({
+        id: s.id,
+        soldier_id: s.soldier_id,
+        division_name: s.division_name,
+        team_name: s.team_name,
+        status: s.status
+      })));
 
       setSoldiers(finalSoldiers);
       setWeapons(results[1].status === 'fulfilled' && Array.isArray(results[1].value) ? results[1].value : []);
@@ -140,7 +158,10 @@ export default function Soldiers() {
       setDroneSets(results[3].status === 'fulfilled' && Array.isArray(results[3].value) ? results[3].value : []);
       // UPDATED: Set all equipment data
       setAllEquipment(results[4].status === 'fulfilled' && Array.isArray(results[4].value) ? results[4].value : []);
+      console.groupEnd();
     } catch (error) {
+      console.error('[Soldiers] Failed to load personnel data', error);
+      console.groupEnd();
       setSoldiers([]);
       setWeapons([]);
       setSerializedGear([]);

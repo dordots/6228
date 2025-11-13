@@ -48,7 +48,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   const [showForm, setShowForm] = useState(false);
   const [editingSet, setEditingSet] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ types: [], statuses: [], locations: [], divisions: [], assigned_soldiers: [] });
+  const [filters, setFilters] = useState({ types: [], statuses: [], armory_statuses: [], deposit_locations: [], divisions: [], assigned_soldiers: [] });
   const [selectedItems, setSelectedItems] = useState([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [reassigningSet, setReassigningSet] = useState(null);
@@ -422,11 +422,16 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
 
       const matchesType = !filters.types || filters.types.length === 0 || filters.types.includes(droneSet.set_type);
       const matchesStatus = !filters.statuses || filters.statuses.length === 0 || filters.statuses.includes(droneSet.status);
-      const matchesLocation = !filters.locations || filters.locations.length === 0 || filters.locations.includes(droneSet.location);
+      const matchesArmoryStatus = !filters.armory_statuses || filters.armory_statuses.length === 0 ||
+        filters.armory_statuses.includes(droneSet.armory_status || 'with_soldier');
+      const matchesDepositLocation = !filters.deposit_locations || filters.deposit_locations.length === 0 ||
+        (droneSet.deposit_location
+          ? filters.deposit_locations.includes(droneSet.deposit_location)
+          : filters.deposit_locations.includes('none'));
       const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(droneSet.division_name);
       const matchesSoldier = !filters.assigned_soldiers || filters.assigned_soldiers.length === 0 || filters.assigned_soldiers.includes(droneSet.assigned_to || 'unassigned');
 
-      return matchesSearch && matchesType && matchesStatus && matchesLocation && matchesDivision && matchesSoldier;
+      return matchesSearch && matchesType && matchesStatus && matchesArmoryStatus && matchesDepositLocation && matchesDivision && matchesSoldier;
     });
   }, [droneSets, soldiers, searchTerm, filters]);
 

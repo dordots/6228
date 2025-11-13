@@ -44,7 +44,7 @@ export default function EquipmentPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ types: [], conditions: [], divisions: [] }); // Array-based filters
+  const [filters, setFilters] = useState({ types: [], conditions: [], divisions: [], deposit_locations: [] }); // Array-based filters
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -180,8 +180,12 @@ export default function EquipmentPage() {
       const matchesType = !filters.types || filters.types.length === 0 || filters.types.includes(item.equipment_type);
       const matchesCondition = !filters.conditions || filters.conditions.length === 0 || filters.conditions.includes(item.condition);
       const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(item.division_name);
+      const matchesDepositLocation = !filters.deposit_locations || filters.deposit_locations.length === 0 ||
+        (item.deposit_location
+          ? filters.deposit_locations.includes(item.deposit_location)
+          : filters.deposit_locations.includes('none'));
 
-      return matchesSearch && matchesType && matchesCondition && matchesDivision;
+      return matchesSearch && matchesType && matchesCondition && matchesDivision && matchesDepositLocation;
     });
   }, [equipment, soldiers, searchTerm, filters]);
 

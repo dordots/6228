@@ -7,6 +7,22 @@ import { Filter, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
+const DEPOSIT_LOCATION_LABELS = {
+  division_deposit: 'Division Deposit',
+  armory_deposit: 'Central Armory Deposit',
+  naura_deposit: 'Naura Deposit'
+};
+
+const formatDepositLocationLabel = (value) => {
+  if (value === 'none') {
+    return 'No Deposit Location';
+  }
+  if (!value) {
+    return 'Deposit Location';
+  }
+  return DEPOSIT_LOCATION_LABELS[value] || value.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+};
+
 // Multi-select button component
 function MultiSelectButton({ options, selected, onToggle, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -98,11 +114,37 @@ export default function DroneFilters({ filters, onFilterChange, droneSets = [], 
     handleFilterChange(key, newValues);
   };
 
+  const depositLocationOptions = useMemo(() => {
+    const safeDrones = Array.isArray(droneSets) ? droneSets : [];
+    const uniqueLocations = new Set();
+    let hasNone = false;
+
+    safeDrones.forEach((droneSet) => {
+      if (!droneSet) return;
+      if (droneSet.deposit_location) {
+        uniqueLocations.add(droneSet.deposit_location);
+      } else {
+        hasNone = true;
+      }
+    });
+
+    const options = [...uniqueLocations]
+      .sort()
+      .map((value) => ({ value, label: formatDepositLocationLabel(value) }));
+
+    if (hasNone) {
+      options.unshift({ value: 'none', label: formatDepositLocationLabel('none') });
+    }
+
+    return options;
+  }, [droneSets]);
+
   const clearAllFilters = () => {
     onFilterChange({
       types: [],
       statuses: [],
       armory_statuses: [],
+      deposit_locations: [],
       divisions: [],
       assigned_soldiers: []
     });
@@ -113,6 +155,7 @@ export default function DroneFilters({ filters, onFilterChange, droneSets = [], 
     if (filters.types?.length > 0) count += filters.types.length;
     if (filters.statuses?.length > 0) count += filters.statuses.length;
     if (filters.armory_statuses?.length > 0) count += filters.armory_statuses.length;
+    if (filters.deposit_locations?.length > 0) count += filters.deposit_locations.length;
     if (filters.divisions?.length > 0) count += filters.divisions.length;
     if (filters.assigned_soldiers?.length > 0) count += filters.assigned_soldiers.length;
     return count;
@@ -199,12 +242,23 @@ export default function DroneFilters({ filters, onFilterChange, droneSets = [], 
 
           {/* Armory Status */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Location</Label>
+            <Label className="text-xs">Armory Status</Label>
             <MultiSelectButton
               options={armoryStatusOptions}
               selected={filters.armory_statuses || []}
               onToggle={(value) => handleMultiSelectToggle('armory_statuses', value)}
-              placeholder="Select locations..."
+              placeholder="Select armory statuses..."
+            />
+          </div>
+
+          {/* Deposit Location */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Deposit Location</Label>
+            <MultiSelectButton
+              options={depositLocationOptions}
+              selected={filters.deposit_locations || []}
+              onToggle={(value) => handleMultiSelectToggle('deposit_locations', value)}
+              placeholder="Select deposit locations..."
             />
           </div>
 

@@ -59,6 +59,7 @@ const PERMISSION_ORDER = [
   'operations.deposit',
   'operations.release',
   'operations.transfer',
+  'operations.lets_go_home',
   'operations.verify',
   'operations.maintain',
   'system.history',
@@ -117,6 +118,11 @@ const PERMISSION_DEFINITIONS = {
   'operations.transfer': {
     label: 'Transfer Equipment',
     description: 'Allow transferring equipment between units or divisions.',
+    category: 'Operations',
+  },
+  'operations.lets_go_home': {
+    label: "Let's Go Home",
+    description: 'Allow performing the lets go home operation.',
     category: 'Operations',
   },
   'operations.verify': {
@@ -188,7 +194,7 @@ const PERMISSION_GROUPS = [
     id: 'operations',
     title: 'Operations',
     description: 'Controls day-to-day armory workflows.',
-    permissions: ['operations.sign', 'operations.deposit', 'operations.release', 'operations.transfer', 'operations.verify', 'operations.maintain'],
+    permissions: ['operations.sign', 'operations.deposit', 'operations.release', 'operations.transfer', 'operations.lets_go_home', 'operations.verify', 'operations.maintain'],
   },
   {
     id: 'system',
@@ -221,6 +227,7 @@ const buildDivisionManagerPermissions = () => {
     'equipment.view',
     'equipment.update',
     'operations.sign',
+    'operations.lets_go_home',
     'operations.transfer',
     'operations.verify',
     'operations.maintain',

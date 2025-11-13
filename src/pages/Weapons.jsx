@@ -45,6 +45,7 @@ export default function Weapons() {
     divisions: [],
     armory_statuses: [],
     assigned_soldiers: [],
+    deposit_locations: [],
     maintenance_check: 'all',
     date_from: null,
     date_to: null
@@ -555,6 +556,10 @@ export default function Weapons() {
       const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(weapon.division_name);
       const matchesArmory = !filters.armory_statuses || filters.armory_statuses.length === 0 ||
         filters.armory_statuses.includes(weapon.armory_status || 'with_soldier');
+      const matchesDepositLocation = !filters.deposit_locations || filters.deposit_locations.length === 0 ||
+        (weapon.deposit_location
+          ? filters.deposit_locations.includes(weapon.deposit_location)
+          : filters.deposit_locations.includes('none'));
 
       // Assigned soldier filter
       const matchesAssignedSoldier = !filters.assigned_soldiers || filters.assigned_soldiers.length === 0 ||
@@ -595,7 +600,8 @@ export default function Weapons() {
       }
 
       return matchesSearch && matchesType && matchesCondition && matchesDivision &&
-             matchesArmory && matchesAssignedSoldier && matchesMaintenance && matchesDateRange;
+             matchesArmory && matchesAssignedSoldier && matchesMaintenance && matchesDateRange &&
+             matchesDepositLocation;
     });
 
     return filtered;

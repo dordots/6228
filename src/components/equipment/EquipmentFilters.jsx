@@ -7,6 +7,22 @@ import { Filter, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
+const DEPOSIT_LOCATION_LABELS = {
+  division_deposit: 'Division Deposit',
+  armory_deposit: 'Central Armory Deposit',
+  naura_deposit: 'Naura Deposit'
+};
+
+const formatDepositLocationLabel = (value) => {
+  if (value === 'none') {
+    return 'No Deposit Location';
+  }
+  if (!value) {
+    return 'Deposit Location';
+  }
+  return DEPOSIT_LOCATION_LABELS[value] || value.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+};
+
 // Multi-select button component
 function MultiSelectButton({ options, selected, onToggle, placeholder }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -98,11 +114,37 @@ export default function EquipmentFilters({ filters, onFilterChange, equipment = 
     handleFilterChange(key, newValues);
   };
 
+  const depositLocationOptions = useMemo(() => {
+    const safeEquipment = Array.isArray(equipment) ? equipment : [];
+    const uniqueLocations = new Set();
+    let hasNone = false;
+
+    safeEquipment.forEach((item) => {
+      if (!item) return;
+      if (item.deposit_location) {
+        uniqueLocations.add(item.deposit_location);
+      } else {
+        hasNone = true;
+      }
+    });
+
+    const options = [...uniqueLocations]
+      .sort()
+      .map((value) => ({ value, label: formatDepositLocationLabel(value) }));
+
+    if (hasNone) {
+      options.unshift({ value: 'none', label: formatDepositLocationLabel('none') });
+    }
+
+    return options;
+  }, [equipment]);
+
   const clearAllFilters = () => {
     onFilterChange({
       types: [],
       conditions: [],
-      divisions: []
+      divisions: [],
+      deposit_locations: []
     });
   };
 
@@ -111,6 +153,7 @@ export default function EquipmentFilters({ filters, onFilterChange, equipment = 
     if (filters.types?.length > 0) count += filters.types.length;
     if (filters.conditions?.length > 0) count += filters.conditions.length;
     if (filters.divisions?.length > 0) count += filters.divisions.length;
+    if (filters.deposit_locations?.length > 0) count += filters.deposit_locations.length;
     return count;
   }, [filters]);
 
@@ -186,6 +229,17 @@ export default function EquipmentFilters({ filters, onFilterChange, equipment = 
               selected={filters.divisions || []}
               onToggle={(value) => handleMultiSelectToggle('divisions', value)}
               placeholder="Select divisions..."
+            />
+          </div>
+
+          {/* Deposit Location */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Deposit Location</Label>
+            <MultiSelectButton
+              options={depositLocationOptions}
+              selected={filters.deposit_locations || []}
+              onToggle={(value) => handleMultiSelectToggle('deposit_locations', value)}
+              placeholder="Select deposit locations..."
             />
           </div>
         </div>

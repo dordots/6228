@@ -135,11 +135,35 @@ export default function SoldierReleasePage() {
   const [lastActivityId, setLastActivityId] = useState(null); // NEW: Store activity ID for PDF
   const [isExporting, setIsExporting] = useState(false); // NEW: State for PDF export loading
   const [lastReleaseData, setLastReleaseData] = useState(null); // NEW: Store release data (items, signature, date, performer) for fallback
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [isUserLoading, setIsUserLoading] = useState(true);
 
   const signaturePadRef = useRef(null); // Ref for the signature pad
+  const divisionScopeMissing = useMemo(
+    () => currentUserProfile?.custom_role === 'division_manager' && !currentUserProfile?.division,
+    [currentUserProfile]
+  );
+  const canPerformLetsGoHome = useMemo(() => {
+    if (!currentUserProfile) return false;
+    if (currentUserProfile.role === 'admin') return true;
+    if (!currentUserProfile.permissions?.['operations.lets_go_home']) return false;
+    if (divisionScopeMissing) return false;
+    return true;
+  }, [currentUserProfile, divisionScopeMissing]);
 
   useEffect(() => {
-    loadAllData(); // Renamed loadSoldiers to loadAllData based on outline
+    const fetchCurrentUser = async () => {
+      try {
+        const user = await User.me();
+        setCurrentUserProfile(user);
+      } catch (err) {
+        setErrorMessage("Failed to load user information.");
+      } finally {
+        setIsUserLoading(false);
+      }
+    };
+
+    fetchCurrentUser();
   }, []);
 
   const handleSerializedQuantityChange = (itemId, quantity) => {
@@ -156,16 +180,130 @@ export default function SoldierReleasePage() {
     }));
   };
 
-  const loadAllData = async () => { // Renamed from loadSoldiers
+  const loadAllData = useCallback(async () => { // Renamed from loadSoldiers
+    if (!currentUserProfile) return;
+    setErrorMessage("");
+    console.groupCollapsed('[LetsGoHome] Soldier fetch');
+    console.log('[LetsGoHome] Current user profile', {
+      uid: currentUserProfile?.uid || currentUserProfile?.id,
+      role: currentUserProfile?.role,
+      custom_role: currentUserProfile?.custom_role,
+      division: currentUserProfile?.division,
+      permissions: currentUserProfile?.permissions,
+    });
     setIsLoading(true);
     try {
-      const s = await Soldier.list("-created_date");
-      setSoldiers(Array.isArray(s) ? s : []);
+      let response;
+
+      const isDivisionManager = currentUserProfile.custom_role === 'division_manager';
+      const hasDivision = Boolean(currentUserProfile.division);
+
+      if (isDivisionManager && hasDivision) {
+        console.log('[LetsGoHome] Fetching soldiers by division via filter', currentUserProfile.division);
+        response = await Soldier.filter({ division_name: currentUserProfile.division });
+      } else {
+        console.log('[LetsGoHome] Fetching all soldiers via list');
+        response = await Soldier.list("-created_date");
+      }
+
+      let soldierList = Array.isArray(response) ? response : [];
+      console.log('[LetsGoHome] Raw soldiers returned', soldierList.length, soldierList);
+
+      if (isDivisionManager && hasDivision) {
+        soldierList = soldierList.filter(
+          (soldier) => soldier?.division_name === currentUserProfile.division
+        );
+
+        // Provide detailed diff for debugging
+        const excludedSoldiers = (Array.isArray(response) ? response : []).filter(
+          soldier => soldier?.division_name !== currentUserProfile.division
+        );
+        if (excludedSoldiers.length > 0) {
+          console.warn('[LetsGoHome] Soldiers excluded after division filter', excludedSoldiers.map(s => ({
+            id: s.id,
+            soldier_id: s.soldier_id,
+            division_name: s.division_name,
+            team_name: s.team_name,
+            status: s.status
+          })));
+        }
+      }
+
+      // Sort by created_at descending if available
+      soldierList = soldierList.sort((a, b) => {
+        const aDate = a?.created_at ? new Date(a.created_at) : null;
+        const bDate = b?.created_at ? new Date(b.created_at) : null;
+        if (aDate && bDate) {
+          return bDate - aDate;
+        }
+        if (aDate) return -1;
+        if (bDate) return 1;
+        return 0;
+      });
+      console.log('[LetsGoHome] Soldiers after division filter', soldierList.length, soldierList.map(s => ({
+        id: s.id,
+        soldier_id: s.soldier_id,
+        division_name: s.division_name,
+        team_name: s.team_name,
+      })));
+
+      setSoldiers(soldierList);
     } catch (error) {
+      console.error('[LetsGoHome] Error loading soldiers', error);
       setErrorMessage("Error loading soldiers.");
+      setSoldiers([]);
     }
     setIsLoading(false);
-  };
+    console.groupEnd();
+  }, [currentUserProfile]);
+
+  useEffect(() => {
+    if (isUserLoading) {
+      return;
+    }
+
+    if (!currentUserProfile || !canPerformLetsGoHome) {
+      setIsLoading(false);
+      return;
+    }
+
+    loadAllData();
+  }, [isUserLoading, currentUserProfile, canPerformLetsGoHome, loadAllData]);
+
+  const validateLetsGoHomeAccess = useCallback((user, soldier) => {
+    if (!user) {
+      return { allowed: false, message: "You do not have permission to perform this action." };
+    }
+
+    if (!(user.role === 'admin' || user.permissions?.['operations.lets_go_home'])) {
+      console.warn('[LetsGoHome] Permission denied', { userId: user.uid || user.id, role: user.role, custom_role: user.custom_role });
+      return { allowed: false, message: "You do not have permission to perform this action." };
+    }
+
+    if (user.custom_role === 'division_manager') {
+      if (!user.division) {
+        console.warn('[LetsGoHome] Division manager missing division assignment', { userId: user.uid || user.id });
+        return {
+          allowed: false,
+          message: "Division managers require an assigned division before releasing soldiers.",
+        };
+      }
+
+      if (!soldier?.division_name || soldier.division_name !== user.division) {
+        console.warn('[LetsGoHome] Soldier outside division scope', {
+          userDivision: user.division,
+          soldierId: soldier?.soldier_id,
+          soldierDivision: soldier?.division_name
+        });
+        return {
+          allowed: false,
+          message: "Division managers can only release soldiers in their division.",
+        };
+      }
+    }
+
+    return { allowed: true };
+  }, []);
 
   const loadSoldierItems = async (soldier) => {
     if (!soldier) return;
@@ -460,6 +598,11 @@ export default function SoldierReleasePage() {
     setErrorMessage(""); // Clear any previous errors
     try {
       const currentUser = await User.me();
+      const accessCheck = validateLetsGoHomeAccess(currentUser, selectedSoldier);
+      if (!accessCheck.allowed) {
+        setErrorMessage(accessCheck.message);
+        return;
+      }
       // ADDED: Look up the performing soldier
       let performingSoldier = null;
       if (currentUser.linked_soldier_id) {
@@ -827,6 +970,11 @@ export default function SoldierReleasePage() {
     setErrorMessage(""); // Clear any previous errors
     try {
       const currentUser = await User.me();
+      const accessCheck = validateLetsGoHomeAccess(currentUser, selectedSoldier);
+      if (!accessCheck.allowed) {
+        setErrorMessage(accessCheck.message);
+        return;
+      }
       // ADDED: Look up the performing soldier
       let performingSoldier = null;
       if (currentUser.linked_soldier_id) {
@@ -1082,6 +1230,12 @@ export default function SoldierReleasePage() {
     try {
         const user = await User.me();
         if (!user) throw new Error("Current user not found.");
+        const accessCheck = validateLetsGoHomeAccess(user, selectedSoldier);
+        if (!accessCheck.allowed) {
+            setErrorMessage(accessCheck.message);
+            setIsReleasing(false);
+            return;
+        }
         
         // ADDED: Look up the performing soldier
         let performingSoldier = null;
@@ -1638,6 +1792,29 @@ export default function SoldierReleasePage() {
     }
   };
 
+
+  if (isUserLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
+      </div>
+    );
+  }
+
+  if (!canPerformLetsGoHome) {
+    const message = divisionScopeMissing
+      ? "Division managers require an assigned division before using Let's Go Home."
+      : "Access denied. You do not have permission to perform Let's Go Home operations.";
+
+    return (
+      <div className="p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6">

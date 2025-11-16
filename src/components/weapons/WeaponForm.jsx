@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { Save, X, Calendar as CalendarIcon, Package, PackageOpen } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import ComboBox from "@/components/common/ComboBox"; // New import
@@ -205,6 +205,13 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
   const isWithSoldier = weapon && (weapon.armory_status || 'with_soldier') === 'with_soldier';
   const isInDeposit = weapon && weapon.armory_status === 'in_deposit';
 
+  // Helper function to safely parse and validate date
+  const getValidDate = (dateValue) => {
+    if (!dateValue) return null;
+    const date = new Date(dateValue);
+    return isValid(date) ? date : null;
+  };
+
   return (
     <Card className="border-slate-200 shadow-md">
       <CardHeader className="bg-slate-50 border-b border-slate-200">
@@ -308,13 +315,16 @@ export default function WeaponForm({ weapon, soldiers, onSubmit, onCancel, exist
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.last_checked_date ? format(new Date(formData.last_checked_date), 'PPP') : 'Select date'}
+                    {(() => {
+                      const validDate = getValidDate(formData.last_checked_date);
+                      return validDate ? format(validDate, 'PPP') : 'Select date';
+                    })()}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    selected={formData.last_checked_date ? new Date(formData.last_checked_date) : undefined}
+                    selected={getValidDate(formData.last_checked_date) || undefined}
                     onSelect={(date) => handleChange('last_checked_date', date)}
                   />
                 </PopoverContent>

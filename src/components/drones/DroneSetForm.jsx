@@ -130,8 +130,36 @@ export default function DroneSetForm({
   const userDivision = currentUser?.division;
 
   const [droneSetTypes, setDroneSetTypes] = useState([]);
-  const [formData, setFormData] = useState(
-    droneSet || {
+  const normalizeComponentValue = (value) => {
+    if (!value) return null;
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      return value.id || value.component_id || value.componentId || null;
+    }
+    return null;
+  };
+
+  const normalizeComponentsMap = (components) => {
+    if (!components || typeof components !== "object") return {};
+    return Object.entries(components).reduce((acc, [slotKey, slotValue]) => {
+      const normalizedValue = normalizeComponentValue(slotValue);
+      if (normalizedValue) {
+        acc[slotKey] = normalizedValue;
+      } else {
+        acc[slotKey] = null;
+      }
+      return acc;
+    }, {});
+  };
+
+  const createInitialFormData = () => {
+    if (droneSet) {
+      return {
+        ...droneSet,
+        components: normalizeComponentsMap(droneSet.components),
+      };
+    }
+    return {
       set_serial_number: "",
       set_type: "",
       status: "Operational",
@@ -141,8 +169,10 @@ export default function DroneSetForm({
       comments: "",
       armory_status: "in_deposit",
       is_sample: "false",
-    }
-  );
+    };
+  };
+
+  const [formData, setFormData] = useState(createInitialFormData);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [depositLocation, setDepositLocation] = useState('division_deposit');
   const [depositAction, setDepositAction] = useState('deposit'); // 'deposit' or 'release'
@@ -172,7 +202,14 @@ export default function DroneSetForm({
 
   useEffect(() => {
     if (droneSet) {
-        setFormData(droneSet);
+        const normalizedDroneSet = {
+          ...droneSet,
+          components: normalizeComponentsMap(droneSet.components),
+        };
+        setFormData(prev => {
+          console.log("[DroneSetForm] Updating form state from droneSet:", normalizedDroneSet);
+          return normalizedDroneSet;
+        });
     } else {
         setFormData({
             set_serial_number: "",
@@ -186,6 +223,7 @@ export default function DroneSetForm({
             is_sample: "false",
         });
     }
+    console.log("[DroneSetForm] Form data after droneSet change:", droneSet);
   }, [droneSet]);
   
   useEffect(() => {
@@ -214,6 +252,7 @@ export default function DroneSetForm({
   };
 
   const handleComponentChange = (slotKey, componentId) => {
+    console.log("[DroneSetForm] Component change triggered:", { slotKey, componentId });
     setFormData(prev => ({
       ...prev,
       components: {
@@ -236,27 +275,46 @@ export default function DroneSetForm({
     return options;
   }, [allSoldiers]);
 
+  const normalizeComponentId = (component) => {
+    if (!component) return null;
+    return component.id || component.component_id || null;
+  };
+
   const getAvailableComponentsForSlot = (currentSlotKey) => {
+    console.log("[DroneSetForm] Calculating available components", {
+      slotKey: currentSlotKey,
+      formDataComponents: formData.components,
+      currentComponentSlots
+    });
     try {
       const requiredType = currentComponentSlots[currentSlotKey];
       if (!requiredType) return [];
 
-      const currentComponentId = formData.components?.[currentSlotKey];
+      const currentComponentValue = formData.components?.[currentSlotKey];
+      const currentComponentId = normalizeComponentValue(currentComponentValue);
       const otherSelectedIds = Object.entries(formData.components || {})
         .filter(([key, value]) => key !== currentSlotKey && value)
-        .map(([, value]) => value);
+        .map(([, value]) => normalizeComponentValue(value))
+        .filter(Boolean);
 
       const safeUnassigned = Array.isArray(unassignedComponents) ? unassignedComponents : [];
-      
-      let available = safeUnassigned.filter(c => {
+      console.log("[DroneSetForm] Safe unassigned components:", safeUnassigned);
+
+      const available = safeUnassigned.filter(c => {
         if (!c || !c.component_type) return false;
-        
+
+        const selectionId = normalizeComponentId(c);
+        if (!selectionId) return false;
+        if (otherSelectedIds.includes(selectionId) || otherSelectedIds.includes(c.component_id)) {
+          return false;
+        }
+
         const dbComponentType = c.component_type.toLowerCase();
-        const setType = formData.set_type.toLowerCase();
+        const setType = formData.set_type ? formData.set_type.toLowerCase() : "";
         const requiredTypeLower = requiredType.toLowerCase();
 
         let matchesRole = false;
-        
+
         if (requiredTypeLower.includes("goggles")) {
           matchesRole = dbComponentType.includes("goggles");
         } else if (requiredTypeLower.includes("remote")) {
@@ -281,19 +339,45 @@ export default function DroneSetForm({
           return dbComponentType.includes("evo") && dbComponentType.includes("bomb dropper");
         }
         
-        return dbComponentType.includes(setType);
+        return setType ? dbComponentType.includes(setType) : true;
 
-      }).filter(c => !otherSelectedIds.includes(c.id));
-      
-      if (currentComponentId && Array.isArray(allComponents)) {
-        const currentComponent = allComponents.find(c => c && c.id === currentComponentId);
-        if (currentComponent && !available.some(c => c && c.id === currentComponentId)) {
-          available.unshift(currentComponent);
+      }).map(component => {
+        if (!component.id && component.component_id) {
+          console.log("[DroneSetForm] Normalizing component id", component);
+          return { ...component, id: component.component_id };
+        }
+        return component;
+      });
+
+      const normalizedAvailable = Array.isArray(available) ? [...available] : [];
+
+      if (currentComponentId) {
+        const currentComponent = Array.isArray(allComponents)
+          ? allComponents.find(c => {
+              const normalized = normalizeComponentId(c);
+              return normalized === currentComponentId || c.component_id === currentComponentId;
+            })
+          : null;
+
+        const fallbackComponent = currentComponent || {
+          id: currentComponentId,
+          component_id: currentComponentId,
+          component_type: currentComponentSlots[currentSlotKey] || "Assigned Component",
+          status: "Operational"
+        };
+
+        const exists = normalizedAvailable.some(c => normalizeComponentId(c) === currentComponentId);
+        if (!exists) {
+          normalizedAvailable.unshift({
+            ...fallbackComponent,
+            id: normalizeComponentId(fallbackComponent) || currentComponentId
+          });
         }
       }
 
-      return available;
+      return normalizedAvailable;
     } catch (error) {
+      console.error("[DroneSetForm] Error calculating available components", error);
       return [];
     }
   };

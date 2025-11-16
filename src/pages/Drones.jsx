@@ -230,6 +230,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
   };
 
   const handleEdit = (droneSet) => {
+    console.log("[DronesPage] Edit button clicked for drone set:", droneSet);
     setEditingSet(droneSet);
     setShowForm(true);
   };

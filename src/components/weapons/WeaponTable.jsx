@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ArmoryStatusBadge from "@/components/common/ArmoryStatusBadge";
 
 export default function WeaponTable({
   weapons = [],
@@ -109,17 +110,10 @@ export default function WeaponTable({
                   </TableCell>
                   <TableCell>{weapon.last_signed_by || 'N/A'}</TableCell>
                   <TableCell>
-                    {weapon.armory_status === 'in_deposit' ? (
-                      <Badge variant="outline" className="text-xs font-normal text-amber-800 bg-amber-50 border-amber-200">
-                        In Deposit
-                      </Badge>
-                    ) : weapon.armory_status === 'with_soldier' ? (
-                      <Badge variant="outline" className="text-xs font-normal text-green-800 bg-green-50 border-green-200">
-                        With Soldier
-                      </Badge>
-                    ) : (
-                      <span className="text-slate-500">Unknown</span>
-                    )}
+                    <ArmoryStatusBadge
+                      status={weapon.armory_status}
+                      depositLocation={weapon.deposit_location}
+                    />
                   </TableCell>
                   <TableCell className="max-w-xs">
                     {weapon.comments ? (

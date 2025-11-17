@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Joystick, Package, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import ArmoryStatusBadge from "@/components/common/ArmoryStatusBadge";
 
 export default function MyDronesPage() {
   const [droneSets, setDroneSets] = useState([]);
@@ -167,13 +168,12 @@ export default function MyDronesPage() {
                     } border`}>
                       {droneSet.status}
                     </Badge>
-                    <Badge className={`${
-                      droneSet.armory_status === 'with_soldier' ? 
-                      'bg-blue-100 text-blue-800 border-blue-200' : 
-                      'bg-amber-100 text-amber-800 border-amber-200'
-                    } border`}>
-                      {droneSet.armory_status === 'with_soldier' ? 'With Me' : 'In Deposit'}
-                    </Badge>
+                    <ArmoryStatusBadge
+                      status={droneSet.armory_status}
+                      depositLocation={droneSet.deposit_location}
+                      overrideLabel={droneSet.armory_status === 'with_soldier' ? 'With Me' : undefined}
+                      className="border"
+                    />
                   </div>
                 </div>
               ))}

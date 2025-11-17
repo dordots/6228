@@ -16,7 +16,11 @@ if (USE_FIREBASE) {
   SerializedGear = createBoundEntityAdapter('serialized_gear', { idField: 'gear_id' });
   DroneSet = createBoundEntityAdapter('drone_sets', { idField: 'drone_set_id' });
   DroneSetType = createBoundEntityAdapter('drone_set_types');
-  DroneComponent = createBoundEntityAdapter('drone_components', { idField: 'component_id' });
+  DroneComponent = createBoundEntityAdapter('drone_components', {
+    idField: null,
+    useProvidedIdAsDocId: false,
+    mirrorDocIdToIdField: false
+  });
   ActivityLog = createBoundEntityAdapter('activity_logs');
   DailyVerification = createBoundEntityAdapter('daily_verifications');
   UserProfile = createBoundEntityAdapter('users'); // For querying users collection by linked_soldier_id

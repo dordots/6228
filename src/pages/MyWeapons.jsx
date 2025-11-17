@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target, Package, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import ArmoryStatusBadge from "@/components/common/ArmoryStatusBadge";
 
 export default function MyWeaponsPage() {
   const [weapons, setWeapons] = useState([]);
@@ -167,13 +168,12 @@ export default function MyWeaponsPage() {
                     } border`}>
                       {weapon.status === 'functioning' ? 'Functioning' : 'Not Functioning'}
                     </Badge>
-                    <Badge className={`${
-                      weapon.armory_status === 'with_soldier' ? 
-                      'bg-blue-100 text-blue-800 border-blue-200' : 
-                      'bg-amber-100 text-amber-800 border-amber-200'
-                    } border`}>
-                      {weapon.armory_status === 'with_soldier' ? 'With Me' : 'In Deposit'}
-                    </Badge>
+                    <ArmoryStatusBadge
+                      status={weapon.armory_status}
+                      depositLocation={weapon.deposit_location}
+                      overrideLabel={weapon.armory_status === 'with_soldier' ? 'With Me' : undefined}
+                      className="border"
+                    />
                   </div>
                 </div>
               ))}

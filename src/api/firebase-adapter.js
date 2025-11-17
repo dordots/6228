@@ -126,7 +126,11 @@ const buildQuery = (collectionRef, options = {}) => {
 
 // Create entity adapter factory
 export const createEntityAdapter = (collectionName, options = {}) => {
-  const { idField = `${collectionName.slice(0, -1)}_id` } = options;
+  const {
+    idField = `${collectionName.slice(0, -1)}_id`,
+    useProvidedIdAsDocId = true,
+    mirrorDocIdToIdField = true
+  } = options;
 
   const adapter = {
     // Create
@@ -138,7 +142,9 @@ export const createEntityAdapter = (collectionName, options = {}) => {
       };
 
       let docRef;
-      if (data[idField]) {
+      const shouldUseCustomDocId = Boolean(idField && data[idField] && useProvidedIdAsDocId);
+
+      if (shouldUseCustomDocId) {
         // Use composite ID for weapons, gear, and equipment (to allow same ID with different types)
         let documentId = data[idField];
 
@@ -156,7 +162,9 @@ export const createEntityAdapter = (collectionName, options = {}) => {
         // Auto-generate ID
         docRef = await addDoc(collection(db, collectionName), docData);
         // Update with generated ID
-        await updateDoc(docRef, { [idField]: docRef.id });
+        if (idField && mirrorDocIdToIdField) {
+          await updateDoc(docRef, { [idField]: docRef.id });
+        }
       }
 
       const newDoc = await getDoc(docRef);

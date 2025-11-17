@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Binoculars, Package, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import ArmoryStatusBadge from "@/components/common/ArmoryStatusBadge";
 
 export default function MyGearPage() {
   const [gear, setGear] = useState([]);
@@ -184,13 +185,12 @@ export default function MyGearPage() {
                         </Badge>
                       );
                     })()}
-                    <Badge className={`${
-                      item.armory_status === 'with_soldier' ? 
-                      'bg-blue-100 text-blue-800 border-blue-200' : 
-                      'bg-amber-100 text-amber-800 border-amber-200'
-                    } border`}>
-                      {item.armory_status === 'with_soldier' ? 'With Me' : 'In Deposit'}
-                    </Badge>
+                    <ArmoryStatusBadge
+                      status={item.armory_status}
+                      depositLocation={item.deposit_location}
+                      overrideLabel={item.armory_status === 'with_soldier' ? 'With Me' : undefined}
+                      className="border"
+                    />
                   </div>
                 </div>
               ))}

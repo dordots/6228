@@ -25,10 +25,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getArmoryStatusDisplay } from "@/lib/armoryStatus";
 
 const statusColors = {
   expected: "bg-yellow-100 text-yellow-800 border-yellow-200",
   arrived: "bg-green-100 text-green-800 border-green-200"
+};
+
+const renderDepositIndicator = (item) => {
+  if (!item || item.armory_status !== 'in_deposit') return null;
+  const display = getArmoryStatusDisplay(item.armory_status, item.deposit_location);
+  if (!display) return null;
+
+  const toneClass = display.tone === 'naura' ? 'text-indigo-700' : 'text-amber-600';
+
+  return (
+    <span className={`ml-2 text-[11px] font-semibold ${toneClass}`}>
+      [{display.label}]
+    </span>
+  );
 };
 
 const AllEquipmentPopover = ({ soldier, weapons, gear, drones, equipment }) => {
@@ -71,9 +86,7 @@ const AllEquipmentPopover = ({ soldier, weapons, gear, drones, equipment }) => {
                   <div key={`w-${item.id}`} className="flex justify-between items-center text-xs py-1">
                     <div className="flex-1">
                       <span className="text-slate-700 font-medium">{item.weapon_type}</span>
-                      {item.armory_status === 'in_deposit' && (
-                        <span className="ml-2 text-amber-600 font-semibold">[IN DEPOSIT]</span>
-                      )}
+                      {renderDepositIndicator(item)}
                     </div>
                     <Badge variant="secondary" className="font-mono text-xs">{item.weapon_id}</Badge>
                   </div>
@@ -93,9 +106,7 @@ const AllEquipmentPopover = ({ soldier, weapons, gear, drones, equipment }) => {
                   <div key={`g-${item.id}`} className="flex justify-between items-center text-xs py-1">
                     <div className="flex-1">
                       <span className="text-slate-700 font-medium">{item.gear_type}</span>
-                      {item.armory_status === 'in_deposit' && (
-                        <span className="ml-2 text-amber-600 font-semibold">[IN DEPOSIT]</span>
-                      )}
+                      {renderDepositIndicator(item)}
                     </div>
                     <Badge variant="secondary" className="font-mono text-xs">{item.gear_id}</Badge>
                   </div>
@@ -115,9 +126,7 @@ const AllEquipmentPopover = ({ soldier, weapons, gear, drones, equipment }) => {
                   <div key={`d-${item.id}`} className="flex justify-between items-center text-xs py-1">
                     <div className="flex-1">
                       <span className="text-slate-700 font-medium">{item.set_type} Set</span>
-                      {item.armory_status === 'in_deposit' && (
-                        <span className="ml-2 text-amber-600 font-semibold">[IN DEPOSIT]</span>
-                      )}
+                      {renderDepositIndicator(item)}
                     </div>
                     <Badge variant="secondary" className="font-mono text-xs">{item.set_serial_number}</Badge>
                   </div>

@@ -7,6 +7,7 @@ import { Edit, Trash2, ArrowRight, ChevronUp, ChevronDown, Eye, MessageSquare } 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import ArmoryStatusBadge from "@/components/common/ArmoryStatusBadge";
 
 const statusColors = {
   Operational: "bg-green-100 text-green-800 border-green-200",
@@ -106,15 +107,10 @@ export default function DroneSetTable({
                   <Badge className={`${statusColors[droneSet.status] || 'bg-gray-100 text-gray-800 border-gray-200'} border`}>{droneSet.status || 'Unknown'}</Badge>
                 </TableCell>
                 <TableCell>
-                  {droneSet.armory_status === 'in_deposit' ? (
-                    <Badge variant="outline" className="text-xs font-normal text-amber-800 bg-amber-50 border-amber-200">
-                      In Deposit
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs font-normal text-green-800 bg-green-50 border-green-200">
-                      With Soldier
-                    </Badge>
-                  )}
+                  <ArmoryStatusBadge
+                    status={droneSet.armory_status}
+                    depositLocation={droneSet.deposit_location}
+                  />
                 </TableCell>
                 <TableCell className="max-w-xs">
                   {droneSet.comments ? (

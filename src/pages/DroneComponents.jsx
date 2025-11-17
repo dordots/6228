@@ -353,7 +353,7 @@ export default function DroneComponents() {
         user_full_name: user.full_name,
         division_name: user.division // Log component changes under user's division
       });
-      await DroneComponent.delete(componentToDelete.component_id);
+      await DroneComponent.delete(componentToDelete.id);
       loadData();
     } catch (error) {
       alert("An error occurred while deleting the drone component.");
@@ -490,7 +490,7 @@ export default function DroneComponents() {
               user_full_name: user.full_name,
               division_name: user.division
             });
-            await DroneComponent.delete(componentToDelete.component_id);
+            await DroneComponent.delete(componentToDelete.id);
           } catch (error) {
             console.error(`Error deleting component ${id}:`, error);
             // Continue with other deletions even if one fails

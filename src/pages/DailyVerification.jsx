@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import SoldierVerificationCard from "../components/verification/SoldierVerificationCard";
 import ComboBox from "../components/common/ComboBox";
+import ArmoryStatusBadge from "@/components/common/ArmoryStatusBadge";
 
 export default function DailyVerificationPage() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -57,13 +58,6 @@ export default function DailyVerificationPage() {
   const [undoingComponentIds, setUndoingComponentIds] = useState(() => new Set());
 
   const [isLoading, setIsLoading] = useState(true);
-
-  const formatArmoryStatus = (status) => {
-    if (!status) return "Unknown";
-    if (status === "in_deposit") return "In Deposit";
-    if (status === "with_soldier") return "With Soldier";
-    return String(status).replace(/_/g, " ");
-  };
 
   // Calculate today's date - this will be recalculated on each component mount (page load/refresh)
   const today = useMemo(() => {
@@ -1967,15 +1961,10 @@ export default function DailyVerificationPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={`text-xs font-normal ${armoryStatus === 'with_soldier'
-                                  ? 'text-green-800 bg-green-50 border-green-200'
-                                  : 'text-slate-700 bg-slate-100 border-slate-200'
-                                }`}
-                              >
-                                {formatArmoryStatus(armoryStatus)}
-                              </Badge>
+                              <ArmoryStatusBadge
+                                status={armoryStatus}
+                                depositLocation={item.record?.deposit_location}
+                              />
                             </TableCell>
                             <TableCell className="text-sm text-slate-600">
                               {item.last_signed_by || <span className="text-slate-400">—</span>}
@@ -2119,15 +2108,10 @@ export default function DailyVerificationPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={`text-xs font-normal ${armoryStatus === 'with_soldier'
-                                  ? 'text-green-800 bg-green-50 border-green-200'
-                                  : 'text-slate-700 bg-slate-100 border-slate-200'
-                                }`}
-                              >
-                                {formatArmoryStatus(armoryStatus)}
-                              </Badge>
+                              <ArmoryStatusBadge
+                                status={armoryStatus}
+                                depositLocation={item.record?.deposit_location}
+                              />
                             </TableCell>
                             <TableCell className="text-sm text-slate-600">
                               {item.last_signed_by || <span className="text-slate-400">—</span>}
@@ -2271,15 +2255,10 @@ export default function DailyVerificationPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={`text-xs font-normal ${item.armory_status === 'with_soldier'
-                                  ? 'text-green-800 bg-green-50 border-green-200'
-                                  : 'text-slate-700 bg-slate-100 border-slate-200'
-                                }`}
-                              >
-                                {formatArmoryStatus(item.armory_status)}
-                              </Badge>
+                              <ArmoryStatusBadge
+                                status={item.armory_status}
+                                depositLocation={item.record?.deposit_location}
+                              />
                             </TableCell>
                             <TableCell className="text-sm text-slate-600">
                               {item.division_name || <span className="text-slate-400">—</span>}

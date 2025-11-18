@@ -56,6 +56,9 @@ export default function SerializedGearPage() {
   const [viewingComment, setViewingComment] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [showRenameDialog, setShowRenameDialog] = useState(false); // New State
+const [showBulkNauraDialog, setShowBulkNauraDialog] = useState(false);
+const [bulkNauraAction, setBulkNauraAction] = useState(null); // 'deposit' | 'release'
+const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -338,6 +341,68 @@ export default function SerializedGearPage() {
     }
   };
 
+  const handleBulkNauraAction = (action) => {
+    if (!selectedItems.length) return;
+    setBulkNauraAction(action);
+    setShowBulkNauraDialog(true);
+  };
+
+  const buildGearNauraPayload = (gearItem, action) => {
+    if (action === 'deposit') {
+      const alreadyInNaura = gearItem.deposit_location === 'naura_deposit';
+      return {
+        assigned_to: alreadyInNaura ? gearItem.assigned_to : null,
+        armory_status: 'in_deposit',
+        deposit_location: 'naura_deposit',
+        skipUpdate: alreadyInNaura
+      };
+    }
+    const alreadyReleased = gearItem.deposit_location !== 'naura_deposit';
+    return {
+      armory_status: gearItem.assigned_to ? 'with_soldier' : 'in_deposit',
+      deposit_location: null,
+      skipUpdate: alreadyReleased
+    };
+  };
+
+  const handleConfirmBulkNaura = async () => {
+    if (!bulkNauraAction) return;
+    setIsBulkNauraProcessing(true);
+    try {
+      let skippedCount = 0;
+      const updates = selectedItems
+        .map(id => {
+          const gearItem = gear.find(g => g.id === id);
+          if (!gearItem) return null;
+          const updatePayload = buildGearNauraPayload(gearItem, bulkNauraAction);
+          if (updatePayload.skipUpdate) {
+            skippedCount++;
+            return null;
+          }
+          return SerializedGear.update(gearItem.gear_id, updatePayload);
+        })
+        .filter(Boolean);
+
+      if (updates.length === 0) {
+        alert("No valid gear items were selected or they were already in the requested state.");
+      } else {
+        await Promise.all(updates);
+        if (skippedCount > 0) {
+          alert(`${skippedCount} gear item(s) were already in the requested state and were skipped.`);
+        }
+      }
+
+      setSelectedItems([]);
+      loadData();
+    } catch (error) {
+      alert("An error occurred while updating the selected gear. Please try again.");
+    } finally {
+      setIsBulkNauraProcessing(false);
+      setShowBulkNauraDialog(false);
+      setBulkNauraAction(null);
+    }
+  };
+
   const handleBulkDelete = async () => {
     if (!currentUser?.permissions?.['equipment.delete'] && currentUser?.role !== 'admin') {
       alert("You do not have permission to delete gear.");
@@ -568,6 +633,32 @@ export default function SerializedGearPage() {
         isLoading={false}
       />
 
+      {/* Bulk Naura Dialog */}
+      <AlertDialog open={showBulkNauraDialog} onOpenChange={setShowBulkNauraDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {bulkNauraAction === 'deposit' ? 'Send Selected Gear to Naura' : 'Release Selected Gear from Naura'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulkNauraAction === 'deposit'
+                ? `This will move ${selectedItems.length} serialized gear item(s) to the Naura deposit and clear any current assignments.`
+                : `This will remove the Naura deposit flag from ${selectedItems.length} serialized gear item(s).`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkNauraProcessing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmBulkNaura}
+              disabled={isBulkNauraProcessing}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+            >
+              {isBulkNauraProcessing ? "Processing..." : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Comment Viewer Dialog */}
       <Dialog open={!!viewingComment} onOpenChange={() => setViewingComment(null)}>
         <DialogContent>
@@ -589,15 +680,37 @@ export default function SerializedGearPage() {
           <p className="text-slate-600">Track and manage specialized equipment with serial numbers</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {selectedItems.length > 0 && (currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
-            <Button
-              variant="destructive"
-              onClick={() => setShowBulkDeleteConfirm(true)}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Selected ({selectedItems.length})
-            </Button>
+          {selectedItems.length > 0 && (
+            <>
+              {(currentUser?.permissions?.['equipment.delete'] || currentUser?.role === 'admin') && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Selected ({selectedItems.length})
+                </Button>
+              )}
+              {(currentUser?.role === 'admin' || currentUser?.permissions?.['equipment.update']) && (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleBulkNauraAction('deposit')}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    Send to Naura ({selectedItems.length})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleBulkNauraAction('release')}
+                    className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  >
+                    Release from Naura
+                  </Button>
+                </>
+              )}
+            </>
           )}
           {currentUser?.role === 'admin' && (
             <Button variant="outline" onClick={() => setShowRenameDialog(true)}>

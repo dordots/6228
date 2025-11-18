@@ -9,10 +9,18 @@ export default function DivisionEquipmentTable({
   equipment,
   equipmentTypes,
 }) {
+  const getNumericQuantity = (value) => {
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+      return value;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const getAssignedEquipmentQty = (soldierId, eqType) => {
     return (Array.isArray(equipment) ? equipment : [])
       .filter(e => e?.assigned_to === soldierId && e?.equipment_type === eqType)
-      .reduce((sum, item) => sum + (item.quantity || 0), 0);
+      .reduce((sum, item) => sum + getNumericQuantity(item.quantity), 0);
   };
 
   const getEquipmentTypeTotals = () => {
@@ -22,7 +30,7 @@ export default function DivisionEquipmentTable({
     return equipmentTypes.reduce((acc, type) => {
       acc[type] = (Array.isArray(equipment) ? equipment : [])
         .filter(e => e?.equipment_type === type && soldierIds.includes(e.assigned_to))
-        .reduce((sum, item) => sum + (item.quantity || 0), 0);
+        .reduce((sum, item) => sum + getNumericQuantity(item.quantity), 0);
       return acc;
     }, {});
   };

@@ -40,26 +40,49 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import AssignedItemsList from "../components/release/AssignedItemsList";
 import SignatureCanvas from "../components/soldiers/SignatureCanvas"; // Import signature canvas
 
+const BEAM_OVERRIDE_CODE = "8520";
+
 // אמר"ל types that need קרן (beam)
-const AMARAL_TYPES = [
+const RAW_AMARAL_TYPES = [
   'אמר"ל דו עיני;עידו',
   'אמר"ל דו עיני;MICRON',
   'אמר"ל דו עיני NYX',
-  'אמר"ל חד עיני - שח"מ'
+  'אמר"ל חד עיני - שח"מ',
+  'דו-עיני עדי',
+  'דו עיני עדי',
+  'דו-עיני micron',
+  'דו עיני micron',
+  'דו-עיני nyx',
+  'דו עיני nyx',
+  'שח"מ'
 ];
+
+const AMARAL_TYPES = RAW_AMARAL_TYPES.map(type => type.toLowerCase());
 
 // Mapping from אמר"ל type to קרן gear_id prefix
 const AMARAL_TO_BEAM_MAP = {
   'אמר"ל דו עיני;עידו': 'IDO-001',
+  'דו-עיני עדי': 'IDO-001',
+  'דו עיני עדי': 'IDO-001',
   'אמר"ל דו עיני;MICRON': 'MICRON-001',
+  'דו-עיני micron': 'MICRON-001',
+  'דו עיני micron': 'MICRON-001',
   'אמר"ל דו עיני NYX': 'NYX-001',
-  'אמר"ל חד עיני - שח"מ': 'SHAHAM-001'
+  'דו-עיני nyx': 'NYX-001',
+  'דו עיני nyx': 'NYX-001',
+  'אמר"ל חד עיני - שח"מ': 'SHAHAM-001',
+  'שח"מ': 'SHAHAM-001'
 };
+
+const NORMALIZED_AMARAL_TO_BEAM_MAP = Object.fromEntries(
+  Object.entries(AMARAL_TO_BEAM_MAP).map(([key, value]) => [key.toLowerCase(), value])
+);
 
 // Helper function to check if a gear item is an אמר"ל that needs קרן
 const isAmaralNeedingBeam = (gearItem) => {
   if (!gearItem || !gearItem.gear_type) return false;
-  return AMARAL_TYPES.some(type => gearItem.gear_type.includes(type));
+  const normalizedType = gearItem.gear_type.toLowerCase();
+  return AMARAL_TYPES.some(type => normalizedType.includes(type));
 };
 
 // Helper function to check if a gear item is a קרן
@@ -72,9 +95,10 @@ const isBeam = (gearItem) => {
 // Helper function to find matching קרן for an אמר"ל
 const findBeamForAmaral = (amaral, allGear) => {
   if (!amaral || !amaral.gear_type) return null;
-  const amaralType = AMARAL_TYPES.find(type => amaral.gear_type.includes(type));
+  const normalizedType = amaral.gear_type.toLowerCase();
+  const amaralType = AMARAL_TYPES.find(type => normalizedType.includes(type));
   if (!amaralType) return null;
-  const expectedBeamId = AMARAL_TO_BEAM_MAP[amaralType];
+  const expectedBeamId = NORMALIZED_AMARAL_TO_BEAM_MAP[amaralType];
   const beamPrefix = expectedBeamId.split('-')[0];
   return allGear.find(gear => 
     gear.gear_id && 
@@ -126,6 +150,16 @@ export default function SoldierReleasePage() {
   const [selectedEquipmentItems, setSelectedEquipmentItems] = useState([]);
   const [serializedQuantities, setSerializedQuantities] = useState({});
   const [equipmentQuantities, setEquipmentQuantities] = useState({});
+  const [beamBypassIds, setBeamBypassIds] = useState([]);
+  const [showBeamReleaseDialog, setShowBeamReleaseDialog] = useState(false);
+  const [pendingBeamRelease, setPendingBeamRelease] = useState(null);
+  const [beamReleaseCode, setBeamReleaseCode] = useState("");
+  const beamOverrideRequired = useMemo(() => (
+    pendingBeamRelease
+      ? pendingBeamRelease.type === 'amaralNoBeamAvailable' || pendingBeamRelease.type === 'beamNoAmaralAvailable'
+      : false
+  ), [pendingBeamRelease]);
+  const beamOverrideValid = useMemo(() => beamReleaseCode.trim() === BEAM_OVERRIDE_CODE, [beamReleaseCode]);
 
   const [successMessage, setSuccessMessage] = useState(""); // New state for success messages
   const [errorMessage, setErrorMessage] = useState(""); // New state for error messages
@@ -385,6 +419,7 @@ export default function SoldierReleasePage() {
     loadSoldierItems(soldier);
   };
 
+
   const assignedSerialized = useMemo(() => {
     if (!selectedSoldier) return [];
     
@@ -451,10 +486,246 @@ export default function SoldierReleasePage() {
     return [...groupedWeapons, ...mappedGear, ...mappedDrones];
   }, [selectedSoldier, assignedWeapons, assignedGear, assignedDrones]);
 
+  useEffect(() => {
+    if (!beamBypassIds.length) return;
+    setBeamBypassIds(prev => {
+      const updated = prev.filter(id => {
+        const serializedItem = assignedSerialized.find(item => item.id === id);
+        if (!serializedItem) return false;
+        const gearItem = assignedGear.find(g => g.gear_id === serializedItem.displayId);
+        if (!gearItem) return false;
+        if (isAmaralNeedingBeam(gearItem)) {
+          return !findBeamForAmaral(gearItem, assignedGear);
+        }
+        if (isBeam(gearItem)) {
+          return !findAmaralForBeam(gearItem, assignedGear);
+        }
+        return false;
+      });
+      return updated.length === prev.length ? prev : updated;
+    });
+  }, [assignedSerialized, assignedGear, beamBypassIds, isAmaralNeedingBeam, findBeamForAmaral, findAmaralForBeam]);
+
+  const serializedItemById = useCallback(
+    (itemId) => assignedSerialized.find(item => item.id === itemId) || null,
+    [assignedSerialized]
+  );
+
+  const gearForSerializedItem = useCallback(
+    (serializedItem) => {
+      if (!serializedItem || serializedItem.itemType !== 'Gear') return null;
+      return assignedGear.find(g => g.gear_id === serializedItem.displayId) || null;
+    },
+    [assignedGear]
+  );
+
+  const beamSerializedForGear = useCallback(
+    (gearItem) => {
+      if (!gearItem) return null;
+      const matchingBeam = findBeamForAmaral(gearItem, assignedGear);
+      if (!matchingBeam) return null;
+      return assignedSerialized.find(item => item.itemType === 'Gear' && item.displayId === matchingBeam.gear_id) || null;
+    },
+    [assignedGear, assignedSerialized]
+  );
+
+  const amaralSerializedForBeamGear = useCallback(
+    (beamGear) => {
+      if (!beamGear) return null;
+      const matchingAmaral = findAmaralForBeam(beamGear, assignedGear);
+      if (!matchingAmaral) return null;
+      return assignedSerialized.find(item => item.itemType === 'Gear' && item.displayId === matchingAmaral.gear_id) || null;
+    },
+    [assignedGear, assignedSerialized]
+  );
+
+  const isSerializedAmaralItem = useCallback(
+    (serializedItem) => {
+      const gearItem = gearForSerializedItem(serializedItem);
+      return gearItem ? isAmaralNeedingBeam(gearItem) : false;
+    },
+    [gearForSerializedItem]
+  );
+
+  const isSerializedBeamItem = useCallback(
+    (serializedItem) => {
+      const gearItem = gearForSerializedItem(serializedItem);
+      return gearItem ? isBeam(gearItem) : false;
+    },
+    [gearForSerializedItem]
+  );
+
+  const findBeamSelectionViolation = useCallback(
+    (proposedSelection, options = {}) => {
+      const selectionArray = Array.isArray(proposedSelection) ? proposedSelection : [];
+      if (!selectionArray.length) return null;
+      const selectionSet = new Set(selectionArray);
+      const ignoredIds = new Set([
+        ...(options.ignoredItemIds ? Array.from(options.ignoredItemIds) : []),
+        ...beamBypassIds,
+      ]);
+
+      for (const id of selectionSet) {
+        if (ignoredIds.has(id)) continue;
+        const serializedItem = serializedItemById(id);
+        if (!serializedItem || serializedItem.itemType !== 'Gear') continue;
+
+        if (isSerializedAmaralItem(serializedItem)) {
+          const gearItem = gearForSerializedItem(serializedItem);
+          const matchingBeamSerialized = beamSerializedForGear(gearItem);
+          if (!matchingBeamSerialized) {
+            return {
+              type: 'amaralNoBeamAvailable',
+              amaralItem: serializedItem,
+              beamItem: null,
+              blockingId: serializedItem.id,
+            };
+          }
+          if (!selectionSet.has(matchingBeamSerialized.id) && !ignoredIds.has(matchingBeamSerialized.id)) {
+            return {
+              type: 'amaralMissingBeam',
+              amaralItem: serializedItem,
+              beamItem: matchingBeamSerialized,
+              blockingId: serializedItem.id,
+            };
+          }
+        } else if (isSerializedBeamItem(serializedItem)) {
+          const gearItem = gearForSerializedItem(serializedItem);
+          const matchingAmaralSerialized = amaralSerializedForBeamGear(gearItem);
+          if (!matchingAmaralSerialized) {
+            return {
+              type: 'beamNoAmaralAvailable',
+              amaralItem: null,
+              beamItem: serializedItem,
+              blockingId: serializedItem.id,
+            };
+          }
+          if (!selectionSet.has(matchingAmaralSerialized.id) && !ignoredIds.has(matchingAmaralSerialized.id)) {
+            return {
+              type: 'beamMissingAmaral',
+              amaralItem: matchingAmaralSerialized,
+              beamItem: serializedItem,
+              blockingId: serializedItem.id,
+            };
+          }
+        }
+      }
+
+      return null;
+    },
+    [
+      beamBypassIds,
+      serializedItemById,
+      isSerializedAmaralItem,
+      gearForSerializedItem,
+      beamSerializedForGear,
+      isSerializedBeamItem,
+      amaralSerializedForBeamGear,
+    ]
+  );
+
+  const attemptSelectionWithBeamValidation = useCallback(
+    (proposedSelection, options = {}) => {
+      const normalizedSelection = Array.isArray(proposedSelection) ? proposedSelection : [];
+      const violation = findBeamSelectionViolation(normalizedSelection, options);
+      if (violation) {
+        const sanitizedSelection = violation.blockingId
+          ? normalizedSelection.filter(id => id !== violation.blockingId)
+          : normalizedSelection;
+        setSelectedSerializedItems(sanitizedSelection);
+        setPendingBeamRelease({
+          ...violation,
+          targetSelection: normalizedSelection,
+        });
+        setShowBeamReleaseDialog(true);
+        setBeamReleaseCode("");
+        return false;
+      }
+      setSelectedSerializedItems(normalizedSelection);
+      return true;
+    },
+    [findBeamSelectionViolation]
+  );
+
+  const handleSerializedSelectionChange = useCallback(
+    (newSelection) => {
+      attemptSelectionWithBeamValidation(Array.isArray(newSelection) ? newSelection : []);
+    },
+    [attemptSelectionWithBeamValidation]
+  );
+
+  const resetBeamDialogState = useCallback(() => {
+    setPendingBeamRelease(null);
+    setShowBeamReleaseDialog(false);
+    setBeamReleaseCode("");
+  }, []);
+
+  useEffect(() => {
+    setBeamBypassIds([]);
+    resetBeamDialogState();
+  }, [selectedSoldier?.soldier_id, resetBeamDialogState]);
+
+  const handleBeamRequirementConfirm = useCallback(() => {
+    if (!pendingBeamRelease) return;
+    const baseSelection = pendingBeamRelease.targetSelection || selectedSerializedItems;
+    const finalSet = new Set(baseSelection);
+    if (pendingBeamRelease.amaralItem) {
+      finalSet.add(pendingBeamRelease.amaralItem.id);
+    }
+    if (pendingBeamRelease.beamItem) {
+      finalSet.add(pendingBeamRelease.beamItem.id);
+    }
+
+    const requiresOverride =
+      pendingBeamRelease.type === 'amaralNoBeamAvailable' ||
+      pendingBeamRelease.type === 'beamNoAmaralAvailable';
+
+    if (requiresOverride && !beamOverrideValid) {
+      return;
+    }
+
+    let ignoredItemIds;
+    if (requiresOverride) {
+      const idsToBypass = [pendingBeamRelease.amaralItem?.id, pendingBeamRelease.beamItem?.id].filter(Boolean);
+      if (idsToBypass.length) {
+        ignoredItemIds = new Set(idsToBypass);
+        setBeamBypassIds(prev => {
+          const next = [...prev];
+          let changed = false;
+          idsToBypass.forEach(id => {
+            if (!next.includes(id)) {
+              next.push(id);
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      }
+    }
+
+    const validationOptions = ignoredItemIds ? { ignoredItemIds } : undefined;
+    attemptSelectionWithBeamValidation(Array.from(finalSet), validationOptions);
+    resetBeamDialogState();
+  }, [
+    pendingBeamRelease,
+    selectedSerializedItems,
+    attemptSelectionWithBeamValidation,
+    resetBeamDialogState,
+    setBeamBypassIds,
+    beamOverrideValid,
+  ]);
+
+  const handleBeamRequirementCancel = useCallback(() => {
+    resetBeamDialogState();
+  }, [resetBeamDialogState]);
+
+
   const assignedEquipment = useMemo(() => {
     if (!selectedSoldier) return [];
     return assignedEquipmentList.map(i => ({ ...i, itemType: 'Equipment', displayName: `${i.equipment_type} (x${i.quantity})`, displayId: `ID: ${i.id.slice(0,8)}` }));
   }, [selectedSoldier, assignedEquipmentList]);
+
+  const beamBypassIdSet = useMemo(() => new Set(beamBypassIds), [beamBypassIds]);
 
   const amaralBeamReminders = useMemo(() => {
     if (!selectedSoldier || selectedSerializedItems.length === 0) return [];
@@ -463,7 +734,8 @@ export default function SoldierReleasePage() {
     const reminders = [];
 
     assignedSerialized.forEach(item => {
-      if (!selectedIds.has(item.id) || item.itemType !== 'Gear') return;
+        if (!selectedIds.has(item.id) || item.itemType !== 'Gear') return;
+        if (beamBypassIdSet.has(item.id)) return;
 
       const gearItem = assignedGear.find(g => g.gear_id === item.displayId);
       if (!gearItem || !isAmaralNeedingBeam(gearItem)) return;
@@ -490,7 +762,7 @@ export default function SoldierReleasePage() {
     });
 
     return Array.from(uniqueMap.values());
-  }, [selectedSoldier, selectedSerializedItems, assignedSerialized, assignedGear]);
+  }, [selectedSoldier, selectedSerializedItems, assignedSerialized, assignedGear, beamBypassIdSet]);
 
   const hasAmaralAssigned = useMemo(() => {
     return assignedGear.some(isAmaralNeedingBeam);
@@ -2079,7 +2351,7 @@ export default function SoldierReleasePage() {
                 <AssignedItemsList
                   items={assignedSerialized}
                   selectedItems={selectedSerializedItems}
-                  onSelectionChange={setSelectedSerializedItems}
+                  onSelectionChange={handleSerializedSelectionChange}
                   quantities={serializedQuantities}
                   onQuantityChange={handleSerializedQuantityChange}
                 />
@@ -2132,6 +2404,73 @@ export default function SoldierReleasePage() {
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showBeamReleaseDialog} onOpenChange={(open) => {
+            if (!open) {
+              handleBeamRequirementCancel();
+            }
+          }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Beam Required</DialogTitle>
+                <DialogDescription>
+                  {pendingBeamRelease?.type === 'beamMissingAmaral'
+                    ? 'This beam must be released together with its NVG.'
+                    : 'To release this NVG you also need to release the matching beam.'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {pendingBeamRelease?.amaralItem && (
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-sm font-semibold text-slate-800">NVG (אמר"ל)</p>
+                    <p className="text-sm text-slate-600">
+                      {pendingBeamRelease.amaralItem.displayName} ({pendingBeamRelease.amaralItem.displayId})
+                    </p>
+                  </div>
+                )}
+                {pendingBeamRelease?.beamItem && (
+                  <div className="rounded-md border border-slate-200 bg-white p-3">
+                    <p className="text-sm font-semibold text-slate-800">Beam (קרן)</p>
+                    <p className="text-sm text-slate-600">
+                      {pendingBeamRelease.beamItem.displayName} ({pendingBeamRelease.beamItem.displayId})
+                    </p>
+                  </div>
+                )}
+                {beamOverrideRequired ? (
+                  <div className="space-y-2">
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      No matching beam is currently available. Enter code {BEAM_OVERRIDE_CODE} to continue without one.
+                    </div>
+                    <Input
+                      value={beamReleaseCode}
+                      onChange={(e) => setBeamReleaseCode(e.target.value)}
+                      placeholder="Enter override code"
+                    />
+                  </div>
+                ) : pendingBeamRelease?.beamItem ? (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                    The beam will be selected and released together with the NVG to keep records aligned.
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    No beam is linked to this item, but you may continue.
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleBeamRequirementCancel}>Cancel</Button>
+                <Button
+                  onClick={handleBeamRequirementConfirm}
+                  disabled={
+                    !pendingBeamRelease ||
+                    (beamOverrideRequired && !beamOverrideValid)
+                  }
+                >
+                  {pendingBeamRelease?.beamItem ? 'Release With Beam' : 'Continue'}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
 

@@ -113,7 +113,8 @@ export default function DroneComponentFilters({ filters, onFilterChange, compone
   const statusOptions = [
     { value: 'Operational', label: 'Operational' },
     { value: 'Maintenance', label: 'Maintenance' },
-    { value: 'Damaged', label: 'Damaged' }
+    { value: 'Damaged', label: 'Damaged' },
+    { value: 'Missing', label: 'Missing' },
   ];
 
   return (

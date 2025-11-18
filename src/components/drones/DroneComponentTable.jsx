@@ -11,6 +11,7 @@ const statusColors = {
   Operational: "bg-green-100 text-green-800 border-green-200",
   Maintenance: "bg-yellow-100 text-yellow-800 border-yellow-200",
   Damaged: "bg-red-100 text-red-800 border-red-200",
+  Missing: "bg-gray-100 text-gray-800 border-gray-200",
 };
 
 export default function DroneComponentTable({
@@ -83,7 +84,9 @@ export default function DroneComponentTable({
               <TableCell className="font-mono sticky left-12 z-10 bg-white group-hover:bg-slate-50">{component.component_id}</TableCell>
               <TableCell>{component.component_type}</TableCell>
               <TableCell>
-                <Badge className={`${statusColors[component.status]} border`}>{component.status}</Badge>
+                <Badge className={`${statusColors[component.status] || 'bg-gray-100 text-gray-800 border-gray-200'} border`}>
+                  {component.status || 'Unknown'}
+                </Badge>
               </TableCell>
               <TableCell>
                 {assignedSet ? (

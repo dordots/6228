@@ -111,6 +111,7 @@ export default function DroneComponentForm({ component, onSubmit, onCancel, exis
                 <SelectItem value="Operational">Operational</SelectItem>
                 <SelectItem value="Maintenance">Maintenance</SelectItem>
                 <SelectItem value="Damaged">Damaged</SelectItem>
+                <SelectItem value="Missing">Missing</SelectItem>
               </SelectContent>
             </Select>
         </div>

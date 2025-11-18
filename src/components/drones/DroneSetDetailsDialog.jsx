@@ -17,13 +17,44 @@ const statusColors = {
   Missing: "bg-gray-100 text-gray-800 border-gray-200",
 };
 
+const inferRoleFromKey = (key = "") => {
+  if (!key) return null;
+  const normalized = key.toString().toLowerCase();
+  if (normalized.includes("goggles")) return "goggles";
+  if (normalized.includes("remote") || normalized.includes("controller")) return "remote";
+  if (normalized.includes("bomb")) return "bomb_dropper";
+  if (normalized.includes("drone")) return "drone";
+  return null;
+};
+
+const componentMatchesRole = (component, role) => {
+  if (!role || !component?.component_type) return true;
+  const type = component.component_type.toLowerCase();
+  switch (role) {
+    case "goggles":
+      return type.includes("goggles");
+    case "remote":
+      return type.includes("remote");
+    case "bomb_dropper":
+      return type.includes("bomb");
+    case "drone":
+      return type.includes("drone");
+    default:
+      return true;
+  }
+};
+
 export default function DroneSetDetailsDialog({ droneSet, allComponents, soldiers, open, onOpenChange }) {
   if (!droneSet) return null;
 
   const assignedSoldier = soldiers.find(s => s.soldier_id === droneSet.assigned_to);
   
-  const getComponentDetails = (componentId) => {
-    return allComponents.find(c => c.id === componentId || c.component_id === componentId);
+  const getComponentDetails = (componentId, slotKey) => {
+    const role = inferRoleFromKey(slotKey);
+    const matches = allComponents.filter(c => c.id === componentId || c.component_id === componentId);
+    if (!matches.length) return null;
+    const roleMatch = matches.find(component => componentMatchesRole(component, role));
+    return roleMatch || matches[0];
   };
 
   const setComponents = droneSet.components ? Object.entries(droneSet.components) : [];
@@ -71,7 +102,7 @@ export default function DroneSetDetailsDialog({ droneSet, allComponents, soldier
             {setComponents.length > 0 ? (
                 <div className="space-y-3">
                 {setComponents.map(([key, componentId]) => {
-                    const component = getComponentDetails(componentId);
+                    const component = getComponentDetails(componentId, key);
                     return (
                     <div key={key} className="grid grid-cols-3 gap-4 items-center p-2 rounded-lg bg-slate-50">
                         <div className="capitalize font-medium text-slate-700">{key.replace(/_/g, ' ')}</div>

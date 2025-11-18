@@ -25,12 +25,19 @@ function SimpleSearchableSelect({
   placeholder = "Select...",
   displayField,
   valueField,
-  searchFields = []
+  searchFields = [],
+  getItemKey
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  
-  const selectedItem = items.find(item => item && item[valueField] === value);
+
+  const normalizedValue = value == null ? null : String(value);
+  const selectedItem = items.find(item => {
+    if (!item || !valueField) return false;
+    const itemValue = item[valueField];
+    if (itemValue == null) return false;
+    return String(itemValue) === normalizedValue;
+  });
   
   const filteredItems = useMemo(() => {
     if (!searchTerm) return items;
@@ -77,19 +84,35 @@ function SimpleSearchableSelect({
               >
                 Unassigned
               </div>
-              {filteredItems.map((item) => (
-                <div
-                  key={item[valueField]}
-                  className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm"
-                  onClick={() => {
-                    onValueChange(item[valueField]);
-                    setIsOpen(false);
-                    setSearchTerm("");
-                  }}
-                >
-                  {displayField(item)}
-                </div>
-              ))}
+              {filteredItems
+                .map((item, index) => {
+                  if (!item) return null;
+                  const itemValue = valueField ? item?.[valueField] : undefined;
+                  const itemKey = getItemKey
+                    ? getItemKey(item, index)
+                    : (itemValue != null
+                        ? `${itemValue}-${item?.component_type || ""}`
+                        : `${index}-${item?.component_type || "item"}`);
+
+                  if (valueField && itemValue == null) {
+                    return null;
+                  }
+
+                  return (
+                    <div
+                      key={itemKey}
+                      className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm"
+                      onClick={() => {
+                        onValueChange(itemValue != null ? String(itemValue) : "");
+                        setIsOpen(false);
+                        setSearchTerm("");
+                      }}
+                    >
+                      {displayField(item)}
+                    </div>
+                  );
+                })
+                .filter(Boolean)}
               {filteredItems.length === 0 && searchTerm && (
                 <div className="px-3 py-2 text-sm text-gray-500">
                   No items found
@@ -130,33 +153,136 @@ export default function DroneSetForm({
   const userDivision = currentUser?.division;
 
   const [droneSetTypes, setDroneSetTypes] = useState([]);
-  const normalizeComponentValue = (value) => {
-    if (!value) return null;
-    if (typeof value === "string") return value;
-    if (typeof value === "object") {
-      return value.id || value.component_id || value.componentId || null;
-    }
-    return null;
-  };
+const normalizeSlotKey = (key = "") => {
+  if (!key) return "";
+  return key.toString().trim().toLowerCase().replace(/[\s\-]+/g, "_");
+};
 
-  const normalizeComponentsMap = (components) => {
-    if (!components || typeof components !== "object") return {};
-    return Object.entries(components).reduce((acc, [slotKey, slotValue]) => {
-      const normalizedValue = normalizeComponentValue(slotValue);
-      if (normalizedValue) {
-        acc[slotKey] = normalizedValue;
-      } else {
-        acc[slotKey] = null;
-      }
-      return acc;
-    }, {});
-  };
+const canonicalSlotKey = (key = "") => {
+  if (!key) return "";
+  return key.toString().trim().toLowerCase().replace(/[\s_\-]+/g, "");
+};
+
+const normalizeSetType = (setType = "") => {
+  return normalizeSlotKey(setType).replace(/_+/g, "_");
+};
+
+const inferSlotRole = (slotKey = "", slotLabel = "", setType = "") => {
+  const normalizedSet = normalizeSetType(setType);
+  const candidates = [slotKey, slotLabel];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const canonical = canonicalSlotKey(candidate);
+    if (!canonical) continue;
+    if (canonical.includes("goggles")) return "goggles";
+    if (canonical.includes("remotecontrol") || canonical.includes("remote") || canonical.includes("controller")) return "remote_control";
+    if (canonical.includes("bombdropper") || canonical.includes("dropper")) return "bomb_dropper";
+    if (canonical.includes("drone")) return "drone";
+    if (normalizedSet && canonical === normalizedSet) return "drone";
+  }
+
+  if (normalizedSet && canonicalSlotKey(slotKey) === normalizedSet) {
+    return "drone";
+  }
+
+  return null;
+};
+
+const resolveSlotKey = (slotKey = "", setType = "", slotLabel = "") => {
+  const role = inferSlotRole(slotKey, slotLabel, setType);
+  const normalizedSet = normalizeSetType(setType);
+  const normalizedSlot = normalizeSlotKey(slotKey);
+
+  if (!role) return normalizedSlot || slotKey;
+  if (!normalizedSet) return normalizedSlot || role;
+  return `${normalizedSet}_${role}`;
+};
+
+const normalizeComponentValue = (value) => {
+  if (!value) return null;
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (typeof value === "object") {
+    return value.component_id || value.componentId || value.id || null;
+  }
+  return null;
+};
+
+const findComponentKeyForSlot = (components = {}, slotKey = "", setType = "", slotLabel = "") => {
+  const targetCanonicalKeys = new Set();
+  const canonicalKey = canonicalSlotKey(slotKey);
+  if (canonicalKey) targetCanonicalKeys.add(canonicalKey);
+
+  const resolvedKey = resolveSlotKey(slotKey, setType, slotLabel);
+  const resolvedCanonical = canonicalSlotKey(resolvedKey);
+  if (resolvedCanonical) targetCanonicalKeys.add(resolvedCanonical);
+
+  return Object.keys(components || {}).find(existingKey => {
+    const existingCanonical = canonicalSlotKey(existingKey);
+    return targetCanonicalKeys.has(existingCanonical);
+  }) || null;
+};
+
+const getComponentValueForSlot = (components = {}, slotKey = "", setType = "", slotLabel = "") => {
+  const existingKey = findComponentKeyForSlot(components, slotKey, setType, slotLabel);
+  if (!existingKey) return null;
+  return components[existingKey];
+};
+
+const inferRoleFromType = (typeLower = "") => {
+  if (!typeLower) return null;
+  if (typeLower.includes("goggles")) return "goggles";
+  if (typeLower.includes("remote")) return "remote";
+  if (typeLower.includes("bomb dropper")) return "bomb_dropper";
+  if (typeLower.includes("drone")) return "drone";
+  return null;
+};
+
+const doesComponentMatchRequiredType = (componentTypeLower, requiredTypeLower, setTypeLower) => {
+  if (!componentTypeLower || !requiredTypeLower) return false;
+
+  if (requiredTypeLower.includes("goggles")) {
+    const matchesRole = componentTypeLower.includes("goggles");
+    if (!matchesRole) return false;
+    if (!setTypeLower) return true;
+    const hasCurrentSetType = componentTypeLower.includes(setTypeLower);
+    const hasOtherSetType =
+      (setTypeLower === "avetta" && componentTypeLower.includes("evo")) ||
+      (setTypeLower === "evo" && componentTypeLower.includes("avetta"));
+    return hasCurrentSetType || !hasOtherSetType;
+  }
+
+  if (requiredTypeLower.includes("remote")) {
+    return componentTypeLower.includes("remote");
+  }
+
+  if (requiredTypeLower.includes("bomb dropper")) {
+    return componentTypeLower.includes("bomb dropper") && componentTypeLower.includes("evo");
+  }
+
+  if (requiredTypeLower.includes("drone")) {
+    return componentTypeLower.includes("drone") && (!setTypeLower || componentTypeLower.includes(setTypeLower));
+  }
+
+  return setTypeLower ? componentTypeLower.includes(setTypeLower) : true;
+};
+
+const normalizeComponentsMap = (components, setType, slotDefinitions = {}) => {
+  if (!components || typeof components !== "object") return {};
+  return Object.entries(components).reduce((acc, [slotKey, slotValue]) => {
+    const normalizedValue = normalizeComponentValue(slotValue);
+    const slotLabel = slotDefinitions?.[slotKey] || "";
+    const normalizedKey = resolveSlotKey(slotKey, setType, slotLabel) || normalizeSlotKey(slotKey) || slotKey || "";
+    acc[normalizedKey] = normalizedValue ?? null;
+    return acc;
+  }, {});
+};
 
   const createInitialFormData = () => {
     if (droneSet) {
       return {
         ...droneSet,
-        components: normalizeComponentsMap(droneSet.components),
+        components: normalizeComponentsMap(droneSet.components, droneSet.set_type, droneSet.component_slots || {}),
       };
     }
     return {
@@ -204,7 +330,7 @@ export default function DroneSetForm({
     if (droneSet) {
         const normalizedDroneSet = {
           ...droneSet,
-          components: normalizeComponentsMap(droneSet.components),
+          components: normalizeComponentsMap(droneSet.components, droneSet.set_type, droneSet.component_slots || {}),
         };
         setFormData(prev => {
           console.log("[DroneSetForm] Updating form state from droneSet:", normalizedDroneSet);
@@ -232,6 +358,35 @@ export default function DroneSetForm({
     }
   }, [formData.set_type, droneSet]);
 
+  useEffect(() => {
+    if (!currentComponentSlots || Object.keys(currentComponentSlots).length === 0) return;
+    setFormData(prev => {
+      const nextComponents = { ...(prev.components || {}) };
+      let changed = false;
+      Object.keys(currentComponentSlots).forEach(slotKey => {
+        const slotLabel = currentComponentSlots[slotKey];
+        const desiredKey = resolveSlotKey(slotKey, formData.set_type, slotLabel) || normalizeSlotKey(slotKey) || slotKey;
+        const desiredCanonical = canonicalSlotKey(desiredKey);
+        const existingKey = findComponentKeyForSlot(nextComponents, slotKey, formData.set_type, slotLabel);
+        if (existingKey) {
+          const existingCanonical = canonicalSlotKey(existingKey);
+          if (desiredCanonical && existingCanonical !== desiredCanonical) {
+            nextComponents[desiredKey] = nextComponents[existingKey];
+            delete nextComponents[existingKey];
+            changed = true;
+          }
+          return;
+        }
+        nextComponents[desiredKey] = null;
+        changed = true;
+      });
+      if (changed) {
+        return { ...prev, components: nextComponents };
+      }
+      return prev;
+    });
+  }, [currentComponentSlots]);
+
   const handleChange = (field, value) => {
     setFormData(prev => {
       let newState = { ...prev, [field]: value };
@@ -256,8 +411,16 @@ export default function DroneSetForm({
     setFormData(prev => ({
       ...prev,
       components: {
-        ...prev.components,
-        [slotKey]: componentId || null,
+        ...(() => {
+          const next = { ...(prev.components || {}) };
+          const slotLabel = currentComponentSlots?.[slotKey];
+          let targetKey = findComponentKeyForSlot(next, slotKey, formData.set_type, slotLabel);
+          if (!targetKey) {
+            targetKey = resolveSlotKey(slotKey, formData.set_type, slotLabel) || slotKey;
+          }
+          next[targetKey] = componentId || null;
+          return next;
+        })(),
       },
     }));
   };
@@ -277,7 +440,7 @@ export default function DroneSetForm({
 
   const normalizeComponentId = (component) => {
     if (!component) return null;
-    return component.id || component.component_id || null;
+    return component.component_id || component.id || null;
   };
 
   const getAvailableComponentsForSlot = (currentSlotKey) => {
@@ -290,63 +453,170 @@ export default function DroneSetForm({
       const requiredType = currentComponentSlots[currentSlotKey];
       if (!requiredType) return [];
 
-      const currentComponentValue = formData.components?.[currentSlotKey];
-      const currentComponentId = normalizeComponentValue(currentComponentValue);
-      const otherSelectedIds = Object.entries(formData.components || {})
-        .filter(([key, value]) => key !== currentSlotKey && value)
-        .map(([, value]) => normalizeComponentValue(value))
-        .filter(Boolean);
+      const slotCanonicalKey = canonicalSlotKey(currentSlotKey);
+
+      const canonicalComponentMap = Object.entries(formData.components || {}).reduce((acc, [key, value]) => {
+        const normalizedValue = normalizeComponentValue(value);
+        const canonical = canonicalSlotKey(key);
+        if (canonical && !acc.has(canonical)) {
+          acc.set(canonical, { originalKey: key, value: normalizedValue });
+        }
+        const resolvedCanonical = canonicalSlotKey(resolveSlotKey(key, formData.set_type));
+        if (resolvedCanonical && !acc.has(resolvedCanonical)) {
+          acc.set(resolvedCanonical, { originalKey: key, value: normalizedValue });
+        }
+        return acc;
+      }, new Map());
 
       const safeUnassigned = Array.isArray(unassignedComponents) ? unassignedComponents : [];
       console.log("[DroneSetForm] Safe unassigned components:", safeUnassigned);
 
-      const available = safeUnassigned.filter(c => {
-        if (!c || !c.component_type) return false;
+      const createComponentLookup = () => {
+        const map = new Map();
+        const addToMap = (component) => {
+          const id = normalizeComponentId(component);
+          if (!id) return;
+          if (!map.has(id)) {
+            map.set(id, []);
+          }
+          map.get(id).push(component);
+        };
+        if (Array.isArray(allComponents)) {
+          allComponents.forEach(addToMap);
+        }
+        safeUnassigned.forEach(addToMap);
+        return map;
+      };
 
-        const selectionId = normalizeComponentId(c);
-        if (!selectionId) return false;
-        if (otherSelectedIds.includes(selectionId) || otherSelectedIds.includes(c.component_id)) {
+      const componentLookup = createComponentLookup();
+
+      const getComponentDefinition = (componentId, slotKeyForMatch) => {
+        if (!componentId) return null;
+        const candidates = componentLookup.get(componentId);
+        if (!candidates || candidates.length === 0) return null;
+        if (!slotKeyForMatch) return candidates[0];
+
+        const requiredTypeLower = currentComponentSlots[slotKeyForMatch]?.toLowerCase?.() || "";
+        const setTypeLower = formData.set_type ? formData.set_type.toLowerCase() : "";
+
+        const matched = candidates.find(candidate => {
+          const candidateTypeLower = candidate?.component_type?.toLowerCase() || "";
+          return doesComponentMatchRequiredType(candidateTypeLower, requiredTypeLower, setTypeLower);
+        });
+
+        return matched || candidates[0];
+      };
+
+      const currentComponentId = getComponentValueForSlot(formData.components, currentSlotKey);
+      const otherSelectedDetails = Array.from(canonicalComponentMap.entries())
+        .filter(([canonicalKey, entry]) => canonicalKey !== slotCanonicalKey && entry.value)
+        .map(([canonicalKey, entry]) => {
+          const componentId = normalizeComponentValue(entry.value);
+          const matchingSlot = Object.keys(currentComponentSlots || {}).find(slotName => canonicalSlotKey(slotName) === canonicalKey);
+          const component = getComponentDefinition(componentId, matchingSlot);
+          const typeFromComponent = component?.component_type?.toLowerCase() || null;
+          const typeFromSlot = matchingSlot ? currentComponentSlots[matchingSlot]?.toLowerCase?.() : null;
+          return {
+            slotKey: matchingSlot || entry.originalKey || canonicalKey,
+            componentId,
+            componentType: typeFromSlot || typeFromComponent || null
+          };
+        })
+        .filter(detail => detail.componentId);
+
+      const currentSetComponentIds = Object.values(formData.components || {})
+        .map(normalizeComponentValue)
+        .filter(Boolean);
+      const currentSetComponentIdSet = new Set(currentSetComponentIds);
+
+      const candidateKey = (component) => {
+        return component?.id || `${component?.component_id || ""}__${(component?.component_type || "").toLowerCase()}` || component?.component_id;
+      };
+
+      const seenCandidates = new Set();
+      const candidateComponents = [];
+      const addCandidate = (component) => {
+        if (!component) return;
+        const key = candidateKey(component);
+        if (!key || seenCandidates.has(key)) return;
+        seenCandidates.add(key);
+        candidateComponents.push(component);
+      };
+
+      safeUnassigned.forEach(addCandidate);
+      if (Array.isArray(allComponents)) {
+        allComponents.forEach(addCandidate);
+      }
+      currentSetComponentIds.forEach(id => {
+        const lookupComponent = getComponentDefinition(id, currentSlotKey) || {
+          component_id: id,
+          component_type: currentComponentSlots[currentSlotKey] || "Assigned Component",
+          status: "Operational"
+        };
+        addCandidate(lookupComponent);
+      });
+
+      const debugDecisions = [];
+      const available = candidateComponents.filter(c => {
+        const decision = {
+          componentId: c?.component_id,
+          type: c?.component_type,
+          include: true,
+          reasons: []
+        };
+        debugDecisions.push(decision);
+
+        if (!c || !c.component_type) {
+          decision.include = false;
+          decision.reasons.push("missing component or type");
           return false;
         }
 
-        const dbComponentType = c.component_type.toLowerCase();
+        const selectionId = normalizeComponentId(c);
+        if (!selectionId) {
+          decision.include = false;
+          decision.reasons.push("missing identifier");
+          return false;
+        }
+
+        const componentTypeLower = c.component_type?.toLowerCase() || "";
+        const conflictsWithSelected = otherSelectedDetails.some(selected => {
+          if (!selected.componentId) return false;
+          if (selected.componentId !== selectionId) return false;
+          if (currentSetComponentIdSet.has(selectionId)) {
+            return false;
+          }
+          if (!selected.componentType || !componentTypeLower) {
+            return true;
+          }
+          return selected.componentType === componentTypeLower;
+        });
+
+        if (conflictsWithSelected) {
+          decision.include = false;
+          decision.reasons.push("already selected in another slot with same type");
+          return false;
+        }
+
+        const dbComponentType = c.component_type?.toLowerCase() || "";
         const setType = formData.set_type ? formData.set_type.toLowerCase() : "";
         const requiredTypeLower = requiredType.toLowerCase();
 
-        let matchesRole = false;
-
-        if (requiredTypeLower.includes("goggles")) {
-          matchesRole = dbComponentType.includes("goggles");
-        } else if (requiredTypeLower.includes("remote")) {
-          matchesRole = dbComponentType.includes("remote");
-        } else if (requiredTypeLower.includes("drone")) {
-          matchesRole = dbComponentType.includes("drone");
-        } else if (requiredTypeLower.includes("bomb dropper")) {
-          matchesRole = dbComponentType.includes("bomb dropper");
+        const matchesRole = doesComponentMatchRequiredType(dbComponentType, requiredTypeLower, setType);
+        if (!matchesRole) {
+          decision.include = false;
+          decision.reasons.push(`type mismatch for required slot "${requiredType}"`);
+          return false;
         }
 
-        if (!matchesRole) return false;
-
-        if (requiredTypeLower.includes("goggles")) {
-          const hasCurrentSetType = dbComponentType.includes(setType);
-          const hasOtherSetType = (setType === "avetta" && dbComponentType.includes("evo")) || 
-                                  (setType === "evo" && dbComponentType.includes("avetta"));
-          
-          return hasCurrentSetType || !hasOtherSetType;
-        }
-        
-        if (requiredTypeLower.includes("bomb dropper")) {
-          return dbComponentType.includes("evo") && dbComponentType.includes("bomb dropper");
-        }
-        
-        return setType ? dbComponentType.includes(setType) : true;
-
+        return true;
       }).map(component => {
-        if (!component.id && component.component_id) {
-          console.log("[DroneSetForm] Normalizing component id", component);
-          return { ...component, id: component.component_id };
-        }
-        return component;
+        if (!component) return component;
+        const normalizedId = component.component_id || component.id;
+        return {
+          ...component,
+          id: normalizedId,
+        };
       });
 
       const normalizedAvailable = Array.isArray(available) ? [...available] : [];
@@ -373,6 +643,26 @@ export default function DroneSetForm({
             id: normalizeComponentId(fallbackComponent) || currentComponentId
           });
         }
+      }
+
+      try {
+        console.groupCollapsed?.(`[DroneSetForm] Slot "${currentSlotKey}" component filtering`, {
+          requiredType,
+          setType: formData.set_type,
+          selectedComponents: formData.components
+        });
+        console.table?.(
+          debugDecisions.map(entry => ({
+            componentId: entry.componentId,
+            type: entry.type,
+            include: entry.include,
+            reasons: entry.reasons.join("; ") || "passed"
+          }))
+        );
+        console.log?.("[DroneSetForm] Available components after filtering:", normalizedAvailable);
+        console.groupEnd?.();
+      } catch (logError) {
+        // Prevent logging issues from breaking the UI
       }
 
       return normalizedAvailable;
@@ -533,19 +823,20 @@ export default function DroneSetForm({
           <div className="space-y-4 pt-4 border-t">
             <h4 className="font-medium">Assign Components</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              {Object.entries(currentComponentSlots).map(([key, name]) => {
+      {Object.entries(currentComponentSlots).map(([key, name]) => {
                 const availableComponents = getAvailableComponentsForSlot(key);
                 const componentLabel = name.replace(formData.set_type, '').trim();
+                const slotValue = getComponentValueForSlot(formData.components, key, formData.set_type, currentComponentSlots?.[key]) || "";
                 
                 return (
                   <SimpleSearchableSelect
                     key={key}
                     label={componentLabel}
-                    value={formData.components?.[key]}
+                    value={slotValue}
                     onValueChange={(componentId) => handleComponentChange(key, componentId)}
                     items={availableComponents}
                     displayField={(component) => `${component.component_type} (${component.component_id})`}
-                    valueField="id"
+                    valueField="component_id"
                     searchFields={["component_type", "component_id"]}
                     placeholder={`Select ${componentLabel}...`}
                   />

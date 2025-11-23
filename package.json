@@ -47,6 +47,7 @@
     "firebase": "^12.3.0",
     "firebase-admin": "^13.5.0",
     "framer-motion": "^12.4.7",
+    "html2pdf.js": "^0.12.1",
     "input-otp": "^1.4.2",
     "jszip": "^3.10.1",
     "libphonenumber-js": "^1.12.22",

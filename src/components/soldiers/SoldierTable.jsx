@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronUp, ChevronDown, ChevronsUpDown, Target, Binoculars, Plane, Edit, Trash2, UserCheck, UserCog, History, Package } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronsUpDown, Target, Binoculars, Plane, Edit, Trash2, UserCheck, UserCog, History, Package, FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getArmoryStatusDisplay } from "@/lib/armoryStatus";
+import { generateEquipmentFormHTML } from "@/utils/equipmentFormGenerator";
 
 const statusColors = {
   expected: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -244,6 +245,61 @@ export default function SoldierTable({
     };
   };
 
+  const getSoldierEquipment = (soldier) => {
+    // Collect all assigned items for this soldier
+    const assignedItems = [];
+
+    // Add weapons
+    (weapons || [])
+      .filter(w => w && w.assigned_to === soldier.soldier_id)
+      .forEach(weapon => {
+        assignedItems.push({ type: 'Weapon', ...weapon });
+      });
+
+    // Add gear
+    (serializedGear || [])
+      .filter(g => g && g.assigned_to === soldier.soldier_id)
+      .forEach(gear => {
+        assignedItems.push({ type: 'Gear', ...gear });
+      });
+
+    // Add drone sets
+    (droneSets || [])
+      .filter(d => d && d.assigned_to === soldier.soldier_id)
+      .forEach(droneSet => {
+        assignedItems.push({ type: 'Drone Set', ...droneSet });
+      });
+
+    // Add equipment
+    (equipment || [])
+      .filter(e => e && e.assigned_to === soldier.soldier_id && (e.quantity || 0) > 0)
+      .forEach(eq => {
+        assignedItems.push({ type: 'Equipment', ...eq });
+      });
+
+    return assignedItems;
+  };
+
+  const handleOpenForm = (soldier) => {
+    const assignedItems = getSoldierEquipment(soldier);
+    const html = generateEquipmentFormHTML(soldier, assignedItems);
+
+    // Create blob URL and open in new tab
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const newWindow = window.open(url, '_blank');
+    
+    if (!newWindow) {
+      alert('Cannot open new window. Please check your popup blocker settings.');
+      URL.revokeObjectURL(url);
+    } else {
+      // Clean up URL after window loads
+      newWindow.addEventListener('load', () => {
+        URL.revokeObjectURL(url);
+      });
+    }
+  };
+
   return (
     <Table className="text-xs whitespace-nowrap">
       <TableHeader>
@@ -320,6 +376,15 @@ export default function SoldierTable({
                 </TableCell>
                 <TableCell className="text-right pr-2">
                   <div className="flex items-center justify-end gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleOpenForm(soldier)} 
+                      className="h-8"
+                      title="Open equipment form"
+                    >
+                      <FileText className="w-3 h-3 mr-2" /> Form
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => onShowHistory(soldier)} className="h-8">
                       <History className="w-3 h-3 mr-2" /> History
                     </Button>

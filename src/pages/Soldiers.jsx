@@ -719,6 +719,55 @@ export default function Soldiers() {
     }
   };
 
+  const generateFormsForSoldiers = (soldiersList) => {
+    const zip = new JSZip();
+
+    // Generate HTML for each soldier
+    for (const soldier of soldiersList) {
+      // Collect all assigned items for this soldier
+      const assignedItems = [];
+
+      // Add weapons
+      weapons
+        .filter(w => w.assigned_to === soldier.soldier_id)
+        .forEach(weapon => {
+          assignedItems.push({ type: 'Weapon', ...weapon });
+        });
+
+      // Add gear
+      serializedGear
+        .filter(g => g.assigned_to === soldier.soldier_id)
+        .forEach(gear => {
+          assignedItems.push({ type: 'Gear', ...gear });
+        });
+
+      // Add drone sets
+      droneSets
+        .filter(d => d.assigned_to === soldier.soldier_id)
+        .forEach(droneSet => {
+          assignedItems.push({ type: 'Drone Set', ...droneSet });
+        });
+
+      // Add equipment
+      allEquipment
+        .filter(e => e.assigned_to === soldier.soldier_id && (e.quantity || 0) > 0)
+        .forEach(equipment => {
+          assignedItems.push({ type: 'Equipment', ...equipment });
+        });
+
+      // Generate HTML
+      const html = generateEquipmentFormHTML(soldier, assignedItems);
+
+      // Create filename: soldier_id-first_name-last_name.html
+      const filename = `${soldier.soldier_id}-${soldier.first_name}-${soldier.last_name}.html`;
+
+      // Add to ZIP
+      zip.file(filename, html);
+    }
+
+    return zip;
+  };
+
   const handleDownloadAllForms = async () => {
     setIsGeneratingZip(true);
     try {
@@ -738,50 +787,7 @@ export default function Soldiers() {
         return;
       }
 
-      const zip = new JSZip();
-
-      // Generate HTML for each soldier
-      for (const soldier of soldiersWithEquipment) {
-        // Collect all assigned items for this soldier
-        const assignedItems = [];
-
-        // Add weapons
-        weapons
-          .filter(w => w.assigned_to === soldier.soldier_id)
-          .forEach(weapon => {
-            assignedItems.push({ type: 'Weapon', ...weapon });
-          });
-
-        // Add gear
-        serializedGear
-          .filter(g => g.assigned_to === soldier.soldier_id)
-          .forEach(gear => {
-            assignedItems.push({ type: 'Gear', ...gear });
-          });
-
-        // Add drone sets
-        droneSets
-          .filter(d => d.assigned_to === soldier.soldier_id)
-          .forEach(droneSet => {
-            assignedItems.push({ type: 'Drone Set', ...droneSet });
-          });
-
-        // Add equipment
-        allEquipment
-          .filter(e => e.assigned_to === soldier.soldier_id && (e.quantity || 0) > 0)
-          .forEach(equipment => {
-            assignedItems.push({ type: 'Equipment', ...equipment });
-          });
-
-        // Generate HTML
-        const html = generateEquipmentFormHTML(soldier, assignedItems);
-
-        // Create filename: soldier_id-first_name-last_name.html
-        const filename = `${soldier.soldier_id}-${soldier.first_name}-${soldier.last_name}.html`;
-
-        // Add to ZIP
-        zip.file(filename, html);
-      }
+      const zip = generateFormsForSoldiers(soldiersWithEquipment);
 
       // Generate ZIP file
       const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -802,6 +808,51 @@ export default function Soldiers() {
       URL.revokeObjectURL(url);
 
       alert(`Successfully generated ${soldiersWithEquipment.length} equipment forms!`);
+    } catch (error) {
+      alert('Failed to generate ZIP file: ' + error.message);
+    } finally {
+      setIsGeneratingZip(false);
+    }
+  };
+
+  const handleDownloadSelectedForms = async () => {
+    if (selectedItems.length === 0) {
+      alert('Please select soldiers to download forms.');
+      return;
+    }
+
+    setIsGeneratingZip(true);
+    try {
+      // Get selected soldiers
+      const selectedSoldiers = soldiers.filter(soldier => selectedItems.includes(soldier.id));
+
+      if (selectedSoldiers.length === 0) {
+        alert('No selected soldiers found.');
+        setIsGeneratingZip(false);
+        return;
+      }
+
+      const zip = generateFormsForSoldiers(selectedSoldiers);
+
+      // Generate ZIP file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      // Create download link
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      link.download = `equipment-forms-selected-${dateStr}.zip`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up
+      URL.revokeObjectURL(url);
+
+      alert(`Successfully generated ${selectedSoldiers.length} equipment forms!`);
     } catch (error) {
       alert('Failed to generate ZIP file: ' + error.message);
     } finally {
@@ -1066,15 +1117,35 @@ export default function Soldiers() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {selectedItems.length > 0 && (
-            <Button
-              variant="destructive"
-              onClick={() => setShowBulkDeleteConfirm(true)}
-              className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={!currentUser?.permissions?.can_delete_soldiers && currentUser?.role !== 'admin'}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Selected ({selectedItems.length})
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={handleDownloadSelectedForms}
+                disabled={isGeneratingZip}
+                className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200"
+              >
+                {isGeneratingZip ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Selected Forms ({selectedItems.length})
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => setShowBulkDeleteConfirm(true)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={!currentUser?.permissions?.can_delete_soldiers && currentUser?.role !== 'admin'}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected ({selectedItems.length})
+              </Button>
+            </>
           )}
           <Button 
             variant="outline"

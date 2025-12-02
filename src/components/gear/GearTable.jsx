@@ -51,6 +51,10 @@ export default function GearTable({
 }) {
   // Helper function to get soldier's full name, as implied by the outline
   const getSoldierName = (soldierId) => {
+    // Check if soldierId is null, empty string, or undefined
+    if (!soldierId || soldierId === null || soldierId === '') {
+      return null;
+    }
     const soldier = Array.isArray(soldiers) ? soldiers.find(s => s.soldier_id === soldierId) : null;
     return soldier ? `${soldier.first_name} ${soldier.last_name}` : null;
   };

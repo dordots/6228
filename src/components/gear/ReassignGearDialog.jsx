@@ -38,6 +38,12 @@ export default function ReassignGearDialog({
   }, [soldiers]);
 
   const handleSubmit = () => {
+    // Check if trying to reassign an already unassigned item to unassigned
+    if (isAlreadyUnassigned && (!newAssignment || newAssignment === '' || newAssignment === null)) {
+      alert("This item is already unassigned.");
+      return;
+    }
+    
     // Only pass the new soldier ID. The parent component will handle the logic.
     onReassign(gear, newAssignment || null);
     onOpenChange(false);
@@ -54,21 +60,32 @@ export default function ReassignGearDialog({
   };
 
   const currentSoldier = useMemo(() => {
-    if (!gear?.assigned_to || !Array.isArray(soldiers)) return null;
+    // Check if gear is assigned (not null and not empty string)
+    if (!gear?.assigned_to || gear.assigned_to === null || gear.assigned_to === '' || !Array.isArray(soldiers)) return null;
     return soldiers.find(s => s.soldier_id === gear.assigned_to);
   }, [gear, soldiers]);
+  
+  // Check if gear is already unassigned
+  const isAlreadyUnassigned = useMemo(() => {
+    return !gear?.assigned_to || gear.assigned_to === null || gear.assigned_to === '';
+  }, [gear]);
 
   const filteredSoldiers = useMemo(() => {
     const safeSoldiers = Array.isArray(soldiers) ? soldiers : [];
+    // Filter out the current soldier (if gear is assigned)
+    const soldiersWithoutCurrent = currentSoldier
+      ? safeSoldiers.filter(s => s && s.soldier_id !== currentSoldier.soldier_id)
+      : safeSoldiers;
+    
     // Changed: show all soldiers when no search term, filter with 1+ characters
-    if (!searchTerm) return safeSoldiers;
+    if (!searchTerm) return soldiersWithoutCurrent;
     const searchLower = searchTerm.toLowerCase().trim();
-    return safeSoldiers.filter(s =>
+    return soldiersWithoutCurrent.filter(s =>
       s &&
       (`${s.first_name} ${s.last_name}`.toLowerCase().includes(searchLower) ||
       s.soldier_id.toLowerCase().includes(searchLower))
     );
-  }, [searchTerm, soldiers]);
+  }, [searchTerm, soldiers, currentSoldier]);
 
   // Reset when dialog opens
   useEffect(() => {
@@ -132,14 +149,17 @@ export default function ReassignGearDialog({
                   </div>
                   {showDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-50 max-h-60 overflow-auto">
-                      <div
-                        // Pass empty string for divisionName to match the updated signature
-                        onClick={() => handleSelectSoldier('', 'Unassigned', '')}
-                        className="p-3 hover:bg-slate-100 cursor-pointer text-sm flex items-center gap-2 border-b"
-                      >
-                        <UserX className="w-4 h-4 text-slate-500" />
-                        Unassigned
-                      </div>
+                      {/* Only show "Unassigned" option if gear is currently assigned */}
+                      {!isAlreadyUnassigned && (
+                        <div
+                          // Pass empty string for divisionName to match the updated signature
+                          onClick={() => handleSelectSoldier('', 'Unassigned', '')}
+                          className="p-3 hover:bg-slate-100 cursor-pointer text-sm flex items-center gap-2 border-b"
+                        >
+                          <UserX className="w-4 h-4 text-slate-500" />
+                          Unassigned
+                        </div>
+                      )}
                       {filteredSoldiers.length > 0 ? (
                         filteredSoldiers.map(s => (
                           <div

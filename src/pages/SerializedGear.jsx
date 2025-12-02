@@ -476,23 +476,32 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
       alert("You do not have permission to reassign equipment.");
       return;
     }
+    
+    // Check if trying to reassign an already unassigned item to unassigned
+    if ((!gearItem.assigned_to || gearItem.assigned_to === null || gearItem.assigned_to === '') && (!newSoldierId || newSoldierId === null || newSoldierId === '')) {
+      alert("This item is already unassigned.");
+      return;
+    }
+    
     try {
       const newSoldier = soldiers.find(s => s && s.soldier_id === newSoldierId);
       
       const updatePayload = { 
-        assigned_to: newSoldierId,
+        assigned_to: newSoldierId || null,
       };
 
       if (newSoldier) {
+        // Assigning to a soldier - update all fields
         updatePayload.last_signed_by = `${newSoldier.first_name} ${newSoldier.last_name}`;
         updatePayload.division_name = newSoldier.division_name;
         updatePayload.team_name = newSoldier.team_name;
       } else {
-        updatePayload.last_signed_by = null;
+        // Unassigning - keep last_signed_by (don't delete it), set assigned_to to null
+        // Don't update last_signed_by - keep the existing value so we can show "Unassigned (Last: ...)"
+        updatePayload.assigned_to = null;
         updatePayload.team_name = null;
-        // Keep existing division name or set to a default if soldier is unassigned
-        // For now, let's keep the existing division_name if soldier is unassigned
-        // updatePayload.division_name = gearItem.division_name; 
+        // Keep existing division_name and last_signed_by when unassigning
+        // This matches the behavior of "lets go home" release
       }
 
       await SerializedGear.update(gearItem.gear_id, updatePayload);

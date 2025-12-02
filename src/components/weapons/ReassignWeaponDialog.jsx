@@ -29,6 +29,12 @@ export default function ReassignWeaponDialog({
   // existingDivisions useMemo has been removed as per outline
 
   const handleSubmit = () => {
+    // Check if trying to reassign an already unassigned item to unassigned
+    if (isAlreadyUnassigned && (!newAssignment || newAssignment === '' || newAssignment === null)) {
+      alert("This item is already unassigned.");
+      return;
+    }
+    
     // The parent now only needs the weapon and the new soldier ID.
     onReassign(weapon, newAssignment || null);
     onOpenChange(false);
@@ -45,22 +51,40 @@ export default function ReassignWeaponDialog({
   };
 
   const currentSoldier = useMemo(() => {
-    if (!weapon?.assigned_to || !Array.isArray(soldiers)) return null;
+    // Check if weapon is assigned (not null and not empty string)
+    if (!weapon?.assigned_to || weapon.assigned_to === null || weapon.assigned_to === '' || !Array.isArray(soldiers)) return null;
     return soldiers.find(s => s.soldier_id === weapon.assigned_to);
   }, [weapon, soldiers]);
+  
+  // Check if weapon is already unassigned
+  const isAlreadyUnassigned = useMemo(() => {
+    return !weapon?.assigned_to || weapon.assigned_to === null || weapon.assigned_to === '';
+  }, [weapon]);
 
-  // Filter soldiers based on search term.
-  // Changed: show all soldiers when no search term, filter with 1+ characters
+  // Filter soldiers based on division and search term
   const filteredSoldiers = useMemo(() => {
     const safeSoldiers = Array.isArray(soldiers) ? soldiers : [];
-    if (!searchTerm) return safeSoldiers; // Show all soldiers if no search term
+    
+    // Filter by division_name if weapon has a division
+    const weaponDivision = weapon?.division_name;
+    const soldiersByDivision = weaponDivision
+      ? safeSoldiers.filter(s => s && s.division_name === weaponDivision)
+      : safeSoldiers;
+    
+    // Filter out the current soldier (if weapon is assigned)
+    const soldiersWithoutCurrent = currentSoldier
+      ? soldiersByDivision.filter(s => s && s.soldier_id !== currentSoldier.soldier_id)
+      : soldiersByDivision;
+    
+    // Changed: show all soldiers when no search term, filter with 1+ characters
+    if (!searchTerm) return soldiersWithoutCurrent;
     const searchLower = searchTerm.toLowerCase().trim();
-    return safeSoldiers.filter(s => 
+    return soldiersWithoutCurrent.filter(s => 
       s &&
       (`${s.first_name} ${s.last_name}`.toLowerCase().includes(searchLower) ||
       s.soldier_id.toLowerCase().includes(searchLower))
     );
-  }, [searchTerm, soldiers]);
+  }, [searchTerm, soldiers, currentSoldier, weapon]);
 
   // Reset when dialog opens
   useEffect(() => {
@@ -121,13 +145,16 @@ export default function ReassignWeaponDialog({
                   </div>
                   {showDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-md shadow-lg z-50 max-h-60 overflow-auto">
-                      <div 
-                        onClick={() => handleSelectSoldier('', 'Unassigned')} 
-                        className="p-3 hover:bg-slate-100 cursor-pointer text-sm flex items-center gap-2 border-b"
-                      >
-                        <UserX className="w-4 h-4 text-slate-500" />
-                        Unassigned
-                      </div>
+                      {/* Only show "Unassigned" option if weapon is currently assigned */}
+                      {!isAlreadyUnassigned && (
+                        <div 
+                          onClick={() => handleSelectSoldier('', 'Unassigned')} 
+                          className="p-3 hover:bg-slate-100 cursor-pointer text-sm flex items-center gap-2 border-b"
+                        >
+                          <UserX className="w-4 h-4 text-slate-500" />
+                          Unassigned
+                        </div>
+                      )}
                       {filteredSoldiers.length > 0 ? (
                         filteredSoldiers.map(s => (
                           <div 

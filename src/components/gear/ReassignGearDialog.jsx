@@ -72,10 +72,17 @@ export default function ReassignGearDialog({
 
   const filteredSoldiers = useMemo(() => {
     const safeSoldiers = Array.isArray(soldiers) ? soldiers : [];
+    
+    // Filter by division_name if gear has a division
+    const gearDivision = gear?.division_name;
+    const soldiersByDivision = gearDivision
+      ? safeSoldiers.filter(s => s && s.division_name === gearDivision)
+      : safeSoldiers;
+    
     // Filter out the current soldier (if gear is assigned)
     const soldiersWithoutCurrent = currentSoldier
-      ? safeSoldiers.filter(s => s && s.soldier_id !== currentSoldier.soldier_id)
-      : safeSoldiers;
+      ? soldiersByDivision.filter(s => s && s.soldier_id !== currentSoldier.soldier_id)
+      : soldiersByDivision;
     
     // Changed: show all soldiers when no search term, filter with 1+ characters
     if (!searchTerm) return soldiersWithoutCurrent;
@@ -85,7 +92,7 @@ export default function ReassignGearDialog({
       (`${s.first_name} ${s.last_name}`.toLowerCase().includes(searchLower) ||
       s.soldier_id.toLowerCase().includes(searchLower))
     );
-  }, [searchTerm, soldiers, currentSoldier]);
+  }, [searchTerm, soldiers, currentSoldier, gear]);
 
   // Reset when dialog opens
   useEffect(() => {

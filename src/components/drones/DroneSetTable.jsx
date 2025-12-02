@@ -85,7 +85,15 @@ export default function DroneSetTable({
           </TableRow>
         ) : (
           droneSets.map(droneSet => {
-            const assignedSoldier = Array.isArray(soldiers) ? soldiers.find(s => s && s.soldier_id === droneSet.assigned_to) : null;
+            // Check if droneSet is assigned (not null and not empty string)
+            const isAssigned = droneSet.assigned_to && droneSet.assigned_to !== null && droneSet.assigned_to !== '';
+            const assignedSoldier = isAssigned && Array.isArray(soldiers) 
+              ? soldiers.find(s => s && s.soldier_id === droneSet.assigned_to) 
+              : null;
+            const assignedSoldierName = assignedSoldier 
+              ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}` 
+              : null;
+            
             return (
               <TableRow key={droneSet.id} className="hover:bg-slate-50 group">
                 <TableCell className="px-4 sticky left-0 z-10 bg-white group-hover:bg-slate-50">
@@ -99,8 +107,15 @@ export default function DroneSetTable({
                 </TableCell>
                 <TableCell>{droneSet.set_type}</TableCell>
                 <TableCell>
-                  {assignedSoldier ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}` :
-                   (droneSet.assigned_to ? <span className="text-slate-500 italic">Unlinked ID</span> : <span className="text-slate-500">Unassigned</span>)}
+                  {assignedSoldierName ? (
+                    assignedSoldierName
+                  ) : droneSet.assigned_to && droneSet.assigned_to !== null && droneSet.assigned_to !== '' ? (
+                    <span className="text-slate-500 italic">Unlinked ID</span>
+                  ) : droneSet.last_signed_by ? (
+                    <span className="text-slate-500">Unassigned (Last: {droneSet.last_signed_by})</span>
+                  ) : (
+                    <span className="text-slate-500">Unassigned</span>
+                  )}
                 </TableCell>
                 <TableCell>{droneSet.division_name || <span className="text-slate-500">N/A</span>}</TableCell>
                 <TableCell>

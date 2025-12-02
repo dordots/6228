@@ -84,7 +84,15 @@ export default function WeaponTable({
             </TableRow>
           ) : (
             weapons.map(weapon => {
-              const assignedSoldier = Array.isArray(soldiers) ? soldiers.find(s => s.soldier_id === weapon.assigned_to) : null;
+              // Check if weapon is assigned (not null and not empty string)
+              const isAssigned = weapon.assigned_to && weapon.assigned_to !== null && weapon.assigned_to !== '';
+              const assignedSoldier = isAssigned && Array.isArray(soldiers) 
+                ? soldiers.find(s => s && s.soldier_id === weapon.assigned_to) 
+                : null;
+              const assignedSoldierName = assignedSoldier 
+                ? `${assignedSoldier.first_name} ${assignedSoldier.last_name}` 
+                : null;
+              
               return (
                 <TableRow key={weapon.id} className="hover:bg-slate-50 group">
                   <TableCell className="w-12 px-4">
@@ -96,8 +104,10 @@ export default function WeaponTable({
                   <TableCell className="font-mono text-xs">{weapon.weapon_id}</TableCell>
                   <TableCell>{weapon.weapon_type}</TableCell>
                   <TableCell>
-                    {assignedSoldier ? (
-                      `${assignedSoldier.first_name} ${assignedSoldier.last_name}`
+                    {assignedSoldierName ? (
+                      assignedSoldierName
+                    ) : weapon.last_signed_by ? (
+                      <span className="text-slate-500">Unassigned (Last: {weapon.last_signed_by})</span>
                     ) : (
                       <span className="text-slate-500">Unassigned</span>
                     )}

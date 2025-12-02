@@ -537,6 +537,12 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
         return;
     }
     
+    // Check if trying to reassign an already unassigned item to unassigned
+    if ((!weapon.assigned_to || weapon.assigned_to === null || weapon.assigned_to === '') && (!newSoldierId || newSoldierId === null || newSoldierId === '')) {
+      alert("This item is already unassigned.");
+      return;
+    }
+    
     try {
       const user = currentUser;
       if (!user) {
@@ -558,11 +564,21 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
 
       // Prepare the payload to update the weapon
       const updatePayload = {
-        assigned_to: newSoldierId,
-        division_name: newSoldier ? newSoldier.division_name : null,
-        team_name: newSoldier ? newSoldier.team_name : null,
-        last_signed_by: newSoldier ? `${newSoldier.first_name} ${newSoldier.last_name}` : null,
+        assigned_to: newSoldierId || null,
       };
+
+      if (newSoldier) {
+        // Assigning to a soldier - update all fields
+        updatePayload.last_signed_by = `${newSoldier.first_name} ${newSoldier.last_name}`;
+        updatePayload.division_name = newSoldier.division_name;
+        updatePayload.team_name = newSoldier.team_name;
+      } else {
+        // Unassigning - keep last_signed_by (don't delete it), set assigned_to to null
+        // Don't update last_signed_by - keep the existing value so we can show "Unassigned (Last: ...)"
+        updatePayload.assigned_to = null;
+        updatePayload.team_name = null;
+        // Keep existing division_name and last_signed_by when unassigning
+      }
 
       // Perform the update first
       await Weapon.update(weapon.weapon_id, updatePayload);

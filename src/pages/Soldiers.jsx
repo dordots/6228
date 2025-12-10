@@ -476,27 +476,59 @@ export default function Soldiers() {
 
       if (Array.isArray(weaponIds)) {
         for (const weaponId of weaponIds) {
-          await Weapon.update(weaponId, { 
-            assigned_to: soldier.soldier_id, 
-            division_name: soldier.division_name,
-            last_signed_by: soldierFullName 
-          });
+          // Find weapon to get weapon_type
+          const weapon = weapons.find(w => w.weapon_id === weaponId);
+          if (weapon && weapon.weapon_type) {
+            await Weapon.update({ where: { weapon_id: weaponId, weapon_type: weapon.weapon_type } }, { 
+              assigned_to: soldier.soldier_id, 
+              division_name: soldier.division_name,
+              last_signed_by: soldierFullName 
+            });
+          } else {
+            // Fallback: use weaponId only (may fail if multiple weapons with same ID)
+            await Weapon.update(weaponId, { 
+              assigned_to: soldier.soldier_id, 
+              division_name: soldier.division_name,
+              last_signed_by: soldierFullName 
+            });
+          }
         }
       }
 
       if (Array.isArray(gearIds)) {
         for (const gearId of gearIds) {
-          await SerializedGear.update(gearId, { 
-            assigned_to: soldier.soldier_id, 
-            division_name: soldier.division_name,
-            last_signed_by: soldierFullName 
-          });
+          // Find gear to get gear_type
+          const gear = serializedGear.find(g => g.gear_id === gearId);
+          if (gear && gear.gear_type) {
+            await SerializedGear.update({ where: { gear_id: gearId, gear_type: gear.gear_type } }, { 
+              assigned_to: soldier.soldier_id, 
+              division_name: soldier.division_name,
+              last_signed_by: soldierFullName 
+            });
+          } else {
+            // Fallback: use gearId only (may fail if multiple gear with same ID)
+            await SerializedGear.update(gearId, { 
+              assigned_to: soldier.soldier_id, 
+              division_name: soldier.division_name,
+              last_signed_by: soldierFullName 
+            });
+          }
         }
       }
 
       if (Array.isArray(droneSetIds)) {
         for (const setId of droneSetIds) {
-          await DroneSet.update(setId, { assigned_to: soldier.soldier_id, division_name: soldier.division_name });
+          // Find drone set to get set_type
+          const droneSet = droneSets.find(d => d.drone_set_id === setId);
+          if (droneSet && droneSet.set_type) {
+            await DroneSet.update({ where: { drone_set_id: setId, set_type: droneSet.set_type } }, { 
+              assigned_to: soldier.soldier_id, 
+              division_name: soldier.division_name 
+            });
+          } else {
+            // Fallback: use setId only (may fail if multiple drones with same ID)
+            await DroneSet.update(setId, { assigned_to: soldier.soldier_id, division_name: soldier.division_name });
+          }
         }
       }
 

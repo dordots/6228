@@ -184,7 +184,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
           ...formData,
           updated_date: new Date().toISOString()
         };
-        await DroneSet.update(editingSet.id, updateData);
+        await DroneSet.update({ where: { drone_set_id: editingSet.drone_set_id, set_type: editingSet.set_type } }, updateData);
       } else {
         const serial = formData.set_serial_number;
         if (!serial?.trim()) {
@@ -325,7 +325,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
             skippedCount++;
             return null;
           }
-          return DroneSet.update(droneSet.id, {
+          return DroneSet.update({ where: { drone_set_id: droneSet.drone_set_id, set_type: droneSet.set_type } }, {
             ...updatePayload,
             updated_date: new Date().toISOString()
           });
@@ -433,7 +433,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
         division_name: newSoldier ? newSoldier.division_name : droneSet.division_name
       });
 
-      await DroneSet.update(droneSet.id, updatePayload);
+      await DroneSet.update({ where: { drone_set_id: droneSet.drone_set_id, set_type: droneSet.set_type } }, updatePayload);
       setShowReassignDialog(false);
       loadData();
     } catch (error) {
@@ -472,7 +472,7 @@ export default function DronesPage() { // Renamed from Drones to DronesPage to m
     }
 
     try {
-      const updatePromises = dronesToUpdate.map(d => DroneSet.update(d.id, { set_type: newType }));
+      const updatePromises = dronesToUpdate.map(d => DroneSet.update({ where: { drone_set_id: d.drone_set_id, set_type: d.set_type } }, { set_type: newType }));
       await Promise.all(updatePromises);
 
       await ActivityLog.create({

@@ -1093,7 +1093,7 @@ export default function UnifiedAssignmentDialog({
 
         // Serialized items (Weapons, Gear, Drones) - Simple assignment update
         for (const item of selectedWeapons) {
-            promises.push(Weapon.update(item.weapon_id, {
+            promises.push(Weapon.update({ where: { weapon_id: item.weapon_id, weapon_type: item.weapon_type } }, {
                 assigned_to: soldier.soldier_id,
                 division_name: soldier.division_name,
                 last_signed_by: `${soldier.first_name} ${soldier.last_name}`,
@@ -1103,7 +1103,7 @@ export default function UnifiedAssignmentDialog({
         }
 
         for (const item of selectedGear) {
-            promises.push(SerializedGear.update(item.gear_id, {
+            promises.push(SerializedGear.update({ where: { gear_id: item.gear_id, gear_type: item.gear_type } }, {
                 assigned_to: soldier.soldier_id,
                 division_name: soldier.division_name,
                 last_signed_by: `${soldier.first_name} ${soldier.last_name}`,
@@ -1113,7 +1113,7 @@ export default function UnifiedAssignmentDialog({
         }
 
         for (const item of selectedDroneSets) {
-            promises.push(DroneSet.update(item.drone_set_id, {
+            promises.push(DroneSet.update({ where: { drone_set_id: item.drone_set_id, set_type: item.set_type } }, {
                 assigned_to: soldier.soldier_id,
                 division_name: soldier.division_name,
                 last_signed_by: `${soldier.first_name} ${soldier.last_name}`,

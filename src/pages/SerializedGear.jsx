@@ -155,7 +155,7 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
     }
 
     try {
-      const updatePromises = gearToUpdate.map(g => SerializedGear.update(g.gear_id, { gear_type: newType }));
+      const updatePromises = gearToUpdate.map(g => SerializedGear.update({ where: { gear_id: g.gear_id, gear_type: g.gear_type } }, { gear_type: newType }));
       await Promise.all(updatePromises);
 
       // Try to create activity log, but don't fail rename if it errors
@@ -196,7 +196,7 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
 
     if (editingGear) {
       activityDetails = `Updated gear: ${gearType} (${gearId}), assigned to ${assignedSoldierName}, in ${divisionName}.`;
-      await SerializedGear.update(editingGear.gear_id, gearData);
+      await SerializedGear.update({ where: { gear_id: editingGear.gear_id, gear_type: editingGear.gear_type } }, gearData);
     } else {
       const serial = gearData.gear_id;
       if (!serial?.trim()) {
@@ -379,7 +379,7 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
             skippedCount++;
             return null;
           }
-          return SerializedGear.update(gearItem.gear_id, updatePayload);
+          return SerializedGear.update({ where: { gear_id: gearItem.gear_id, gear_type: gearItem.gear_type } }, updatePayload);
         })
         .filter(Boolean);
 
@@ -504,7 +504,7 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
         // This matches the behavior of "lets go home" release
       }
 
-      await SerializedGear.update(gearItem.gear_id, updatePayload);
+      await SerializedGear.update({ where: { gear_id: gearItem.gear_id, gear_type: gearItem.gear_type } }, updatePayload);
 
       // Log activity for reassign
       const user = await User.me();

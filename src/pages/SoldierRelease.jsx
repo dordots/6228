@@ -811,23 +811,37 @@ export default function SoldierReleasePage() {
             itemType: 'Weapon', 
             displayName: displayName, 
             displayId: `${weapon.weapon_id}, ${pairedWeapon.weapon_id}`,
-            isPaired: true,
+            weapon_type: weapon.weapon_type,
             pairedWeaponId: pairedWeapon.weapon_id,
-            pairedWeaponDocId: pairedWeapon.id
+            pairedWeaponType: pairedWeapon.weapon_type,
+            pairedWeaponDocId: pairedWeapon.id,
+            isPaired: true
           });
         } else {
           processedWeaponIds.add(weapon.id);
-          items.push({ documentId: weapon.id, fieldId: weapon.weapon_id, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id });
+          items.push({ documentId: weapon.id, fieldId: weapon.weapon_id, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id, weapon_type: weapon.weapon_type });
         }
       } else {
         processedWeaponIds.add(weapon.id);
-        items.push({ documentId: weapon.id, fieldId: weapon.weapon_id, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id });
+        items.push({ documentId: weapon.id, fieldId: weapon.weapon_id, itemType: 'Weapon', displayName: weapon.weapon_type, displayId: weapon.weapon_id, weapon_type: weapon.weapon_type });
       }
     });
     
-    assignedGear.forEach(i => items.push({ documentId: i.id, fieldId: i.gear_id, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id }));
-    assignedDrones.forEach(i => items.push({ documentId: i.id, fieldId: i.drone_set_id, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number }));
-    assignedEquipmentList.forEach(i => items.push({ documentId: i.id, fieldId: i.id, itemType: 'Equipment', displayName: `${i.equipment_type} (x${i.quantity})`, quantity: i.quantity, displayId: `ID: ${i.id.slice(0,8)}` }));
+    assignedGear.forEach(i => items.push({ documentId: i.id, fieldId: i.gear_id, itemType: 'Gear', displayName: i.gear_type, displayId: i.gear_id, gear_type: i.gear_type }));
+    assignedDrones.forEach(i => items.push({ documentId: i.id, fieldId: i.drone_set_id, itemType: 'Drone', displayName: i.set_type, displayId: i.set_serial_number, set_type: i.set_type }));
+    assignedEquipmentList.forEach(i => {
+      const equipmentId = i.equipment_id || i.id;
+      items.push({
+        documentId: i.id, // Firestore doc id (may differ from equipment_id)
+        fieldId: equipmentId,
+        itemType: 'Equipment',
+        displayName: `${i.equipment_type} (x${i.quantity})`,
+        quantity: i.quantity,
+        displayId: equipmentId || `ID: ${i.id?.slice?.(0,8)}`,
+        equipment_type: i.equipment_type,
+        serial_number: i.serial_number || i.serial || i.serialNumber
+      });
+    });
     return items;
   }, [selectedSoldier, assignedWeapons, assignedGear, assignedDrones, assignedEquipmentList]);
 
@@ -889,6 +903,7 @@ export default function SoldierReleasePage() {
 
       // Expand paired weapons - if a paired weapon is selected, include both weapons
       const expandedSelectedItems = new Set(selectedSerializedItems);
+      
       assignedSerialized.forEach(item => {
         if (item.isPaired && selectedSerializedItems.includes(item.id)) {
           // If paired weapon is selected, also add the paired weapon
@@ -922,27 +937,42 @@ export default function SoldierReleasePage() {
       });
       
       const itemsToUnassign = assignedSerialized.filter(item => expandedSelectedItems.has(item.id));
+      
+      // Build list of actual items being released (for logging)
+      const itemsBeingReleased = [];
+      itemsToUnassign.forEach(item => {
+        if (item.itemType === 'Weapon' && item.isPaired && item.weapon1 && item.weapon2) {
+          itemsBeingReleased.push({ type: 'Weapon', weapon_id: item.weapon1.weapon_id });
+          itemsBeingReleased.push({ type: 'Weapon', weapon_id: item.weapon2.weapon_id });
+        } else if (item.itemType === 'Weapon' && item.weapon_id) {
+          itemsBeingReleased.push({ type: 'Weapon', weapon_id: item.weapon_id });
+        } else if (item.itemType === 'Gear' && item.gear_id) {
+          itemsBeingReleased.push({ type: 'Gear', gear_id: item.gear_id });
+        } else if (item.itemType === 'Drone' && item.id) {
+          itemsBeingReleased.push({ type: 'Drone', id: item.id });
+        }
+      });
+      
+      console.log('[SoldierRelease] Releasing items:', itemsBeingReleased);
+      
       const itemDetailsForLog = itemsToUnassign.map(item => {
         // For paired weapons, use the grouped display info
         if (item.isPaired) {
           return {
             type: item.itemType,
             name: item.displayName,
-            id: item.id, // Firestore document ID for cloud function to fetch with .get()
-            fieldId: item.displayId // Field ID for display (weapon_id, gear_id, etc.)
+            id: item.id,
+            fieldId: item.displayId
           };
         }
-        // Store both document ID (for cloud function .get()) and field ID (for display)
-        const logItem = {
+        return {
           type: item.itemType,
           name: item.displayName,
-          id: item.id, // Firestore document ID for cloud function to fetch with .get()
-          fieldId: item.displayId // Field ID for display (weapon_id, gear_id, etc.)
+          id: item.id,
+          fieldId: item.displayId
         };
-        console.log('[SoldierRelease] Item for activity log:', logItem);
-        return logItem;
       });
-
+      
       for (const item of itemsToUnassign) {
         if (!item) continue;
 
@@ -950,21 +980,75 @@ export default function SoldierReleasePage() {
           case 'Weapon':
             // Handle paired weapons - unassign both if it's a pair
             if (item.isPaired && item.weapon1 && item.weapon2) {
-              await Promise.all([
-                Weapon.update(item.weapon1.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
-                Weapon.update(item.weapon2.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
-              ]);
+              // Unassigning - update last_signed_by to soldier being released, keep division_name, set assigned_to to "", team_name to null
+              const soldierFullName = `${selectedSoldier.first_name} ${selectedSoldier.last_name}`;
+              const updatePayload = { 
+                assigned_to: "", 
+                armory_status: targetArmoryStatus, 
+                deposit_location: depositLocationValue,
+                team_name: null,
+                last_signed_by: soldierFullName
+                // Note: division_name is preserved
+              };
+              
+              try {
+                const weapon1Where = { weapon_id: item.weapon1.weapon_id, weapon_type: item.weapon1.weapon_type };
+                const weapon2Where = { weapon_id: item.weapon2.weapon_id, weapon_type: item.weapon2.weapon_type };
+
+                const result1 = await Weapon.update({ where: weapon1Where }, updatePayload);
+                const result2 = await Weapon.update({ where: weapon2Where }, updatePayload);
+              } catch (updateError) {
+                console.error('[SoldierRelease] ERROR updating paired weapons:', updateError);
+                throw updateError;
+              }
             } else if (item.weapon_id) {
-              await Weapon.update(item.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+              // Unassigning - update last_signed_by to soldier being released, keep division_name, set assigned_to to "", team_name to null
+              const soldierFullName = `${selectedSoldier.first_name} ${selectedSoldier.last_name}`;
+              await Weapon.update(
+                { where: { weapon_id: item.weapon_id, weapon_type: item.weapon_type } },
+                { 
+                  assigned_to: "", 
+                  armory_status: targetArmoryStatus, 
+                  deposit_location: depositLocationValue,
+                  team_name: null,
+                  last_signed_by: soldierFullName
+                  // Note: division_name is preserved
+                }
+              );
             } else {
               // Fallback: try to get weapon_id from the original weapon object
               const weapon = assignedWeapons.find(w => w.id === item.id);
-              if (weapon) {
-                await Weapon.update(weapon.weapon_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+              if (weapon && weapon.weapon_id) {
+                // Unassigning - update last_signed_by to soldier being released, keep division_name, set assigned_to to "", team_name to null
+                const soldierFullName = `${selectedSoldier.first_name} ${selectedSoldier.last_name}`;
+                await Weapon.update(
+                  { where: { weapon_id: weapon.weapon_id, weapon_type: weapon.weapon_type } },
+                  { 
+                    assigned_to: "", 
+                    armory_status: targetArmoryStatus, 
+                    deposit_location: depositLocationValue,
+                    team_name: null,
+                    last_signed_by: soldierFullName
+                    // Note: division_name is preserved
+                  }
+                );
+              } else {
+                console.error('[SoldierRelease] ERROR: Could not find weapon for item:', item);
               }
             }
             break;
           case 'Gear':
+            // Unassigning - update last_signed_by to soldier being released, keep division_name, set assigned_to to "", team_name to null
+            const soldierFullName = `${selectedSoldier.first_name} ${selectedSoldier.last_name}`;
+            const gearUpdatePayload = { 
+              assigned_to: "", 
+              armory_status: targetArmoryStatus, 
+              deposit_location: depositLocationValue,
+              team_name: null,
+              last_signed_by: soldierFullName
+              // Note: division_name is preserved
+            };
+            
             // Find the gear item in assignedGear to check if it's an אמר"ל or קרן
             const gearItem = assignedGear.find(g => g.gear_id === item.gear_id);
             
@@ -975,39 +1059,66 @@ export default function SoldierReleasePage() {
                 const matchingBeam = findBeamForAmaral(gearItem, assignedGear);
                 if (matchingBeam) {
                   await Promise.all([
-                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
-                    SerializedGear.update(matchingBeam.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
+                    SerializedGear.update({ where: { gear_id: item.gear_id, gear_type: gearItem.gear_type } }, gearUpdatePayload),
+                    SerializedGear.update({ where: { gear_id: matchingBeam.gear_id, gear_type: matchingBeam.gear_type } }, gearUpdatePayload)
                   ]);
                 } else {
-                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                  await SerializedGear.update({ where: { gear_id: item.gear_id, gear_type: gearItem.gear_type } }, gearUpdatePayload);
                 }
               } else if (isBeam(gearItem)) {
                 // This is a קרן - find and release the matching אמר"ל as well
                 const matchingAmaral = findAmaralForBeam(gearItem, assignedGear);
                 if (matchingAmaral) {
                   await Promise.all([
-                    SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
-                    SerializedGear.update(matchingAmaral.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
+                    SerializedGear.update({ where: { gear_id: item.gear_id, gear_type: gearItem.gear_type } }, gearUpdatePayload),
+                    SerializedGear.update({ where: { gear_id: matchingAmaral.gear_id, gear_type: matchingAmaral.gear_type } }, gearUpdatePayload)
                   ]);
                 } else {
-                  await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                  await SerializedGear.update({ where: { gear_id: item.gear_id, gear_type: gearItem.gear_type } }, gearUpdatePayload);
                 }
               } else {
                 // Regular gear - just release this one
-                await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                await SerializedGear.update({ where: { gear_id: item.gear_id, gear_type: gearItem.gear_type } }, gearUpdatePayload);
               }
             } else {
-              // Fallback: if gear item not found, just release it
-              await SerializedGear.update(item.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+              // Fallback: if gear item not found, try to find gear_type from item
+              if (item.gear_type) {
+                await SerializedGear.update({ where: { gear_id: item.gear_id, gear_type: item.gear_type } }, gearUpdatePayload);
+              } else {
+                // Last resort: use gear_id only (may fail if multiple gear with same ID)
+                await SerializedGear.update(item.gear_id, gearUpdatePayload);
+              }
             }
             break;
           case 'Drone':
-            await DroneSet.update(item.id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+            // Unassigning - update last_signed_by to soldier being released, keep division_name, set assigned_to to "", team_name to null
+            const soldierFullNameDrone = `${selectedSoldier.first_name} ${selectedSoldier.last_name}`;
+            const droneUpdatePayload = { 
+              assigned_to: "", 
+              armory_status: targetArmoryStatus, 
+              deposit_location: depositLocationValue,
+              team_name: null,
+              last_signed_by: soldierFullNameDrone
+              // Note: division_name is preserved
+            };
+            
+            // Use where clause with both drone_set_id and set_type if available
+            if (item.drone_set_id && item.set_type) {
+              await DroneSet.update({ where: { drone_set_id: item.drone_set_id, set_type: item.set_type } }, droneUpdatePayload);
+            } else {
+              // Fallback: try to find from assignedDrones
+              const droneItem = assignedDrones.find(d => d.id === item.id);
+              if (droneItem && droneItem.drone_set_id && droneItem.set_type) {
+                await DroneSet.update({ where: { drone_set_id: droneItem.drone_set_id, set_type: droneItem.set_type } }, droneUpdatePayload);
+              } else {
+                // Last resort: use item.id (document ID)
+                await DroneSet.update(item.id, droneUpdatePayload);
+              }
+            }
             break;
           default: break;
         }
       }
-
 
       // Try to create ActivityLog and send email, but don't fail if this doesn't work
       try {
@@ -1040,8 +1151,6 @@ export default function SoldierReleasePage() {
 
         // Try to send email notification
         try {
-          console.log('[SoldierRelease PARTIAL] Sending release form email with activityId:', newActivityLog.id);
-          console.log('[SoldierRelease PARTIAL] Full activity log:', newActivityLog);
           const emailResponse = await sendReleaseFormByActivity({ activityId: newActivityLog.id });
 
           const soldierReceived = emailResponse?.data?.soldierReceived || emailResponse?.soldierReceived || false;
@@ -1053,8 +1162,6 @@ export default function SoldierReleasePage() {
               : `The release form could not be sent to the soldier (they are not a registered app user). A copy was sent to your email for manual sharing.`,
           });
         } catch (emailError) {
-          console.error('[SoldierRelease PARTIAL] Error sending release form email:', emailError);
-          console.error('[SoldierRelease PARTIAL] Error details:', emailError.message, emailError.code);
           setDialogContent({
             title: 'Release Successful',
             description: `Items have been unassigned successfully. You can view and download the release form using the button below.`,
@@ -1262,7 +1369,7 @@ export default function SoldierReleasePage() {
       let logDetails = [];
 
       for (const itemId of selectedEquipmentItems) {
-        const item = assignedEquipmentList.find(e => e.id === itemId);
+        const item = assignedEquipmentList.find(e => e.id === itemId || e.equipment_id === itemId);
         if (!item) continue;
 
         const quantityToUnassign = equipmentQuantities[itemId] || item.quantity;
@@ -1270,14 +1377,29 @@ export default function SoldierReleasePage() {
 
         logDetails.push({ type: item.equipment_type, quantity: quantityToUnassign, name: item.displayName });
 
+        const equipmentId = item.equipment_id || item.id;
+        const equipmentType = item.equipment_type;
+        const equipmentSerial = item.serial_number || item.serial || item.serialNumber;
+        const whereFilter = equipmentId ? { equipment_id: equipmentId } : null;
+        if (whereFilter) {
+          if (equipmentType) whereFilter.equipment_type = equipmentType;
+          if (equipmentSerial) whereFilter.serial_number = equipmentSerial;
+        }
+
         if (remainingQuantity <= 0) {
-          await Equipment.update(itemId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+          await Equipment.update(
+            whereFilter ? { where: whereFilter } : itemId,
+            { assigned_to: "", armory_status: targetArmoryStatus, deposit_location: depositLocationValue, team_name: null, last_signed_by: `${selectedSoldier.first_name} ${selectedSoldier.last_name}` }
+          );
         } else {
-          await Equipment.update(itemId, { quantity: remainingQuantity, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+          await Equipment.update(
+            whereFilter ? { where: whereFilter } : itemId,
+            { quantity: remainingQuantity, armory_status: targetArmoryStatus, deposit_location: depositLocationValue, team_name: null }
+          );
           const { id, ...rest } = item;
           await Equipment.create({
             ...rest,
-            assigned_to: null,
+            assigned_to: "",
             quantity: quantityToUnassign,
             armory_status: targetArmoryStatus,
             deposit_location: depositLocationValue
@@ -1540,17 +1662,43 @@ export default function SoldierReleasePage() {
             switch (item.itemType) {
                 case 'Weapon':
                     // Handle paired weapons - if this is a paired item, unassign both
-                    if (item.isPaired && item.pairedWeaponId) {
+                    const soldierFullNameFull = `${selectedSoldier.first_name} ${selectedSoldier.last_name}`;
+                    const weaponUpdatePayloadFull = { 
+                      assigned_to: "", 
+                      armory_status: targetArmoryStatus, 
+                      deposit_location: depositLocationValue,
+                      team_name: null,
+                      last_signed_by: soldierFullNameFull
+                    };
+                    
+                    if (item.isPaired && item.pairedWeaponId && item.weapon_type && item.pairedWeaponType) {
                       promise = Promise.all([
-                        Weapon.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
-                        Weapon.update(item.pairedWeaponId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
+                        Weapon.update({ where: { weapon_id: item.fieldId, weapon_type: item.weapon_type } }, weaponUpdatePayloadFull),
+                        Weapon.update({ where: { weapon_id: item.pairedWeaponId, weapon_type: item.pairedWeaponType } }, weaponUpdatePayloadFull)
                       ]);
+                    } else if (item.weapon_type) {
+                      // Use where clause with both weapon_id and weapon_type
+                      promise = Weapon.update({ where: { weapon_id: item.fieldId, weapon_type: item.weapon_type } }, weaponUpdatePayloadFull);
                     } else {
-                      // Use fieldId (weapon_id) for updates with adapter
-                      promise = Weapon.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                      // Fallback: try to find weapon type from assignedWeapons
+                      const weaponFull = assignedWeapons.find(w => w.weapon_id === item.fieldId);
+                      if (weaponFull && weaponFull.weapon_type) {
+                        promise = Weapon.update({ where: { weapon_id: item.fieldId, weapon_type: weaponFull.weapon_type } }, weaponUpdatePayloadFull);
+                      } else {
+                        // Last resort: use fieldId only (may fail if multiple weapons with same ID)
+                        promise = Weapon.update(item.fieldId, weaponUpdatePayloadFull);
+                      }
                     }
                     break;
                 case 'Gear':
+                    const gearUpdatePayloadFull = { 
+                      assigned_to: "", 
+                      armory_status: targetArmoryStatus, 
+                      deposit_location: depositLocationValue,
+                      team_name: null,
+                      last_signed_by: soldierFullNameFull
+                    };
+                    
                     // Find the gear item in assignedGear to check if it's an אמר"ל or קרן
                     const gearItemFull = assignedGear.find(g => g.gear_id === item.fieldId);
                     
@@ -1559,41 +1707,87 @@ export default function SoldierReleasePage() {
                       if (isAmaralNeedingBeam(gearItemFull)) {
                         // Find and release the matching קרן as well
                         const matchingBeamFull = findBeamForAmaral(gearItemFull, assignedGear);
-                        if (matchingBeamFull) {
+                        if (matchingBeamFull && item.gear_type) {
                           promise = Promise.all([
-                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
-                            SerializedGear.update(matchingBeamFull.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
+                            SerializedGear.update({ where: { gear_id: item.fieldId, gear_type: item.gear_type } }, gearUpdatePayloadFull),
+                            SerializedGear.update({ where: { gear_id: matchingBeamFull.gear_id, gear_type: matchingBeamFull.gear_type } }, gearUpdatePayloadFull)
                           ]);
+                        } else if (item.gear_type) {
+                          promise = SerializedGear.update({ where: { gear_id: item.fieldId, gear_type: item.gear_type } }, gearUpdatePayloadFull);
                         } else {
-                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                          promise = SerializedGear.update(item.fieldId, gearUpdatePayloadFull);
                         }
                       } else if (isBeam(gearItemFull)) {
                         // This is a קרן - find and release the matching אמר"ל as well
                         const matchingAmaralFull = findAmaralForBeam(gearItemFull, assignedGear);
-                        if (matchingAmaralFull) {
+                        if (matchingAmaralFull && item.gear_type) {
                           promise = Promise.all([
-                            SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue }),
-                            SerializedGear.update(matchingAmaralFull.gear_id, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue })
+                            SerializedGear.update({ where: { gear_id: item.fieldId, gear_type: item.gear_type } }, gearUpdatePayloadFull),
+                            SerializedGear.update({ where: { gear_id: matchingAmaralFull.gear_id, gear_type: matchingAmaralFull.gear_type } }, gearUpdatePayloadFull)
                           ]);
+                        } else if (item.gear_type) {
+                          promise = SerializedGear.update({ where: { gear_id: item.fieldId, gear_type: item.gear_type } }, gearUpdatePayloadFull);
                         } else {
-                          promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                          promise = SerializedGear.update(item.fieldId, gearUpdatePayloadFull);
                         }
                       } else {
                         // Regular gear - just release this one
-                        promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                        if (item.gear_type) {
+                          promise = SerializedGear.update({ where: { gear_id: item.fieldId, gear_type: item.gear_type } }, gearUpdatePayloadFull);
+                        } else {
+                          promise = SerializedGear.update(item.fieldId, gearUpdatePayloadFull);
+                        }
                       }
                     } else {
                       // Fallback: if gear item not found, just release it
-                      promise = SerializedGear.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                      if (item.gear_type) {
+                        promise = SerializedGear.update({ where: { gear_id: item.fieldId, gear_type: item.gear_type } }, gearUpdatePayloadFull);
+                      } else {
+                        promise = SerializedGear.update(item.fieldId, gearUpdatePayloadFull);
+                      }
                     }
                     break;
                 case 'Drone':
-                    // Use fieldId (drone_set_id) for updates with adapter
-                    promise = DroneSet.update(item.fieldId, { assigned_to: null, armory_status: targetArmoryStatus, deposit_location: depositLocationValue });
+                    const droneUpdatePayloadFull = { 
+                      assigned_to: "", 
+                      armory_status: targetArmoryStatus, 
+                      deposit_location: depositLocationValue,
+                      team_name: null,
+                      last_signed_by: soldierFullNameFull
+                    };
+                    
+                    // Use where clause with both drone_set_id and set_type if available
+                    if (item.set_type) {
+                      promise = DroneSet.update({ where: { drone_set_id: item.fieldId, set_type: item.set_type } }, droneUpdatePayloadFull);
+                    } else {
+                      // Fallback: try to find set_type from assignedDrones
+                      const droneFull = assignedDrones.find(d => d.drone_set_id === item.fieldId);
+                      if (droneFull && droneFull.set_type) {
+                        promise = DroneSet.update({ where: { drone_set_id: item.fieldId, set_type: droneFull.set_type } }, droneUpdatePayloadFull);
+                      } else {
+                        // Last resort: use fieldId only
+                        promise = DroneSet.update(item.fieldId, droneUpdatePayloadFull);
+                      }
+                    }
                     break;
                 case 'Equipment':
-                    // For full release, unassign the entire equipment instance (uses document ID)
-                    promise = Equipment.update(item.documentId, { assigned_to: null });
+                    // For full release, unassign equipment using where with equipment_id + type/serial when available
+                    const equipmentIdFull = item.fieldId || item.documentId;
+                    const equipmentWhereFull = equipmentIdFull ? { equipment_id: equipmentIdFull } : null;
+                    if (equipmentWhereFull) {
+                      if (item.equipment_type) equipmentWhereFull.equipment_type = item.equipment_type;
+                      if (item.serial_number) equipmentWhereFull.serial_number = item.serial_number;
+                    }
+                    promise = Equipment.update(
+                      equipmentWhereFull ? { where: equipmentWhereFull } : item.documentId,
+                      { 
+                        assigned_to: "", 
+                        armory_status: targetArmoryStatus, 
+                        deposit_location: depositLocationValue,
+                        team_name: null,
+                        last_signed_by: soldierFullNameFull
+                      }
+                    );
                     break;
                 default:
                     continue;

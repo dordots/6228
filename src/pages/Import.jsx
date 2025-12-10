@@ -1140,7 +1140,11 @@ export default function ImportPage() {
             if (assignment.weapon_id) {
               const weapon = await Weapon.findById(assignment.weapon_id);
               if (weapon) {
-                await Weapon.update(weapon.id, { assigned_to: assignment.soldier_id });
+                if (weapon.weapon_id && weapon.weapon_type) {
+                  await Weapon.update({ where: { weapon_id: weapon.weapon_id, weapon_type: weapon.weapon_type } }, { assigned_to: assignment.soldier_id });
+                } else {
+                  await Weapon.update(weapon.id, { assigned_to: assignment.soldier_id });
+                }
               }
             }
             
@@ -1148,7 +1152,11 @@ export default function ImportPage() {
             if (assignment.gear_id) {
               const gear = await SerializedGear.findById(assignment.gear_id);
               if (gear) {
-                await SerializedGear.update(gear.id, { assigned_to: assignment.soldier_id });
+                if (gear.gear_id && gear.gear_type) {
+                  await SerializedGear.update({ where: { gear_id: gear.gear_id, gear_type: gear.gear_type } }, { assigned_to: assignment.soldier_id });
+                } else {
+                  await SerializedGear.update(gear.id, { assigned_to: assignment.soldier_id });
+                }
               }
             }
             

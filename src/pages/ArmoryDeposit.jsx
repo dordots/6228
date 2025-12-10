@@ -237,7 +237,14 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         } else if (mode === 'release') {
           updatePayload.deposit_location = null; // Clear deposit location on release
         }
-        updatePromises.push(Weapon.update(weaponId, updatePayload));
+        // Find weapon to get weapon_type
+        const weapon = weapons.find(w => w.weapon_id === weaponId);
+        if (weapon && weapon.weapon_type) {
+          updatePromises.push(Weapon.update({ where: { weapon_id: weaponId, weapon_type: weapon.weapon_type } }, updatePayload));
+        } else {
+          // Fallback: use weaponId only (may fail if multiple weapons with same ID)
+          updatePromises.push(Weapon.update(weaponId, updatePayload));
+        }
       }
 
       // Update gear
@@ -248,7 +255,14 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         } else if (mode === 'release') {
           updatePayload.deposit_location = null; // Clear deposit location on release
         }
-        updatePromises.push(SerializedGear.update(gearId, updatePayload));
+        // Find gear to get gear_type
+        const gearItem = gear.find(g => g.gear_id === gearId);
+        if (gearItem && gearItem.gear_type) {
+          updatePromises.push(SerializedGear.update({ where: { gear_id: gearId, gear_type: gearItem.gear_type } }, updatePayload));
+        } else {
+          // Fallback: use gearId only (may fail if multiple gear with same ID)
+          updatePromises.push(SerializedGear.update(gearId, updatePayload));
+        }
       }
 
       // Update drone sets
@@ -259,7 +273,14 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
         } else if (mode === 'release') {
           updatePayload.deposit_location = null; // Clear deposit location on release
         }
-        updatePromises.push(DroneSet.update(droneSetId, updatePayload));
+        // Find drone set to get set_type
+        const droneSet = droneSets.find(d => d.drone_set_id === droneSetId);
+        if (droneSet && droneSet.set_type) {
+          updatePromises.push(DroneSet.update({ where: { drone_set_id: droneSetId, set_type: droneSet.set_type } }, updatePayload));
+        } else {
+          // Fallback: use droneSetId only (may fail if multiple drones with same ID)
+          updatePromises.push(DroneSet.update(droneSetId, updatePayload));
+        }
       }
 
       await Promise.all(updatePromises);
@@ -320,7 +341,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           division_name: weapon?.division_name // Preserve division_name
         };
         console.log('[DepositUnassigned] Updating weapon with payload:', updatePayload);
-        await Weapon.update(weaponId, updatePayload);
+        if (weapon && weapon.weapon_type) {
+          await Weapon.update({ where: { weapon_id: weaponId, weapon_type: weapon.weapon_type } }, updatePayload);
+        } else {
+          await Weapon.update(weaponId, updatePayload);
+        }
       }
       for (const gearId of gearIds) {
         console.log('[DepositUnassigned] Processing gear:', gearId);
@@ -334,7 +359,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           division_name: gearItem?.division_name // Preserve division_name
         };
         console.log('[DepositUnassigned] Updating gear with payload:', updatePayload);
-        await SerializedGear.update(gearId, updatePayload);
+        if (gearItem && gearItem.gear_type) {
+          await SerializedGear.update({ where: { gear_id: gearId, gear_type: gearItem.gear_type } }, updatePayload);
+        } else {
+          await SerializedGear.update(gearId, updatePayload);
+        }
       }
       for (const droneSetId of droneSetIds) {
         console.log('[DepositUnassigned] Processing droneSet:', droneSetId);
@@ -352,7 +381,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           division_name: droneSet?.division_name // Preserve division_name
         };
         console.log('[DepositUnassigned] Updating droneSet with drone_set_id:', droneSet.drone_set_id, 'payload:', updatePayload);
-        await DroneSet.update(droneSet.drone_set_id, updatePayload);
+        if (droneSet && droneSet.set_type) {
+          await DroneSet.update({ where: { drone_set_id: droneSet.drone_set_id, set_type: droneSet.set_type } }, updatePayload);
+        } else {
+          await DroneSet.update(droneSet.drone_set_id, updatePayload);
+        }
       }
 
       const actionItems = [];
@@ -400,7 +433,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           division_name: weapon?.division_name // Preserve division_name
         };
         console.log('[ReleaseUnassigned] Updating weapon with payload:', updatePayload);
-        await Weapon.update(weaponId, updatePayload);
+        if (weapon && weapon.weapon_type) {
+          await Weapon.update({ where: { weapon_id: weaponId, weapon_type: weapon.weapon_type } }, updatePayload);
+        } else {
+          await Weapon.update(weaponId, updatePayload);
+        }
       }
       for (const gearId of gearIds) {
         console.log('[ReleaseUnassigned] Processing gear:', gearId);
@@ -414,7 +451,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           division_name: gearItem?.division_name // Preserve division_name
         };
         console.log('[ReleaseUnassigned] Updating gear with payload:', updatePayload);
-        await SerializedGear.update(gearId, updatePayload);
+        if (gearItem && gearItem.gear_type) {
+          await SerializedGear.update({ where: { gear_id: gearId, gear_type: gearItem.gear_type } }, updatePayload);
+        } else {
+          await SerializedGear.update(gearId, updatePayload);
+        }
       }
       for (const droneSetId of droneSetIds) {
         console.log('[ReleaseUnassigned] Processing droneSet:', droneSetId);
@@ -432,7 +473,11 @@ export default function ArmoryDepositPage() { // Renamed from ArmoryDeposit
           division_name: droneSet?.division_name // Preserve division_name
         };
         console.log('[ReleaseUnassigned] Updating droneSet with drone_set_id:', droneSet.drone_set_id, 'payload:', updatePayload);
-        await DroneSet.update(droneSet.drone_set_id, updatePayload);
+        if (droneSet && droneSet.set_type) {
+          await DroneSet.update({ where: { drone_set_id: droneSet.drone_set_id, set_type: droneSet.set_type } }, updatePayload);
+        } else {
+          await DroneSet.update(droneSet.drone_set_id, updatePayload);
+        }
       }
 
       const actionItems = [];

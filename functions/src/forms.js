@@ -855,6 +855,13 @@ exports.sendSigningFormByActivity = functions
       db.collection("equipment").where("assigned_to", "==", soldierID).get(),
     ]);
 
+    console.log("[sendReleaseFormByActivity] Remaining items fetched", {
+      weapons: weapons.size,
+      gear: gear.size,
+      drones: drones.size,
+      equipment: equipment.size
+    });
+
     // Fetch drone components for all drone sets
     const droneSetIds = drones.docs.map(doc => doc.data().drone_set_id).filter(Boolean);
     let droneComponents = [];
@@ -1150,9 +1157,11 @@ exports.sendReleaseFormByActivity = functions
     );
   }
 
-  const { activityID } = data;
+  // Support both legacy camelCase and current ActivityID keys
+  const { activityID, activityId } = data;
+  const resolvedActivityId = activityID || activityId;
 
-  if (!activityID) {
+  if (!resolvedActivityId) {
     throw new functions.https.HttpsError(
       "invalid-argument",
       "Activity ID is required"
@@ -1160,10 +1169,13 @@ exports.sendReleaseFormByActivity = functions
   }
 
   try {
+    console.log("[sendReleaseFormByActivity] Start", { resolvedActivityId });
+
     // Get activity log
-    const activityDoc = await db.collection("activity_logs").doc(activityID).get();
+    const activityDoc = await db.collection("activity_logs").doc(resolvedActivityId).get();
     
     if (!activityDoc.exists) {
+      console.error("[sendReleaseFormByActivity] Activity not found", { resolvedActivityId });
       throw new functions.https.HttpsError(
         "not-found",
         "Activity not found"
@@ -1171,36 +1183,58 @@ exports.sendReleaseFormByActivity = functions
     }
 
     const activity = activityDoc.data();
+    console.log("[sendReleaseFormByActivity] Activity loaded", {
+      activity_type: activity.activity_type,
+      soldier_id_in_details: activity.details?.soldier_id,
+      soldier_id_in_context: activity.context?.soldierId,
+      soldier_id_root: activity.soldier_id,
+      released_items_len: (activity.details?.released_items || activity.context?.unassignedItems || []).length,
+      has_signature: Boolean(activity.context?.signature)
+    });
+
     // Check multiple possible locations for soldier_id
     const soldierID = activity.details?.soldier_id ||
                       activity.context?.soldierId ||
                       activity.soldier_id;
 
     if (!soldierID) {
+      console.error("[sendReleaseFormByActivity] Missing soldier ID in activity", { resolvedActivityId });
       throw new functions.https.HttpsError(
         "invalid-argument",
         "Activity does not contain soldier information"
       );
     }
 
+    const releasedItems = activity.details?.released_items || activity.context?.unassignedItems || [];
+
+    console.log("[sendReleaseFormByActivity] Generating release form PDF");
     // Generate release form using helper function
-    const formResult = await generateReleaseFormPDF(
+    const formResult = await generateReleaseFormDocument({
       soldierID,
-      activity.details?.released_items || activity.context?.unassignedItems || [],
-      activity.details?.reason || "Activity-based release"
-    );
+      releasedItems,
+      reason: activity.details?.reason || "Activity-based release",
+      performerName: activity.user_full_name || "System",
+      signatureData: activity.context?.signature || "",
+      soldierData: null
+    });
 
     // Get soldier email
     if (!formResult.soldier.email) {
+      console.error("[sendReleaseFormByActivity] Soldier missing email", { soldierID });
       throw new functions.https.HttpsError(
         "failed-precondition",
         "Soldier does not have an email address"
       );
     }
 
+    console.log("[sendReleaseFormByActivity] Generated release form", {
+      soldierID,
+      soldierEmail: formResult.soldier.email,
+      releasedItems: releasedItems.map(item => item?.id || item?.displayId || item).slice(0, 5)
+    });
+
     // Send email with HTML formatted release form
     const soldier = formResult.soldier;
-    const releasedItems = activity.details?.released_items || activity.context?.unassignedItems || [];
     const reason = activity.details?.reason || "Activity-based release";
 
     // Get all remaining equipment for the soldier AFTER release
@@ -1210,6 +1244,13 @@ exports.sendReleaseFormByActivity = functions
       db.collection("drone_sets").where("assigned_to", "==", soldierID).get(),
       db.collection("equipment").where("assigned_to", "==", soldierID).get(),
     ]);
+
+    console.log("[sendReleaseFormByActivity] Remaining items fetched", {
+      weapons: weapons.size,
+      gear: gear.size,
+      drones: drones.size,
+      equipment: equipment.size
+    });
 
     // Fetch drone components for all remaining drone sets
     const releaseDroneSetIds = drones.docs.map(doc => doc.data().drone_set_id).filter(Boolean);
@@ -1473,6 +1514,12 @@ exports.sendReleaseFormByActivity = functions
 
     return { success: true, message: `Release form sent to ${soldier.email}` };
   } catch (error) {
+    console.error("[sendReleaseFormByActivity] Failed", {
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      stack: error?.stack
+    });
     throw new functions.https.HttpsError(
       "internal",
       `Failed to send release form: ${error.message}`

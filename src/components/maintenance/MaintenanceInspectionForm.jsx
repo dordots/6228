@@ -151,6 +151,14 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
     setItemComments({});
   };
 
+  // Safely format dates coming from Firestore (can be empty string or invalid)
+  const safeFormatDate = (value) => {
+    if (!value) return null;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return format(d, 'PPP');
+  };
+
   const renderWeaponItem = (weapon) => {
     const key = `weapon-${weapon.weapon_id}`;
     const isSelected = selectedItems.has(key);
@@ -165,8 +173,8 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
         <div className="flex-1">
           <p className="font-semibold">{weapon.weapon_type}</p>
           <p className="text-sm text-gray-500 font-mono">{weapon.weapon_id}</p>
-          {weapon.last_checked_date && (
-            <p className="text-xs text-slate-500 mt-1">Last Checked: {format(new Date(weapon.last_checked_date), 'PPP')}</p>
+          {safeFormatDate(weapon.last_checked_date) && (
+            <p className="text-xs text-slate-500 mt-1">Last Checked: {safeFormatDate(weapon.last_checked_date)}</p>
           )}
         </div>
         {weapon.status && getStatusBadge(weapon.status)}
@@ -188,8 +196,8 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
         <div className="flex-1">
           <p className="font-semibold">{gear.gear_type}</p>
           <p className="text-sm text-gray-500 font-mono">{gear.gear_id}</p>
-          {gear.last_checked_date && (
-            <p className="text-xs text-slate-500 mt-1">Last Checked: {format(new Date(gear.last_checked_date), 'PPP')}</p>
+          {safeFormatDate(gear.last_checked_date) && (
+            <p className="text-xs text-slate-500 mt-1">Last Checked: {safeFormatDate(gear.last_checked_date)}</p>
           )}
         </div>
         {gear.status && getStatusBadge(gear.status)}
@@ -211,8 +219,8 @@ export default function MaintenanceInspectionForm({ soldier, assignedWeapons, as
         <div className="flex-1">
           <p className="font-semibold">{drone.set_type}</p>
           <p className="text-sm text-gray-500 font-mono">{drone.set_serial_number}</p>
-          {drone.last_checked_date && (
-            <p className="text-xs text-slate-500 mt-1">Last Checked: {format(new Date(drone.last_checked_date), 'PPP')}</p>
+          {safeFormatDate(drone.last_checked_date) && (
+            <p className="text-xs text-slate-500 mt-1">Last Checked: {safeFormatDate(drone.last_checked_date)}</p>
           )}
         </div>
         {drone.status && getStatusBadge(drone.status)}

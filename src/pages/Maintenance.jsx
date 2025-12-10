@@ -149,7 +149,11 @@ export default function MaintenancePage() {
             if (data.comments) {
               updateData.maintenance_comments = data.comments;
             }
-            updatePromises.push(Weapon.update(weaponId, updateData));
+            if (weaponToUpdate && weaponToUpdate.weapon_type) {
+              updatePromises.push(Weapon.update({ where: { weapon_id: weaponId, weapon_type: weaponToUpdate.weapon_type } }, updateData));
+            } else {
+              updatePromises.push(Weapon.update(weaponId, updateData));
+            }
         }
     }
 
@@ -164,7 +168,11 @@ export default function MaintenancePage() {
             if (data.comments) {
               updateData.maintenance_comments = data.comments;
             }
-            updatePromises.push(SerializedGear.update(gearId, updateData));
+            if (gearToUpdate && gearToUpdate.gear_type) {
+              updatePromises.push(SerializedGear.update({ where: { gear_id: gearId, gear_type: gearToUpdate.gear_type } }, updateData));
+            } else {
+              updatePromises.push(SerializedGear.update(gearId, updateData));
+            }
         }
     }
 
@@ -179,7 +187,11 @@ export default function MaintenancePage() {
             if (data.comments) {
               updateData.maintenance_comments = data.comments;
             }
-            updatePromises.push(DroneSet.update(droneId, updateData));
+            if (droneToUpdate && droneToUpdate.drone_set_id && droneToUpdate.set_type) {
+              updatePromises.push(DroneSet.update({ where: { drone_set_id: droneToUpdate.drone_set_id, set_type: droneToUpdate.set_type } }, updateData));
+            } else {
+              updatePromises.push(DroneSet.update(droneId, updateData));
+            }
         }
     }
 

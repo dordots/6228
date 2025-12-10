@@ -164,7 +164,7 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
     }
 
     try {
-      const updatePromises = weaponsToUpdate.map(w => Weapon.update(w.weapon_id, { weapon_type: newType }));
+      const updatePromises = weaponsToUpdate.map(w => Weapon.update({ where: { weapon_id: w.weapon_id, weapon_type: w.weapon_type } }, { weapon_type: newType }));
       await Promise.all(updatePromises);
 
       // Try to create activity log, but don't fail rename if it errors
@@ -240,7 +240,7 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
             updateDetails += ` No significant field changes detected.`;
         }
 
-        await Weapon.update(editingWeapon.weapon_id, weaponData);
+        await Weapon.update({ where: { weapon_id: editingWeapon.weapon_id, weapon_type: editingWeapon.weapon_type } }, weaponData);
 
         // Try to create activity log, but don't fail weapon update if it errors
         try {
@@ -442,7 +442,7 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
             skippedCount++;
             return null;
           }
-          return Weapon.update(weapon.weapon_id, updatePayload);
+          return Weapon.update({ where: { weapon_id: weapon.weapon_id, weapon_type: weapon.weapon_type } }, updatePayload);
         })
         .filter(Boolean);
 
@@ -580,8 +580,8 @@ const [isBulkNauraProcessing, setIsBulkNauraProcessing] = useState(false);
         // Keep existing division_name and last_signed_by when unassigning
       }
 
-      // Perform the update first
-      await Weapon.update(weapon.weapon_id, updatePayload);
+      // Perform the update first - use where clause with both weapon_id and weapon_type
+      await Weapon.update({ where: { weapon_id: weapon.weapon_id, weapon_type: weapon.weapon_type } }, updatePayload);
 
       // Try to log the reassignment activity, but don't fail reassignment if it errors
       try {

@@ -47,7 +47,7 @@ export default function Soldiers() {
   const [showForm, setShowForm] = useState(false);
   const [editingSoldier, setEditingSoldier] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ statuses: [], divisions: [], teams: [], crews: [], sexes: [], marital_statuses: [], license_types: [] });
+  const [filters, setFilters] = useState({ statuses: [], divisions: [], teams: [], crews: [], sexes: [], marital_statuses: [], license_types: [], cities: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -919,8 +919,9 @@ export default function Soldiers() {
       const matchesSex = !filters.sexes || filters.sexes.length === 0 || filters.sexes.includes(soldier.sex);
       const matchesMarital = !filters.marital_statuses || filters.marital_statuses.length === 0 || filters.marital_statuses.includes(soldier.marital_status);
       const matchesLicenseType = !filters.license_types || filters.license_types.length === 0 || filters.license_types.includes(soldier.driving_license_type);
+      const matchesCity = !filters.cities || filters.cities.length === 0 || filters.cities.includes(soldier.city);
 
-      return matchesSearch && matchesStatus && matchesDivision && matchesTeam && matchesCrew && matchesSex && matchesMarital && matchesLicenseType;
+      return matchesSearch && matchesStatus && matchesDivision && matchesTeam && matchesCrew && matchesSex && matchesMarital && matchesLicenseType && matchesCity;
     });
 
     return filtered;

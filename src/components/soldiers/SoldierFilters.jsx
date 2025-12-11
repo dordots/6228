@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Filter } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 
 // Multi-select button component
 function MultiSelectButton({ options, selected, onToggle, placeholder }) {
@@ -47,7 +48,7 @@ function MultiSelectButton({ options, selected, onToggle, placeholder }) {
 }
 
 export default function SoldierFilters({ filters, onFilterChange, soldiers = [] }) {
-  const { divisions, teams, crews, sexes, maritalStatuses, licenseTypes } = useMemo(() => {
+  const { divisions, teams, crews, sexes, maritalStatuses, licenseTypes, cities } = useMemo(() => {
     const safeSoldiers = Array.isArray(soldiers) ? soldiers : [];
     const divisionsSet = new Set(safeSoldiers.map(s => s.division_name).filter(Boolean));
     const teamsSet = new Set(safeSoldiers.map(s => s.team_name).filter(Boolean));
@@ -55,6 +56,7 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
     const sexesSet = new Set(safeSoldiers.map(s => s.sex).filter(Boolean));
     const maritalSet = new Set(safeSoldiers.map(s => s.marital_status).filter(Boolean));
     const licenseTypeSet = new Set(safeSoldiers.map(s => s.driving_license_type).filter(Boolean));
+    const citiesSet = new Set(safeSoldiers.map(s => s.city).filter(Boolean));
     return {
       divisions: [...divisionsSet].sort(),
       teams: [...teamsSet].sort(),
@@ -62,6 +64,7 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
       sexes: [...sexesSet].sort(),
       maritalStatuses: [...maritalSet].sort(),
       licenseTypes: [...licenseTypeSet].sort(),
+      cities: [...citiesSet].sort(),
     };
   }, [soldiers]);
 
@@ -85,7 +88,8 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
       crews: [],
       sexes: [],
       marital_statuses: [],
-      license_types: []
+      license_types: [],
+      cities: []
     });
   };
 
@@ -98,6 +102,7 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
     if (filters.sexes?.length > 0) count += filters.sexes.length;
     if (filters.marital_statuses?.length > 0) count += filters.marital_statuses.length;
     if (filters.license_types?.length > 0) count += filters.license_types.length;
+    if (filters.cities?.length > 0) count += filters.cities.length;
     return count;
   }, [filters]);
 
@@ -107,6 +112,12 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
   const sexOptions = sexes.map(c => ({ value: c, label: c }));
   const maritalOptions = maritalStatuses.map(c => ({ value: c, label: c }));
   const licenseOptions = licenseTypes.map(c => ({ value: c, label: c }));
+  const cityOptions = cities.map(c => ({ value: c, label: c }));
+  const [citySearch, setCitySearch] = useState('');
+  const filteredCityOptions = useMemo(() => {
+    const term = citySearch.toLowerCase();
+    return cityOptions.filter(opt => opt.label.toLowerCase().includes(term));
+  }, [cityOptions, citySearch]);
 
   const statusOptions = [
     { value: 'expected', label: 'Expected' },
@@ -221,6 +232,52 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
               onToggle={(value) => handleMultiSelectToggle('license_types', value)}
               placeholder="Select license type..."
             />
+          </div>
+
+          {/* City */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">City</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                >
+                  <span>
+                    {(filters.cities?.length || 0) === 0 ? 'Select cities...' : `${filters.cities.length} selected`}
+                  </span>
+                  <Filter className="w-4 h-4 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-0" align="start">
+                <div className="p-2 border-b">
+                  <Input
+                    value={citySearch}
+                    onChange={(e) => setCitySearch(e.target.value)}
+                    placeholder="Search city..."
+                    className="h-8"
+                  />
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {filteredCityOptions.map((option) => (
+                    <div
+                      key={option.value}
+                      className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                      onClick={() => handleMultiSelectToggle('cities', option.value)}
+                    >
+                      <Checkbox
+                        checked={(filters.cities || []).includes(option.value)}
+                        onCheckedChange={() => handleMultiSelectToggle('cities', option.value)}
+                      />
+                      <label className="text-sm cursor-pointer flex-1">{option.label}</label>
+                    </div>
+                  ))}
+                  {filteredCityOptions.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-500">No cities found</div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </PopoverContent>

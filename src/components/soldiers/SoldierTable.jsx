@@ -311,7 +311,7 @@ export default function SoldierTable({
             />
           </TableHead>
           <SortableHeader column="name" sortConfig={sortConfig} onSort={onSort} className="w-52 sticky top-0 left-12 z-40 bg-slate-50 pr-3">Name</SortableHeader>
-          <SortableHeader column="soldier_id" sortConfig={sortConfig} onSort={onSort} className="w-44 sticky top-0 z-20 bg-slate-50 pl-10">Personal #</SortableHeader>
+          <SortableHeader column="soldier_id" sortConfig={sortConfig} onSort={onSort} className="w-44 sticky top-0 z-20 bg-slate-50 pl-10">Military ID</SortableHeader>
           <SortableHeader column="id_number" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">ID Number</SortableHeader>
           <SortableHeader column="email" sortConfig={sortConfig} onSort={onSort} className="w-48 sticky top-0 z-20 bg-slate-50">Email</SortableHeader>
           <SortableHeader column="phone_number" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Phone</SortableHeader>

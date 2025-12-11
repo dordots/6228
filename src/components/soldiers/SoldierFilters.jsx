@@ -47,13 +47,21 @@ function MultiSelectButton({ options, selected, onToggle, placeholder }) {
 }
 
 export default function SoldierFilters({ filters, onFilterChange, soldiers = [] }) {
-  const { divisions, teams } = useMemo(() => {
+  const { divisions, teams, crews, sexes, maritalStatuses, licenseTypes } = useMemo(() => {
     const safeSoldiers = Array.isArray(soldiers) ? soldiers : [];
     const divisionsSet = new Set(safeSoldiers.map(s => s.division_name).filter(Boolean));
     const teamsSet = new Set(safeSoldiers.map(s => s.team_name).filter(Boolean));
+    const crewsSet = new Set(safeSoldiers.map(s => s.crew).filter(Boolean));
+    const sexesSet = new Set(safeSoldiers.map(s => s.sex).filter(Boolean));
+    const maritalSet = new Set(safeSoldiers.map(s => s.marital_status).filter(Boolean));
+    const licenseTypeSet = new Set(safeSoldiers.map(s => s.driving_license_type).filter(Boolean));
     return {
       divisions: [...divisionsSet].sort(),
       teams: [...teamsSet].sort(),
+      crews: [...crewsSet].sort(),
+      sexes: [...sexesSet].sort(),
+      maritalStatuses: [...maritalSet].sort(),
+      licenseTypes: [...licenseTypeSet].sort(),
     };
   }, [soldiers]);
 
@@ -73,7 +81,11 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
     onFilterChange({
       divisions: [],
       teams: [],
-      statuses: []
+      statuses: [],
+      crews: [],
+      sexes: [],
+      marital_statuses: [],
+      license_types: []
     });
   };
 
@@ -82,11 +94,19 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
     if (filters.divisions?.length > 0) count += filters.divisions.length;
     if (filters.teams?.length > 0) count += filters.teams.length;
     if (filters.statuses?.length > 0) count += filters.statuses.length;
+    if (filters.crews?.length > 0) count += filters.crews.length;
+    if (filters.sexes?.length > 0) count += filters.sexes.length;
+    if (filters.marital_statuses?.length > 0) count += filters.marital_statuses.length;
+    if (filters.license_types?.length > 0) count += filters.license_types.length;
     return count;
   }, [filters]);
 
   const divisionOptions = divisions.map(d => ({ value: d, label: d }));
   const teamOptions = teams.map(t => ({ value: t, label: t }));
+  const crewOptions = crews.map(c => ({ value: c, label: c }));
+  const sexOptions = sexes.map(c => ({ value: c, label: c }));
+  const maritalOptions = maritalStatuses.map(c => ({ value: c, label: c }));
+  const licenseOptions = licenseTypes.map(c => ({ value: c, label: c }));
 
   const statusOptions = [
     { value: 'expected', label: 'Expected' },
@@ -156,6 +176,50 @@ export default function SoldierFilters({ filters, onFilterChange, soldiers = [] 
               selected={filters.statuses || []}
               onToggle={(value) => handleMultiSelectToggle('statuses', value)}
               placeholder="Select statuses..."
+            />
+          </div>
+
+          {/* Crew */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Crew</Label>
+            <MultiSelectButton
+              options={crewOptions}
+              selected={filters.crews || []}
+              onToggle={(value) => handleMultiSelectToggle('crews', value)}
+              placeholder="Select crews..."
+            />
+          </div>
+
+          {/* Sex */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Sex</Label>
+            <MultiSelectButton
+              options={sexOptions}
+              selected={filters.sexes || []}
+              onToggle={(value) => handleMultiSelectToggle('sexes', value)}
+              placeholder="Select sex..."
+            />
+          </div>
+
+          {/* Marital Status */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Marital Status</Label>
+            <MultiSelectButton
+              options={maritalOptions}
+              selected={filters.marital_statuses || []}
+              onToggle={(value) => handleMultiSelectToggle('marital_statuses', value)}
+              placeholder="Select marital status..."
+            />
+          </div>
+
+          {/* License Type */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">License Type</Label>
+            <MultiSelectButton
+              options={licenseOptions}
+              selected={filters.license_types || []}
+              onToggle={(value) => handleMultiSelectToggle('license_types', value)}
+              placeholder="Select license type..."
             />
           </div>
         </div>

@@ -12,15 +12,24 @@ import { Calendar as CalendarIcon, Save, X, Plus } from "lucide-react";
 export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldiers = [] }) {
   const [formData, setFormData] = useState(soldier || {
     soldier_id: "",
+    id_number: "",
     first_name: "",
     last_name: "",
+    sex: "",
+    marital_status: "",
     email: "",
     street_address: "",
     city: "",
     division_name: "",
     team_name: "",
+    crew: "",
     profession: "",
+    secondary_profession: "",
     phone_number: "",
+    date_of_birth: "",
+    trainings: "",
+    driving_license: "",
+    driving_license_type: "",
     enlistment_status: "expected",
     arrival_date: ""
   });
@@ -41,15 +50,24 @@ export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldi
   useEffect(() => {
     setFormData(soldier || {
       soldier_id: "",
+      id_number: "",
       first_name: "",
       last_name: "",
+      sex: "",
+      marital_status: "",
       email: "",
       street_address: "",
       city: "",
       division_name: "",
       team_name: "",
+      crew: "",
       profession: "",
+      secondary_profession: "",
       phone_number: "",
+      date_of_birth: "",
+      trainings: "",
+      driving_license: "",
+      driving_license_type: "",
       enlistment_status: "expected",
       arrival_date: ""
     });
@@ -108,6 +126,15 @@ export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldi
             />
           </div>
           <div className="space-y-1">
+            <Label htmlFor="id_number">ID Number</Label>
+            <Input
+              id="id_number"
+              value={formData.id_number}
+              onChange={(e) => handleChange('id_number', e.target.value)}
+              placeholder="National ID"
+            />
+          </div>
+          <div className="space-y-1">
             <Label htmlFor="enlistment_status">Status</Label>
             <Select value={formData.enlistment_status} onValueChange={(value) => handleChange('enlistment_status', value)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -136,6 +163,22 @@ export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldi
             />
           </div>
           <div className="space-y-1">
+            <Label htmlFor="sex">Sex</Label>
+            <Input
+              id="sex"
+              value={formData.sex}
+              onChange={(e) => handleChange('sex', e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="marital_status">Marital Status</Label>
+            <Input
+              id="marital_status"
+              value={formData.marital_status}
+              onChange={(e) => handleChange('marital_status', e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
             <Label htmlFor="arrival_date">Arrival Date</Label>
             <div className="flex gap-2">
               <Popover>
@@ -160,6 +203,36 @@ export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldi
                 onClick={clearArrivalDate}
                 className="px-3"
                 title="Clear arrival date"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_of_birth">Date of Birth</Label>
+            <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="flex-1 justify-start text-left">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.date_of_birth ? format(new Date(formData.date_of_birth), 'dd/MM/yyyy') : 'Select date of birth'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={formData.date_of_birth ? new Date(formData.date_of_birth) : undefined}
+                    onSelect={(date) => handleChange('date_of_birth', date)}
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleChange('date_of_birth', "")}
+                className="px-3"
+                title="Clear date of birth"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -229,12 +302,30 @@ export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldi
             />
           </div>
           <div className="space-y-1">
+            <Label htmlFor="crew">Crew</Label>
+            <Input
+              id="crew"
+              value={formData.crew || ''}
+              onChange={(e) => handleChange('crew', e.target.value)}
+              placeholder="Crew"
+            />
+          </div>
+          <div className="space-y-1">
             <Label htmlFor="profession">Profession</Label>
             <Input
               id="profession"
               value={formData.profession || ''}
               onChange={(e) => handleChange('profession', e.target.value)}
               placeholder="e.g. Infantry, Medic"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="secondary_profession">Secondary Profession</Label>
+            <Input
+              id="secondary_profession"
+              value={formData.secondary_profession || ''}
+              onChange={(e) => handleChange('secondary_profession', e.target.value)}
+              placeholder="e.g. Secondary role"
             />
           </div>
           <div className="space-y-1">
@@ -253,6 +344,33 @@ export default function SoldierForm({ soldier, onSubmit, onCancel, existingSoldi
               value={formData.city || ''}
               onChange={(e) => handleChange('city', e.target.value)}
               placeholder="Anytown"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="trainings">Trainings / Qualifications</Label>
+            <Input
+              id="trainings"
+              value={formData.trainings || ''}
+              onChange={(e) => handleChange('trainings', e.target.value)}
+              placeholder="Comma-separated or free text"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="driving_license">Driving License</Label>
+            <Input
+              id="driving_license"
+              value={formData.driving_license || ''}
+              onChange={(e) => handleChange('driving_license', e.target.value)}
+              placeholder="Yes/No"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="driving_license_type">License Type</Label>
+            <Input
+              id="driving_license_type"
+              value={formData.driving_license_type || ''}
+              onChange={(e) => handleChange('driving_license_type', e.target.value)}
+              placeholder="e.g. B, C1"
             />
           </div>
         </div>

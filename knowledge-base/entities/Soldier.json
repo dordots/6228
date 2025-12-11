@@ -5,7 +5,11 @@
   "properties": {
     "soldier_id": {
       "type": "string",
-      "description": "Unique soldier ID from import"
+      "description": "Military personal number (unique)"
+    },
+    "id_number": {
+      "type": "string",
+      "description": "National ID number"
     },
     "first_name": {
       "type": "string",
@@ -36,13 +40,46 @@
       "type": "string",
       "description": "Team assignment"
     },
+    "crew": {
+      "type": "string",
+      "description": "Crew assignment (if distinct from team)"
+    },
     "profession": {
       "type": "string",
       "description": "Military profession/MOS"
     },
+    "secondary_profession": {
+      "type": "string",
+      "description": "Secondary profession/MOS"
+    },
     "phone_number": {
       "type": "string",
       "description": "Contact phone number"
+    },
+    "sex": {
+      "type": "string",
+      "description": "Gender"
+    },
+    "marital_status": {
+      "type": "string",
+      "description": "Marital status"
+    },
+    "date_of_birth": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of birth"
+    },
+    "trainings": {
+      "type": "string",
+      "description": "Trainings/qualifications (free text list)"
+    },
+    "driving_license": {
+      "type": "string",
+      "description": "Driving license indicator"
+    },
+    "driving_license_type": {
+      "type": "string",
+      "description": "Type/category of driving license"
     },
     "enlistment_status": {
       "type": "string",

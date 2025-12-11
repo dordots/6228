@@ -196,7 +196,6 @@ export default function SoldierTable({
   onEdit,
   onDelete,
   onMarkArrived,
-  onUpdateDetails,
   onShowHistory, // New prop for showing history
   isLoading,
   sortConfig = { key: null, direction: 'asc' },
@@ -311,13 +310,24 @@ export default function SoldierTable({
               onCheckedChange={onSelectAll}
             />
           </TableHead>
-          <SortableHeader column="name" sortConfig={sortConfig} onSort={onSort} className="w-48 sticky top-0 left-12 z-40 bg-slate-50">Name</SortableHeader>
-          <SortableHeader column="soldier_id" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Soldier ID</SortableHeader>
+          <SortableHeader column="name" sortConfig={sortConfig} onSort={onSort} className="w-52 sticky top-0 left-12 z-40 bg-slate-50 pr-3">Name</SortableHeader>
+          <SortableHeader column="soldier_id" sortConfig={sortConfig} onSort={onSort} className="w-44 sticky top-0 z-20 bg-slate-50 pl-10">Personal #</SortableHeader>
+          <SortableHeader column="id_number" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">ID Number</SortableHeader>
           <SortableHeader column="email" sortConfig={sortConfig} onSort={onSort} className="w-48 sticky top-0 z-20 bg-slate-50">Email</SortableHeader>
           <SortableHeader column="phone_number" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Phone</SortableHeader>
+          <SortableHeader column="city" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">City</SortableHeader>
+          <SortableHeader column="street_address" sortConfig={sortConfig} onSort={onSort} className="w-40 sticky top-0 z-20 bg-slate-50">Street</SortableHeader>
           <SortableHeader column="division_name" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Division</SortableHeader>
           <SortableHeader column="team_name" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Team</SortableHeader>
+          <SortableHeader column="crew" sortConfig={sortConfig} onSort={onSort} className="w-28 sticky top-0 z-20 bg-slate-50">Crew</SortableHeader>
           <SortableHeader column="profession" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Profession</SortableHeader>
+          <SortableHeader column="secondary_profession" sortConfig={sortConfig} onSort={onSort} className="w-36 sticky top-0 z-20 bg-slate-50">Secondary Profession</SortableHeader>
+          <SortableHeader column="sex" sortConfig={sortConfig} onSort={onSort} className="w-24 sticky top-0 z-20 bg-slate-50">Sex</SortableHeader>
+          <SortableHeader column="marital_status" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Marital Status</SortableHeader>
+          <SortableHeader column="date_of_birth" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Date of Birth</SortableHeader>
+          <SortableHeader column="trainings" sortConfig={sortConfig} onSort={onSort} className="w-40 sticky top-0 z-20 bg-slate-50">Trainings</SortableHeader>
+          <SortableHeader column="driving_license" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Driving License</SortableHeader>
+          <SortableHeader column="driving_license_type" sortConfig={sortConfig} onSort={onSort} className="w-36 sticky top-0 z-20 bg-slate-50">License Type</SortableHeader>
           <SortableHeader column="equipment" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Equipment</SortableHeader>
           <SortableHeader column="enlistment_status" sortConfig={sortConfig} onSort={onSort} className="w-32 sticky top-0 z-20 bg-slate-50">Status</SortableHeader>
           <TableHead className="w-48 text-right pr-4 sticky top-0 z-20 bg-slate-50">Actions</TableHead>
@@ -345,21 +355,41 @@ export default function SoldierTable({
                     onCheckedChange={() => onSelectItem(soldier.id)}
                   />
                 </TableCell>
-                <TableCell className="sticky left-12 z-10 bg-white group-hover:bg-slate-50 font-medium text-slate-800">
-                  {soldier.first_name} {soldier.last_name}
+                <TableCell className="sticky left-12 z-10 bg-white group-hover:bg-slate-50 font-medium text-slate-800 pr-4 max-w-[180px]">
+                  <div className="truncate">{soldier.first_name} {soldier.last_name}</div>
                 </TableCell>
-                <TableCell className="font-mono">{soldier.soldier_id}</TableCell>
+                <TableCell className="font-mono whitespace-pre pl-10 pr-2 min-w-[140px] ml-40">{soldier.soldier_id}</TableCell>
+                <TableCell className="text-slate-600">{soldier.id_number || '-'}</TableCell>
                 <TableCell className="text-slate-600">
                   <div className="max-w-40 truncate" title={soldier.email}>
                     {soldier.email || '-'}
                   </div>
                 </TableCell>
                 <TableCell className="text-slate-600">{soldier.phone_number || '-'}</TableCell>
+                <TableCell className="text-slate-600">{soldier.city || '-'}</TableCell>
+                <TableCell className="text-slate-600">{soldier.street_address || '-'}</TableCell>
                 <TableCell className="text-slate-600">{soldier.division_name || '-'}</TableCell>
                 <TableCell>
                   {soldier.team_name && <Badge variant="outline" className="text-xs">{soldier.team_name}</Badge>}
                 </TableCell>
+                <TableCell className="text-slate-600">{soldier.crew || '-'}</TableCell>
                 <TableCell className="text-slate-600">{soldier.profession || '-'}</TableCell>
+                <TableCell className="text-slate-600">{soldier.secondary_profession || '-'}</TableCell>
+                <TableCell className="text-slate-600">{soldier.sex || '-'}</TableCell>
+                <TableCell className="text-slate-600">{soldier.marital_status || '-'}</TableCell>
+                <TableCell className="text-slate-600">
+                  {soldier.date_of_birth
+                    ? (() => {
+                        const d = new Date(soldier.date_of_birth);
+                        return isNaN(d.getTime()) ? soldier.date_of_birth : d.toLocaleDateString('en-GB');
+                      })()
+                    : '-'}
+                </TableCell>
+                <TableCell className="text-slate-600 truncate max-w-40" title={Array.isArray(soldier.trainings) ? soldier.trainings.join(', ') : soldier.trainings}>
+                  {Array.isArray(soldier.trainings) ? (soldier.trainings.length ? soldier.trainings.join(', ') : '-') : (soldier.trainings || '-')}
+                </TableCell>
+                <TableCell className="text-slate-600">{soldier.driving_license || '-'}</TableCell>
+                <TableCell className="text-slate-600">{soldier.driving_license_type || '-'}</TableCell>
                 <TableCell>
                   <AllEquipmentPopover 
                     soldier={soldier} 
@@ -400,9 +430,6 @@ export default function SoldierTable({
                         )}
                         <DropdownMenuItem onClick={() => onEdit(soldier)}>
                           <Edit className="w-3 h-3 mr-2" /> Edit Soldier
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onUpdateDetails(soldier)}>
-                           <UserCog className="w-3 h-3 mr-2" /> Update Personal Details
                         </DropdownMenuItem>
                         {(currentUser?.permissions?.['personnel.delete'] || currentUser?.role === 'admin') && canDelete && (
                           <DropdownMenuItem

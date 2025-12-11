@@ -32,7 +32,6 @@ import { Badge } from "@/components/ui/badge";
 import SoldierForm from "../components/soldiers/SoldierForm";
 import SoldierTable from "../components/soldiers/SoldierTable";
 import UnifiedAssignmentDialog from "../components/soldiers/UnifiedAssignmentDialog";
-import UpdatePersonalDetailsDialog from "../components/soldiers/UpdatePersonalDetailsDialog";
 import SoldierFilters from "../components/soldiers/SoldierFilters";
 import SigningHistoryDialog from "../components/soldiers/SigningHistoryDialog";
 import DeleteConfirmDialog from "../components/common/DeleteConfirmDialog";
@@ -48,7 +47,7 @@ export default function Soldiers() {
   const [showForm, setShowForm] = useState(false);
   const [editingSoldier, setEditingSoldier] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filters, setFilters] = useState({ statuses: [], divisions: [], teams: [] });
+  const [filters, setFilters] = useState({ statuses: [], divisions: [], teams: [], crews: [], sexes: [], marital_statuses: [], license_types: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [duplicates, setDuplicates] = useState([]);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -56,8 +55,6 @@ export default function Soldiers() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
   const [selectedSoldierForWelcome, setSelectedSoldierForWelcome] = useState(null);
-  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
-  const [updatingSoldier, setUpdatingSoldier] = useState(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -558,73 +555,6 @@ export default function Soldiers() {
     }
   };
 
-  const handleUpdateDetails = (soldier) => {
-    setUpdatingSoldier(soldier);
-    setShowUpdateDialog(true);
-  };
-
-  const handleUpdateDetailsSubmit = async (updateData) => {
-    try {
-      const currentUser = await User.me();
-      const getAdjustedTimestamp = () => {
-        const now = new Date();
-        now.setUTCHours(now.getUTCHours() + 3);
-        return now.toISOString();
-      };
-
-      if (updatingSoldier) {
-        // Verify the soldier document exists before updating
-        const existingSoldier = await Soldier.findById(updatingSoldier.id);
-        if (!existingSoldier) {
-          // Try to find by soldier_id if direct lookup failed
-          const soldierBySoldierId = await Soldier.findById(updatingSoldier.soldier_id);
-          if (soldierBySoldierId) {
-            console.warn(`Soldier found by soldier_id instead of document ID. Using soldier_id: ${updatingSoldier.soldier_id}`);
-            await Soldier.update(updatingSoldier.soldier_id, updateData);
-          } else {
-            alert(`Error: Soldier document not found. The soldier may have been deleted or the ID is invalid. Please refresh and try again.`);
-            setShowUpdateDialog(false);
-            setUpdatingSoldier(null);
-            await loadAllData();
-            return;
-          }
-        } else {
-          await Soldier.update(updatingSoldier.id, updateData);
-        }
-
-        const changes = {};
-        Object.keys(updateData).forEach(key => {
-            if (updateData[key] !== updatingSoldier[key]) {
-                changes[key] = {
-                    old: updatingSoldier[key] || null,
-                    new: updateData[key] || null,
-                };
-            }
-        });
-
-        // Try to create activity log, but don't fail the whole operation if it errors
-        try {
-          await ActivityLog.create({
-            activity_type: "UPDATE",
-            entity_type: "Soldier",
-            details: `Updated details for ${updatingSoldier.first_name} ${updatingSoldier.last_name} (${updatingSoldier.soldier_id})`,
-            user_full_name: currentUser?.full_name || 'System',
-            client_timestamp: getAdjustedTimestamp(),
-            context: { changes, updatedFields: updateData },
-            division_name: updatingSoldier.division_name
-          });
-        } catch (logError) {
-        }
-
-        // Always cleanup UI and refresh data after soldier update succeeds
-        setShowUpdateDialog(false);
-        setUpdatingSoldier(null);
-        await loadAllData();
-      }
-    } catch (error) {
-      alert("Error updating soldier details: " + error.message);
-    }
-  };
 
   const handleOpenHistory = (soldier) => {
     setSelectedSoldierForHistory(soldier);
@@ -972,6 +902,7 @@ export default function Soldiers() {
           soldier.first_name,
           soldier.last_name,
           soldier.soldier_id,
+          soldier.id_number,
           soldier.email,
           soldier.division_name,
           soldier.team_name,
@@ -984,8 +915,12 @@ export default function Soldiers() {
       const matchesStatus = !filters.statuses || filters.statuses.length === 0 || filters.statuses.includes(soldier.enlistment_status || 'expected');
       const matchesDivision = !filters.divisions || filters.divisions.length === 0 || filters.divisions.includes(soldier.division_name);
       const matchesTeam = !filters.teams || filters.teams.length === 0 || filters.teams.includes(soldier.team_name);
+      const matchesCrew = !filters.crews || filters.crews.length === 0 || filters.crews.includes(soldier.crew);
+      const matchesSex = !filters.sexes || filters.sexes.length === 0 || filters.sexes.includes(soldier.sex);
+      const matchesMarital = !filters.marital_statuses || filters.marital_statuses.length === 0 || filters.marital_statuses.includes(soldier.marital_status);
+      const matchesLicenseType = !filters.license_types || filters.license_types.length === 0 || filters.license_types.includes(soldier.driving_license_type);
 
-      return matchesSearch && matchesStatus && matchesDivision && matchesTeam;
+      return matchesSearch && matchesStatus && matchesDivision && matchesTeam && matchesCrew && matchesSex && matchesMarital && matchesLicenseType;
     });
 
     return filtered;
@@ -1055,13 +990,6 @@ export default function Soldiers() {
         onSuccess={loadAllData}
       />
       
-      <UpdatePersonalDetailsDialog
-        open={showUpdateDialog}
-        onOpenChange={setShowUpdateDialog}
-        soldier={updatingSoldier}
-        onSubmit={handleUpdateDetailsSubmit}
-      />
-
       <SigningHistoryDialog
         soldier={selectedSoldierForHistory}
         open={showHistoryDialog}
@@ -1307,7 +1235,6 @@ export default function Soldiers() {
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
               onMarkArrived={handleWelcomeSoldier}
-              onUpdateDetails={handleUpdateDetails}
               onShowHistory={handleOpenHistory}
               isLoading={isLoading}
               sortConfig={sortConfig}
